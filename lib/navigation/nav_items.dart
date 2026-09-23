@@ -93,6 +93,11 @@ class NavItems {
               icon: Icons.calendar_month_rounded,
               section: 'PÉDAGOGIE'),
           NavItem(
+              id: 'periods',
+              label: 'Périodes',
+              icon: Icons.date_range_rounded,
+              section: 'PÉDAGOGIE'),
+          NavItem(
               id: 'grades',
               label: 'Résultats & soumissions',
               icon: Icons.grade_rounded,
