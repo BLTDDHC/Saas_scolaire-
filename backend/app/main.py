@@ -45,6 +45,7 @@ KINDS = {"establishments", "subscriptions", "academic-years", "students", "teach
 PASSWORD_MIN_LENGTH = 8
 RESULT_CALCULATION_RULE_VERSION = "mc-composition-v2"
 STUDENT_PHOTO_ROOT = Path(__file__).resolve().parents[1] / "storage" / "student-photos"
+USER_PROFILE_PHOTO_ROOT = Path(__file__).resolve().parents[1] / "storage" / "user-profile-photos"
 STUDENT_PHOTO_MAX_BYTES = 5 * 1024 * 1024
 STUDENT_PHOTO_TYPES = {
     "image/jpeg": ".jpg",
@@ -815,6 +816,19 @@ class ChangePasswordInput(BaseModel):
     current_password: str | None = Field(default=None, min_length=1)
     new_password: str = Field(min_length=1, max_length=128)
     new_password_confirmation: str = Field(min_length=1, max_length=128)
+
+class ProfileUpdateInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    name: str = Field(min_length=2, max_length=160)
+    email: str = Field(min_length=3, max_length=254)
+
+    @model_validator(mode="after")
+    def normalize_profile(self):
+        self.name = self.name.strip()
+        self.email = self.email.strip().lower()
+        if not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+', self.email):
+            raise ValueError("Adresse e-mail invalide")
+        return self
 class ResourceInput(BaseModel): payload: dict[str, Any]
 class FinanceFeeInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -3476,6 +3490,94 @@ def login(
 @app.get("/api/v1/auth/me")
 def me(current: Principal = Depends(principal), session: Session = Depends(db)):
     user = session.get(User, uuid.UUID(current.id)); return user_json(user, session)
+@app.put("/api/v1/auth/profile")
+def update_own_profile(
+    body: ProfileUpdateInput,
+    current: Principal = Depends(principal),
+    session: Session = Depends(db),
+):
+    if current.role not in {"admin", "superadmin"}:
+        raise HTTPException(403, "La modification du profil est réservée aux administrateurs")
+    user = session.get(User, uuid.UUID(current.id))
+    if not user:
+        raise HTTPException(404, "Utilisateur introuvable")
+    duplicate = session.scalar(select(User.id).where(
+        func.lower(User.email) == body.email,
+        User.id != user.id,
+    ))
+    if duplicate:
+        raise HTTPException(409, "Cette adresse e-mail est déjà utilisée")
+    user.name = body.name
+    user.email = body.email
+    user.updated_at = datetime.now(timezone.utc)
+    session.commit()
+    session.refresh(user)
+    return user_json(user, session)
+
+def _user_profile_photo_row(
+    session: Session, user_id: uuid.UUID
+) -> Resource | None:
+    return session.get(
+        Resource, {"kind": "user-profile-photos", "id": str(user_id)}
+    )
+
+@app.get("/api/v1/auth/profile/photo")
+def get_own_profile_photo(
+    current: Principal = Depends(principal),
+    session: Session = Depends(db),
+):
+    row = _user_profile_photo_row(session, uuid.UUID(current.id))
+    path = Path(str(row.payload.get("path"))) if row and row.payload.get("path") else None
+    if not row or not path or not path.is_file():
+        raise HTTPException(404, "Photo de profil introuvable")
+    return Response(
+        content=path.read_bytes(),
+        media_type=row.payload.get("mimeType") or "image/jpeg",
+        headers={"Cache-Control": "private, max-age=300"},
+    )
+
+@app.put("/api/v1/auth/profile/photo")
+def update_own_profile_photo(
+    body: StudentPhotoUpdateInput,
+    current: Principal = Depends(principal),
+    session: Session = Depends(db),
+):
+    if current.role not in {"admin", "superadmin"}:
+        raise HTTPException(403, "La photo de profil est gérée par l’administration")
+    user_id = uuid.UUID(current.id)
+    content, extension = _decode_student_photo(body)
+    target_dir = USER_PROFILE_PHOTO_ROOT / str(user_id)
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target = target_dir / f"profile{extension}"
+    temporary = target_dir / f".profile-{uuid.uuid4().hex}.tmp"
+    temporary.write_bytes(content)
+    temporary.replace(target)
+    row = _user_profile_photo_row(session, user_id)
+    old_path = Path(str(row.payload.get("path"))) if row and row.payload.get("path") else None
+    payload = {
+        "userId": str(user_id),
+        "path": str(target),
+        "mimeType": body.mime_type.lower(),
+        "originalName": body.name,
+        "size": len(content),
+        "updatedAt": datetime.now(timezone.utc).isoformat(),
+    }
+    if row:
+        row.payload = payload
+        row.updated_at = datetime.now(timezone.utc)
+    else:
+        session.add(Resource(
+            id=str(user_id),
+            kind="user-profile-photos",
+            school_id=current.school_id,
+            establishment_id=resolve_establishment_id(session, current.school_id),
+            payload=payload,
+        ))
+    if old_path and old_path != target and old_path.is_file() and old_path.parent == target_dir:
+        old_path.unlink(missing_ok=True)
+    session.commit()
+    return {"updatedAt": payload["updatedAt"]}
+
 @app.post("/api/v1/auth/change-password")
 def change_password(body: ChangePasswordInput, current: Principal = Depends(principal), session: Session = Depends(db)):
     user = session.get(User, uuid.UUID(current.id))
