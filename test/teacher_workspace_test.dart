@@ -574,9 +574,9 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('Note /20'), findsOneWidget);
     expect(find.text('Tous ont été notés'), findsNothing);
-    expect(find.text('Absent'), findsNothing);
-    expect(find.byKey(const ValueKey('grade-presence-student-1-not_recorded')),
-        findsNothing);
+    expect(find.text('Absent'), findsWidgets);
+    expect(find.byKey(const ValueKey('grade-presence-student-1')),
+        findsOneWidget);
     final gradeField = tester.widget<TextField>(
       find.byKey(const ValueKey('grade-value-student-1')),
     );
@@ -585,6 +585,51 @@ void main() {
 
     expect(find.text('Nouvelle évaluation'), findsNothing);
     expect(find.text('Préparer une évaluation'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'la saisie combinée affiche uniquement les évaluations ordinaires programmées',
+      (tester) async {
+    tester.view.physicalSize = const Size(1440, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final store = await _store(_teacherClient());
+    expect(await store.login(_email, _password), isTrue);
+
+    await tester.pumpWidget(ChangeNotifierProvider<StoreService>.value(
+      value: store,
+      child: const Scaffold(body: CanonicalGradesPage()),
+    ));
+    await tester.pumpAndSettle();
+
+    Future<void> choose(int index, String labelPrefix) async {
+      await tester.tap(find.byType(DropdownButtonFormField<String>).at(index));
+      await tester.pumpAndSettle();
+      await tester.tap(find.textContaining(labelPrefix).last);
+      await tester.pumpAndSettle();
+    }
+
+    await choose(0, '3e A');
+    await choose(1, '1er trimestre');
+    expect(find.byKey(const Key('grade-entry-combined')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('grade-entry-combined')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('combined-grade-entry-card')), findsOneWidget);
+    expect(find.text('Devoir 1'), findsWidgets);
+    expect(find.text('Composition'), findsWidgets);
+    expect(
+      find.byKey(const ValueKey('combined-grade-evaluation-1|student-1')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('combined-grade-evaluation-2|student-1')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('submit-combined-grades')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
