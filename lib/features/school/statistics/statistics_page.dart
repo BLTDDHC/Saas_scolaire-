@@ -585,7 +585,7 @@ class _StatisticsContent extends StatelessWidget {
         if (insights.isNotEmpty || alerts.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.s6),
           ResponsiveGrid(
-            desktopColumns: 3,
+            desktopColumns: 2,
             tabletColumns: 1,
             mobileColumns: 1,
             children: [
@@ -636,7 +636,7 @@ class _StatisticsContent extends StatelessWidget {
         _DistributionCard(distribution: distribution),
         const SizedBox(height: AppSpacing.s6),
         ResponsiveGrid(
-          desktopColumns: 2,
+          desktopColumns: 3,
           tabletColumns: 1,
           mobileColumns: 1,
           children: [
