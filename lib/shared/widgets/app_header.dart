@@ -4,11 +4,14 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/constants/establishment_types.dart';
 import '../../core/utils/responsive_utils.dart';
+import '../../core/utils/student_photo_picker.dart';
 import '../../data/services/store_service.dart';
 import '../../features/auth/change_password_dialog.dart';
 import '../../features/school/students/student_photo_avatar.dart';
+import '../../features/school/shared/user_profile_avatar.dart';
 import 'app_button.dart';
 import 'app_modal.dart';
+import 'app_toast.dart';
 
 /// Header principal EduPro — Reproduction exacte de layout.css avec adaptation mobile
 class AppHeader extends StatelessWidget implements PreferredSizeWidget {
@@ -213,18 +216,25 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
                     initials: user?.initials ?? 'U',
                     radius: isMobile ? 14 : 16,
                   )
-                : CircleAvatar(
-                    radius: isMobile ? 14 : 16,
-                    backgroundColor:
-                        AppColors.avatarColorFor(user?.name ?? 'User'),
-                    child: Text(
-                      user?.initials ?? 'U',
-                      style: TextStyle(
-                          fontSize: isMobile ? 10 : 11,
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold),
-                    ),
-                  ),
+                : user != null &&
+                        const {UserRole.admin, UserRole.superadmin}
+                            .contains(user.role)
+                    ? UserProfileAvatar(
+                        initials: user.initials,
+                        radius: isMobile ? 14 : 16,
+                      )
+                    : CircleAvatar(
+                        radius: isMobile ? 14 : 16,
+                        backgroundColor:
+                            AppColors.avatarColorFor(user?.name ?? 'User'),
+                        child: Text(
+                          user?.initials ?? 'U',
+                          style: TextStyle(
+                              fontSize: isMobile ? 10 : 11,
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold),
+                        ),
+                      ),
           ),
         ],
       ),
@@ -329,6 +339,10 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
                 StudentPhotoAvatar(
                     studentId: studentId,
                     initials: user?.initials ?? 'U')
+              else if (user != null &&
+                  const {UserRole.admin, UserRole.superadmin}
+                      .contains(user.role))
+                UserProfileAvatar(initials: user.initials)
               else
                 CircleAvatar(
                   radius: 28,
@@ -367,6 +381,16 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
             variant: AppButtonVariant.secondary,
             onPressed: () => Navigator.pop(context),
           ),
+          if (user != null &&
+              const {UserRole.admin, UserRole.superadmin}.contains(user.role))
+            AppButton(
+              label: 'Modifier mon profil',
+              icon: Icons.edit_outlined,
+              onPressed: () {
+                Navigator.pop(context);
+                _editProfile(context, store);
+              },
+            ),
           AppButton(
             label: 'Modifier le mot de passe',
             icon: Icons.password_rounded,
@@ -380,6 +404,121 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
     );
   }
 }
+
+
+  Future<void> _editProfile(BuildContext context, StoreService store) async {
+    final user = store.currentUser;
+    if (user == null ||
+        !const {UserRole.admin, UserRole.superadmin}.contains(user.role)) {
+      return;
+    }
+    final name = TextEditingController(text: user.name);
+    final email = TextEditingController(text: user.email);
+    PickedStudentPhoto? pendingPhoto;
+    var saving = false;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Modifier mon profil'),
+          content: SizedBox(
+            width: 520,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  UserProfileAvatar(
+                    initials: store.currentUser?.initials ?? user.initials,
+                    radius: 42,
+                  ),
+                  const SizedBox(height: AppSpacing.s3),
+                  OutlinedButton.icon(
+                    onPressed: saving
+                        ? null
+                        : () async {
+                            final files =
+                                await pickStudentPhotos(multiple: false);
+                            if (files.isEmpty || !context.mounted) return;
+                            final file = files.first;
+                            if (!file.isValid) {
+                              AppToast.error(
+                                context,
+                                file.rejectionReason ??
+                                    'Cette image ne peut pas être importée.',
+                              );
+                              return;
+                            }
+                            setDialogState(() => pendingPhoto = file);
+                          },
+                    icon: const Icon(Icons.photo_camera_outlined),
+                    label: Text(pendingPhoto == null
+                        ? 'Choisir une photo'
+                        : pendingPhoto!.name),
+                  ),
+                  const SizedBox(height: AppSpacing.s3),
+                  TextField(
+                    controller: name,
+                    enabled: !saving,
+                    decoration: const InputDecoration(labelText: 'Nom *'),
+                  ),
+                  const SizedBox(height: AppSpacing.s3),
+                  TextField(
+                    controller: email,
+                    enabled: !saving,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration:
+                        const InputDecoration(labelText: 'Adresse e-mail *'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: saving ? null : () => Navigator.pop(dialogContext),
+              child: const Text('Annuler'),
+            ),
+            FilledButton(
+              onPressed: saving
+                  ? null
+                  : () async {
+                      if (name.text.trim().length < 2 ||
+                          email.text.trim().isEmpty) {
+                        AppToast.warning(
+                            context, 'Renseignez un nom et un e-mail valides.');
+                        return;
+                      }
+                      setDialogState(() => saving = true);
+                      try {
+                        await store.updateOwnProfileRemote(
+                          name: name.text,
+                          email: email.text,
+                        );
+                        if (pendingPhoto != null) {
+                          await store.updateOwnProfilePhotoRemote(
+                              pendingPhoto!.toJson());
+                        }
+                        if (!context.mounted) return;
+                        Navigator.pop(dialogContext);
+                        AppToast.success(
+                            context, 'Votre profil a été mis à jour.');
+                      } catch (error) {
+                        if (context.mounted) {
+                          AppToast.error(context,
+                              AppToast.humanErrorMessage(error.toString()));
+                          setDialogState(() => saving = false);
+                        }
+                      }
+                    },
+              child: Text(saving ? 'Enregistrement…' : 'Enregistrer'),
+            ),
+          ],
+        ),
+      ),
+    );
+    name.dispose();
+    email.dispose();
+  }
 
 class _ProfileLine extends StatelessWidget {
   const _ProfileLine({required this.label, this.value});
