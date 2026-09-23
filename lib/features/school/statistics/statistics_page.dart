@@ -113,10 +113,14 @@ class _StatisticsPageState extends State<StatisticsPage> {
       if (!mounted || yearId != _loadedYearId) return;
       setState(() {
         _periods = periods
-            .where((item) =>
-                item['periodType'] == 'trimester' &&
-                item['status'] != 'archived')
-            .toList();
+            .where((item) => item['status'] != 'archived')
+            .toList()
+          ..sort((left, right) {
+            final byOrder = ((left['sortOrder'] as num?)?.toInt() ?? 0)
+                .compareTo((right['sortOrder'] as num?)?.toInt() ?? 0);
+            if (byOrder != 0) return byOrder;
+            return '${left['name']}'.compareTo('${right['name']}');
+          });
       });
     } catch (_) {
       // Statistics remain usable without the optional period selector.
@@ -160,7 +164,7 @@ class _StatisticsPageState extends State<StatisticsPage> {
     return WorkspacePage(
       title: 'Statistiques & analyses',
       subtitle:
-          'Indicateurs construits à partir des derniers résultats trimestriels officiels',
+          'Indicateurs construits à partir des résultats officiels du périmètre sélectionné',
       actions: [
         Wrap(
           spacing: AppSpacing.s3,
@@ -260,7 +264,8 @@ class _StatisticsPageState extends State<StatisticsPage> {
                 decoration: const InputDecoration(labelText: 'Période'),
                 items: [
                   const DropdownMenuItem<String?>(
-                      value: null, child: Text('Dernière période officielle')),
+                      value: null,
+                      child: Text('Dernier trimestre officiel')),
                   ..._periods.map((item) => DropdownMenuItem<String?>(
                         value: '${item['id']}',
                         child: Text('${item['name']}',
@@ -536,9 +541,9 @@ class _StatisticsContent extends StatelessWidget {
         if (monthlyEvolution.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.s6),
           _AverageBarsCard(
-            title: 'Évolution mensuelle des notes publiées',
+            title: 'Évolution mensuelle des notes',
             subtitle:
-                'Moyenne descriptive normalisée sur 20, distincte de la moyenne trimestrielle officielle',
+                'Série mensuelle distincte de l’évolution trimestrielle officielle',
             rows: monthlyEvolution,
             labelKey: 'month',
             valueKey: 'average20',
@@ -641,7 +646,9 @@ class _StatisticsContent extends StatelessWidget {
             _VerticalBarsCard(
               key: const Key('statistics-class-bars'),
               title: 'Moyenne par classe',
-              subtitle: 'Dernier trimestre officiel disponible',
+              subtitle: _periodId == null
+                  ? 'Dernier trimestre officiel disponible'
+                  : 'Période officielle sélectionnée',
               rows: byClass,
               labelKey: 'className',
               valueKey: 'average20',
