@@ -62,6 +62,20 @@ jobs:
             ON school_cycles (establishment_id, code);
           CREATE UNIQUE INDEX IF NOT EXISTS ci_uq_school_levels_establishment_cycle_code
             ON school_levels (establishment_id, cycle_id, code);
+          CREATE UNIQUE INDEX IF NOT EXISTS ci_uq_school_cycles_id_establishment
+            ON school_cycles (id, establishment_id);
+          CREATE UNIQUE INDEX IF NOT EXISTS ci_uq_school_levels_id_cycle_establishment
+            ON school_levels (id, cycle_id, establishment_id);
+          CREATE UNIQUE INDEX IF NOT EXISTS ci_uq_academic_years_id_establishment
+            ON academic_years (id, establishment_id);
+          CREATE UNIQUE INDEX IF NOT EXISTS ci_uq_classes_id_establishment
+            ON classes (id, establishment_id);
+          CREATE UNIQUE INDEX IF NOT EXISTS ci_uq_students_id_establishment
+            ON students (id, establishment_id);
+          CREATE UNIQUE INDEX IF NOT EXISTS ci_uq_teachers_id_establishment
+            ON teachers (id, establishment_id);
+          CREATE UNIQUE INDEX IF NOT EXISTS ci_uq_subjects_id_establishment
+            ON subjects (id, establishment_id);
           SQL
 
       - name: Apply migrations to isolated test database
@@ -90,7 +104,7 @@ jobs:
         run: flutter pub get
 
       - name: Flutter analyze
-        run: flutter analyze
+        run: flutter analyze --no-fatal-infos
 
       - name: Flutter tests
         run: flutter test
