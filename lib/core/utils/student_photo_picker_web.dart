@@ -1,16 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:html' as html;
-import 'dart:typed_data';
-
 import 'student_photo_picker_model.dart';
-
-Uint8List? studentPhotoBytesFromReaderResult(Object? raw) {
-  if (raw is Uint8List) return raw;
-  if (raw is ByteBuffer) return raw.asUint8List();
-  if (raw is List<int>) return Uint8List.fromList(raw);
-  return null;
-}
 
 String _mimeTypeFor(html.File file) {
   if (file.type.trim().isNotEmpty) return file.type.trim();
