@@ -11069,6 +11069,14 @@ def statistics(
     school_classes = filtered_classes
     class_ids = [item.id for item in school_classes]
     classes_by_id = {item.id: item for item in school_classes}
+    selected_level_ids = {
+        item.school_level_id for item in school_classes if item.school_level_id
+    }
+    levels_by_id: dict[uuid.UUID, SchoolLevel] = {
+        item.id: item for item in session.scalars(select(SchoolLevel).where(
+            SchoolLevel.id.in_(selected_level_ids)
+        )).all()
+    } if selected_level_ids else {}
 
     latest_by_class: dict[uuid.UUID, tuple[ResultCalculation, int]] = {}
     valid_snapshots: list[tuple[ResultCalculation, AcademicPeriod]] = []
@@ -11114,6 +11122,7 @@ def statistics(
     official_result_averages: list[float] = []
     subject_values: dict[str, dict[str, Any]] = {}
     class_values: dict[str, list[float]] = {}
+    level_values: dict[str, list[float]] = {}
     cycle_values: dict[str, list[float]] = {}
     distribution = {
         "Excellent": 0,
@@ -11131,6 +11140,8 @@ def statistics(
         scale = _statistics_class_scale(session, school_class)
         cycle_row = cycles_by_id.get(school_class.cycle_id) if school_class.cycle_id else None
         cycle_name = cycle_row.name if cycle_row else "Cycle non renseigné"
+        level_row = levels_by_id.get(school_class.school_level_id) if school_class.school_level_id else None
+        level_name = level_row.name if level_row else "Niveau non renseigné"
         for result in (snapshot.payload or {}).get("students") or []:
             general_average = result.get("average")
             if general_average is not None:
@@ -11155,6 +11166,9 @@ def statistics(
                 "className": school_class.name,
                 "cycleId": str(school_class.cycle_id) if school_class.cycle_id else None,
                 "cycle": cycle_name,
+                "levelId": str(school_class.school_level_id)
+                    if school_class.school_level_id else None,
+                "level": level_name,
                 "average": round(raw_average, 2),
                 "average20": average20,
                 "scale": scale,
@@ -11163,6 +11177,7 @@ def statistics(
             ranking.append(entry)
             distribution[entry["mention"]] += 1
             class_values.setdefault(str(school_class.id), []).append(average20)
+            level_values.setdefault(level_name, []).append(average20)
             cycle_values.setdefault(cycle_name, []).append(average20)
             for subject in result.get("subjects") or []:
                 if subject.get("average") is None:
@@ -11213,6 +11228,15 @@ def statistics(
         for class_key, values in class_values.items() if values
     ]
     by_class.sort(key=lambda item: item["className"].casefold())
+    by_level = [
+        {
+            "level": name,
+            "studentCount": len(values),
+            "average20": round(sum(values) / len(values), 2),
+        }
+        for name, values in level_values.items() if values
+    ]
+    by_level.sort(key=lambda item: item["level"].casefold())
     by_cycle = [
         {"cycle": name, "studentCount": len(values), "average20": round(sum(values) / len(values), 2)}
         for name, values in cycle_values.items() if values
@@ -11677,6 +11701,7 @@ def statistics(
         "top10": top10,
         "distribution": distribution,
         "byCycle": by_cycle,
+        "byLevel": by_level,
         "byClass": by_class,
         "bySubject": by_subject,
         "evolution": evolution,
