@@ -1376,12 +1376,28 @@ class _CanonicalGradesPageState extends State<CanonicalGradesPage> {
     students.sort((left, right) {
       final byLastName =
           left.lastName.toLowerCase().compareTo(right.lastName.toLowerCase());
-      return byLastName != 0
-          ? byLastName
-          : left.firstName
-              .toLowerCase()
-              .compareTo(right.firstName.toLowerCase());
+      if (byLastName != 0) return byLastName;
+      final byFirstName =
+          left.firstName.toLowerCase().compareTo(right.firstName.toLowerCase());
+      return byFirstName != 0 ? byFirstName : left.id.compareTo(right.id);
     });
+    final ordinaryEvaluations =
+        isTeacher ? _ordinaryEvaluations(store) : <EvaluationModel>[];
+    final combinedStudents = _classId == null
+        ? <StudentModel>[]
+        : store
+            .getStudents()
+            .where((item) => item.classId == _classId)
+            .toList()
+      ..sort((left, right) {
+        final byLastName =
+            left.lastName.toLowerCase().compareTo(right.lastName.toLowerCase());
+        if (byLastName != 0) return byLastName;
+        final byFirstName = left.firstName
+            .toLowerCase()
+            .compareTo(right.firstName.toLowerCase());
+        return byFirstName != 0 ? byFirstName : left.id.compareTo(right.id);
+      });
     final isAdmin =
         store.isSuperAdmin() || store.currentUser?.role == UserRole.admin;
     final availableEventCodes = store
@@ -1839,23 +1855,71 @@ class _CanonicalGradesPageState extends State<CanonicalGradesPage> {
             AppCard(
               title:
                   '${subjects.length > 1 ? 4 : 3}. Mes évaluations à compléter',
-              subtitle:
-                  'Sélectionnez une évaluation pour afficher immédiatement les élèves.',
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: evaluations
-                    .map((evaluation) => ChoiceChip(
-                          selected: evaluation.id == _evaluationId,
-                          label: Text(
-                              '${evaluation.title} · ${evaluation.status}'),
-                          onSelected: (_) =>
-                              _selectEvaluation(evaluation, store),
-                        ))
-                    .toList(),
+              subtitle: ordinaryEvaluations.length >= 2
+                  ? 'Choisissez la saisie séparée ou combinée pour les devoirs/composition programmés.'
+                  : 'Sélectionnez une évaluation pour afficher immédiatement les élèves.',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (ordinaryEvaluations.length >= 2) ...[
+                    Wrap(
+                      spacing: AppSpacing.s2,
+                      runSpacing: AppSpacing.s2,
+                      children: [
+                        ChoiceChip(
+                          key: const Key('grade-entry-separated'),
+                          selected: !_combinedEntry,
+                          label: const Text('Saisie séparée'),
+                          onSelected: _saving
+                              ? null
+                              : (_) => setState(() {
+                                    _combinedEntry = false;
+                                    _combinedGradeControllers.clear();
+                                    _combinedPresence.clear();
+                                  }),
+                        ),
+                        ChoiceChip(
+                          key: const Key('grade-entry-combined'),
+                          selected: _combinedEntry,
+                          label: const Text('Saisie combinée'),
+                          onSelected: _saving
+                              ? null
+                              : (_) {
+                                  _prepareCombinedEditors(store);
+                                  setState(() {
+                                    _combinedEntry = true;
+                                    _evaluationId = null;
+                                  });
+                                },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.s3),
+                  ],
+                  if (!_combinedEntry)
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: evaluations
+                          .map((evaluation) => ChoiceChip(
+                                selected: evaluation.id == _evaluationId,
+                                label: Text(
+                                    '${evaluation.title} · ${evaluation.status}'),
+                                onSelected: (_) =>
+                                    _selectEvaluation(evaluation, store),
+                              ))
+                          .toList(),
+                    ),
+                ],
               ),
             ),
-          if (selected != null) ...[
+          if (!isAdmin &&
+              _combinedEntry &&
+              ordinaryEvaluations.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.s4),
+            _combinedEntryCard(store, combinedStudents, ordinaryEvaluations),
+          ],
+          if (!_combinedEntry && selected != null) ...[
             const SizedBox(height: AppSpacing.s4),
             AppCard(
               title: isAdmin
