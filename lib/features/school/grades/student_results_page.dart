@@ -49,6 +49,9 @@ class StudentResultsPage extends StatefulWidget {
 
 class _StudentResultsPageState extends State<StudentResultsPage> {
   Future<Map<String, dynamic>>? _request;
+  String? _periodFilter;
+  String? _subjectFilter;
+  String? _typeFilter;
 
   @override
   void didChangeDependencies() {
@@ -63,6 +66,9 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.request != widget.request || oldWidget.loader != widget.loader) {
       _request = widget.request ?? widget.loader?.call();
+      _periodFilter = null;
+      _subjectFilter = null;
+      _typeFilter = null;
     }
   }
 
@@ -108,6 +114,45 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
                     'Les résultats apparaîtront après leur validation par l’administration.',
               );
             }
+            final periodOptions = <String>{};
+            final subjectOptions = <String>{};
+            final typeOptions = <String>{};
+            for (final year in years) {
+              for (final period in (year['periods'] as List? ?? const [])) {
+                final row = Map<String, dynamic>.from(period as Map);
+                final name = '${row['period'] ?? ''}'.trim();
+                if (name.isNotEmpty) periodOptions.add(name);
+                for (final subject in (row['subjects'] as List? ?? const [])) {
+                  final item = Map<String, dynamic>.from(subject as Map);
+                  final subjectName = '${item['subject'] ?? ''}'.trim();
+                  if (subjectName.isNotEmpty) subjectOptions.add(subjectName);
+                  for (final grade in (item['grades'] as List? ?? const [])) {
+                    final value = Map<String, dynamic>.from(grade as Map);
+                    final code = '${value['examCode'] ?? value['type'] ?? ''}'.trim();
+                    if (code.isNotEmpty) typeOptions.add(code);
+                  }
+                }
+                for (final exam in (row['exams'] as List? ?? const [])) {
+                  final item = Map<String, dynamic>.from(exam as Map);
+                  final code = '${item['code'] ?? ''}'.trim();
+                  if (code.isNotEmpty) typeOptions.add(code);
+                }
+              }
+              for (final note in (year['notes'] as List? ?? const [])) {
+                final row = Map<String, dynamic>.from(note as Map);
+                final periodName = '${row['period'] ?? ''}'.trim();
+                final subjectName = '${row['subject'] ?? ''}'.trim();
+                final code =
+                    '${row['examCode'] ?? row['evaluationType'] ?? ''}'.trim();
+                if (periodName.isNotEmpty) periodOptions.add(periodName);
+                if (subjectName.isNotEmpty) subjectOptions.add(subjectName);
+                if (code.isNotEmpty) typeOptions.add(code);
+              }
+            }
+            final sortedPeriods = periodOptions.toList()..sort();
+            final sortedSubjects = subjectOptions.toList()..sort();
+            final sortedTypes = typeOptions.toList()..sort();
+
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -115,6 +160,75 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
                   Text(
                     '${data['studentName']}',
                     style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: AppSpacing.s4),
+                ],
+                if (sortedPeriods.isNotEmpty ||
+                    sortedSubjects.isNotEmpty ||
+                    sortedTypes.isNotEmpty) ...[
+                  AppCard(
+                    title: 'Filtres',
+                    child: Wrap(
+                      spacing: AppSpacing.s3,
+                      runSpacing: AppSpacing.s3,
+                      children: [
+                        SizedBox(
+                          width: 230,
+                          child: DropdownButtonFormField<String?>(
+                            isExpanded: true,
+                            initialValue: _periodFilter,
+                            decoration:
+                                const InputDecoration(labelText: 'Période'),
+                            items: [
+                              const DropdownMenuItem<String?>(
+                                  value: null, child: Text('Toutes')),
+                              ...sortedPeriods.map((value) =>
+                                  DropdownMenuItem<String?>(
+                                      value: value, child: Text(value))),
+                            ],
+                            onChanged: (value) =>
+                                setState(() => _periodFilter = value),
+                          ),
+                        ),
+                        SizedBox(
+                          width: 230,
+                          child: DropdownButtonFormField<String?>(
+                            isExpanded: true,
+                            initialValue: _subjectFilter,
+                            decoration:
+                                const InputDecoration(labelText: 'Matière'),
+                            items: [
+                              const DropdownMenuItem<String?>(
+                                  value: null, child: Text('Toutes')),
+                              ...sortedSubjects.map((value) =>
+                                  DropdownMenuItem<String?>(
+                                      value: value, child: Text(value))),
+                            ],
+                            onChanged: (value) =>
+                                setState(() => _subjectFilter = value),
+                          ),
+                        ),
+                        SizedBox(
+                          width: 230,
+                          child: DropdownButtonFormField<String?>(
+                            isExpanded: true,
+                            initialValue: _typeFilter,
+                            decoration: const InputDecoration(
+                                labelText: 'Type d’évaluation'),
+                            items: [
+                              const DropdownMenuItem<String?>(
+                                  value: null, child: Text('Tous')),
+                              ...sortedTypes.map((value) =>
+                                  DropdownMenuItem<String?>(
+                                      value: value,
+                                      child: Text(_evaluationTypeLabel(value)))),
+                            ],
+                            onChanged: (value) =>
+                                setState(() => _typeFilter = value),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: AppSpacing.s4),
                 ],
