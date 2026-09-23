@@ -20,6 +20,7 @@ import 'documents/documents_page.dart';
 import 'finance/finance_page.dart';
 import 'grades/canonical_grades_page.dart';
 import 'grades/student_results_page.dart';
+import 'periods/periods_page.dart';
 import 'schedule/schedule_page.dart';
 import 'settings/settings_page.dart';
 import 'statistics/statistics_page.dart';
@@ -191,6 +192,8 @@ class _SchoolShellState extends State<SchoolShell> {
         return const AffectationsPage();
       case 'academic_years':
         return const AcademicYearsPage();
+      case 'periods':
+        return const PeriodsPage();
       case 'grades':
         if (store.currentUser?.role == UserRole.student) {
           return const StudentResultsPage();
