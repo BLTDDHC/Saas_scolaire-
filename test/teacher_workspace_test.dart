@@ -574,9 +574,14 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('Note /20'), findsOneWidget);
     expect(find.text('Tous ont été notés'), findsNothing);
-    expect(find.text('Absent'), findsWidgets);
-    expect(find.byKey(const ValueKey('grade-presence-student-1')),
-        findsOneWidget);
+    final presenceFinder =
+        find.byKey(const ValueKey('grade-presence-student-1'));
+    expect(presenceFinder, findsOneWidget);
+    await tester.tap(presenceFinder);
+    await tester.pumpAndSettle();
+    expect(find.text('Absent'), findsOneWidget);
+    await tester.tap(find.text('Non noté').last);
+    await tester.pumpAndSettle();
     final gradeField = tester.widget<TextField>(
       find.byKey(const ValueKey('grade-value-student-1')),
     );
