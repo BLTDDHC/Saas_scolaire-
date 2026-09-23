@@ -14,10 +14,26 @@ class TeacherStudentsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    String normalized(String value) => value
+        .toLowerCase()
+        .replaceAll(RegExp(r'[àáâäãå]'), 'a')
+        .replaceAll(RegExp(r'[ç]'), 'c')
+        .replaceAll(RegExp(r'[èéêë]'), 'e')
+        .replaceAll(RegExp(r'[ìíîï]'), 'i')
+        .replaceAll(RegExp(r'[ñ]'), 'n')
+        .replaceAll(RegExp(r'[òóôöõ]'), 'o')
+        .replaceAll(RegExp(r'[ùúûü]'), 'u')
+        .replaceAll(RegExp(r'[ýÿ]'), 'y');
+
     final students = context.watch<StoreService>().getStudents().toList()
       ..sort((a, b) {
-        final byClass = (a.className ?? '').compareTo(b.className ?? '');
-        return byClass != 0 ? byClass : a.fullName.compareTo(b.fullName);
+        final byLastName =
+            normalized(a.lastName).compareTo(normalized(b.lastName));
+        if (byLastName != 0) return byLastName;
+        final byFirstName =
+            normalized(a.firstName).compareTo(normalized(b.firstName));
+        if (byFirstName != 0) return byFirstName;
+        return a.id.compareTo(b.id);
       });
     return SingleChildScrollView(
       padding: const EdgeInsets.all(AppSpacing.s5),
