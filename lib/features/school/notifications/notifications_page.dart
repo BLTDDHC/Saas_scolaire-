@@ -249,7 +249,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
                       AppBadge(
                         label: _typeLabel(item.type),
                         variant: item.read
-                            ? AppBadgeVariant.neutral
+                            ? AppBadgeVariant.secondary
                             : AppBadgeVariant.primary,
                       ),
                     ],
