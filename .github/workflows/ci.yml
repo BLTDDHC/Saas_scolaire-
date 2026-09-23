@@ -119,3 +119,12 @@ jobs:
 
       - name: Flutter Web photo regression test
         run: flutter test --platform chrome test/student_photo_picker_web_test.dart
+
+      - name: Build Web release
+        run: flutter build web --release
+
+      - name: Build Android APK release
+        run: flutter build apk --release
+
+      - name: Build Android App Bundle release
+        run: flutter build appbundle --release
