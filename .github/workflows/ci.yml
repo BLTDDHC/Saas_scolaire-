@@ -76,6 +76,8 @@ jobs:
             ON teachers (id, establishment_id);
           CREATE UNIQUE INDEX IF NOT EXISTS ci_uq_subjects_id_establishment
             ON subjects (id, establishment_id);
+          CREATE UNIQUE INDEX IF NOT EXISTS ci_uq_school_series_id_establishment
+            ON school_series (id, establishment_id);
           SQL
 
       - name: Apply migrations to isolated test database
