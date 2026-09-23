@@ -4886,8 +4886,26 @@ class StoreService extends ChangeNotifier {
 
   Future<void> refreshWorkflowNotificationsRemote() async {
     final rows = await _repository.workflowNotifications();
-    _notifications = rows.map(NotificationModel.fromJson).toList();
+    _notifications = rows.map(NotificationModel.fromJson).toList()
+      ..sort((left, right) => right.time.compareTo(left.time));
     notifyListeners();
+  }
+
+  Future<Map<String, dynamic>> notifyTeachersInApp({
+    required String title,
+    required String message,
+    String category = 'administrative',
+    List<String>? teacherIds,
+  }) async {
+    final result = await _repository.notifyTeachersInApp({
+      'title': title.trim(),
+      'message': message.trim(),
+      'category': category,
+      if (teacherIds != null && teacherIds.isNotEmpty)
+        'teacherIds': teacherIds,
+    });
+    await refreshWorkflowNotificationsRemote();
+    return result;
   }
 
   List<AuditLogModel> getAuditLogs({String? schoolId}) {
