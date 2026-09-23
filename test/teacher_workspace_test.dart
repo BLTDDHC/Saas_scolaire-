@@ -600,7 +600,9 @@ void main() {
 
     await tester.pumpWidget(ChangeNotifierProvider<StoreService>.value(
       value: store,
-      child: const Scaffold(body: CanonicalGradesPage()),
+      child: const MaterialApp(
+        home: Scaffold(body: CanonicalGradesPage()),
+      ),
     ));
     await tester.pumpAndSettle();
 
