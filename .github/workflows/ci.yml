@@ -51,6 +51,15 @@ jobs:
           PYTHONPATH: backend
         run: python -c "from app.main import Base, engine; Base.metadata.create_all(engine)"
 
+      - name: Align isolated schema with historical migration baseline
+        run: |
+          psql -h localhost -U postgres -d saas_scolaire_test -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE UNIQUE INDEX IF NOT EXISTS ci_uq_school_cycles_establishment_code
+            ON school_cycles (establishment_id, code);
+          CREATE UNIQUE INDEX IF NOT EXISTS ci_uq_school_levels_establishment_cycle_code
+            ON school_levels (establishment_id, cycle_id, code);
+          SQL
+
       - name: Apply migrations to isolated test database
         run: |
           for migration in backend/migrations/*.sql; do
