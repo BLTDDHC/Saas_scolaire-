@@ -21,6 +21,7 @@ import 'finance/finance_page.dart';
 import 'grades/canonical_grades_page.dart';
 import 'grades/student_results_page.dart';
 import 'periods/periods_page.dart';
+import 'notifications/notifications_page.dart';
 import 'schedule/schedule_page.dart';
 import 'settings/settings_page.dart';
 import 'statistics/statistics_page.dart';
@@ -56,8 +57,10 @@ class _SchoolShellState extends State<SchoolShell> {
 
   bool _pageAllowedForRole(UserRole? role, String pageId) {
     if (role == UserRole.admin) return true;
-    const studentPages = {'dashboard', 'grades', 'schedule'};
-    const parentPages = {'dashboard', 'tracking', 'grades', 'schedule'};
+    const studentPages = {'dashboard', 'grades', 'schedule', 'notifications'};
+    const parentPages = {
+      'dashboard', 'tracking', 'grades', 'schedule', 'notifications'
+    };
     const teacherPages = {
       'dashboard',
       'students',
@@ -65,6 +68,7 @@ class _SchoolShellState extends State<SchoolShell> {
       'attendance',
       'schedule',
       'behavior',
+      'notifications',
     };
     if (role == UserRole.student) return studentPages.contains(pageId);
     if (role == UserRole.parent) return parentPages.contains(pageId);
@@ -194,6 +198,8 @@ class _SchoolShellState extends State<SchoolShell> {
         return const AcademicYearsPage();
       case 'periods':
         return const PeriodsPage();
+      case 'notifications':
+        return const NotificationsPage();
       case 'grades':
         if (store.currentUser?.role == UserRole.student) {
           return const StudentResultsPage();
