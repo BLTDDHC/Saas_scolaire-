@@ -45,6 +45,7 @@ KINDS = {"establishments", "subscriptions", "academic-years", "students", "teach
 PASSWORD_MIN_LENGTH = 8
 RESULT_CALCULATION_RULE_VERSION = "mc-composition-v2"
 STUDENT_PHOTO_ROOT = Path(__file__).resolve().parents[1] / "storage" / "student-photos"
+USER_PROFILE_PHOTO_ROOT = Path(__file__).resolve().parents[1] / "storage" / "user-profile-photos"
 STUDENT_PHOTO_MAX_BYTES = 5 * 1024 * 1024
 STUDENT_PHOTO_TYPES = {
     "image/jpeg": ".jpg",
@@ -815,6 +816,19 @@ class ChangePasswordInput(BaseModel):
     current_password: str | None = Field(default=None, min_length=1)
     new_password: str = Field(min_length=1, max_length=128)
     new_password_confirmation: str = Field(min_length=1, max_length=128)
+
+class ProfileUpdateInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    name: str = Field(min_length=2, max_length=160)
+    email: str = Field(min_length=3, max_length=254)
+
+    @model_validator(mode="after")
+    def normalize_profile(self):
+        self.name = self.name.strip()
+        self.email = self.email.strip().lower()
+        if not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+', self.email):
+            raise ValueError("Adresse e-mail invalide")
+        return self
 class ResourceInput(BaseModel): payload: dict[str, Any]
 class FinanceFeeInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -1560,6 +1574,27 @@ class ExternalNotificationInput(BaseModel):
                 raise ValueError('Adresse e-mail invalide')
         elif not re.fullmatch(r'\+?[0-9][0-9 .()\-]{5,30}', self.recipient):
             raise ValueError('Numéro de téléphone invalide')
+        return self
+
+
+class InAppTeacherNotificationInput(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
+    title: str = Field(min_length=1, max_length=160)
+    message: str = Field(min_length=1, max_length=4000)
+    category: str = Field(default="administrative", min_length=1, max_length=80)
+    teacher_ids: list[uuid.UUID] | None = Field(
+        default=None, alias="teacherIds", max_length=500
+    )
+
+    @model_validator(mode="after")
+    def normalize_in_app_teacher_notification(self):
+        self.title = self.title.strip()
+        self.message = self.message.strip()
+        self.category = self.category.strip().lower()
+        if self.teacher_ids is not None:
+            self.teacher_ids = list(dict.fromkeys(self.teacher_ids))
+            if not self.teacher_ids:
+                self.teacher_ids = None
         return self
 
 
@@ -3455,6 +3490,94 @@ def login(
 @app.get("/api/v1/auth/me")
 def me(current: Principal = Depends(principal), session: Session = Depends(db)):
     user = session.get(User, uuid.UUID(current.id)); return user_json(user, session)
+@app.put("/api/v1/auth/profile")
+def update_own_profile(
+    body: ProfileUpdateInput,
+    current: Principal = Depends(principal),
+    session: Session = Depends(db),
+):
+    if current.role not in {"admin", "superadmin"}:
+        raise HTTPException(403, "La modification du profil est réservée aux administrateurs")
+    user = session.get(User, uuid.UUID(current.id))
+    if not user:
+        raise HTTPException(404, "Utilisateur introuvable")
+    duplicate = session.scalar(select(User.id).where(
+        func.lower(User.email) == body.email,
+        User.id != user.id,
+    ))
+    if duplicate:
+        raise HTTPException(409, "Cette adresse e-mail est déjà utilisée")
+    user.name = body.name
+    user.email = body.email
+    user.updated_at = datetime.now(timezone.utc)
+    session.commit()
+    session.refresh(user)
+    return user_json(user, session)
+
+def _user_profile_photo_row(
+    session: Session, user_id: uuid.UUID
+) -> Resource | None:
+    return session.get(
+        Resource, {"kind": "user-profile-photos", "id": str(user_id)}
+    )
+
+@app.get("/api/v1/auth/profile/photo")
+def get_own_profile_photo(
+    current: Principal = Depends(principal),
+    session: Session = Depends(db),
+):
+    row = _user_profile_photo_row(session, uuid.UUID(current.id))
+    path = Path(str(row.payload.get("path"))) if row and row.payload.get("path") else None
+    if not row or not path or not path.is_file():
+        raise HTTPException(404, "Photo de profil introuvable")
+    return Response(
+        content=path.read_bytes(),
+        media_type=row.payload.get("mimeType") or "image/jpeg",
+        headers={"Cache-Control": "private, max-age=300"},
+    )
+
+@app.put("/api/v1/auth/profile/photo")
+def update_own_profile_photo(
+    body: StudentPhotoUpdateInput,
+    current: Principal = Depends(principal),
+    session: Session = Depends(db),
+):
+    if current.role not in {"admin", "superadmin"}:
+        raise HTTPException(403, "La photo de profil est gérée par l’administration")
+    user_id = uuid.UUID(current.id)
+    content, extension = _decode_student_photo(body)
+    target_dir = USER_PROFILE_PHOTO_ROOT / str(user_id)
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target = target_dir / f"profile{extension}"
+    temporary = target_dir / f".profile-{uuid.uuid4().hex}.tmp"
+    temporary.write_bytes(content)
+    temporary.replace(target)
+    row = _user_profile_photo_row(session, user_id)
+    old_path = Path(str(row.payload.get("path"))) if row and row.payload.get("path") else None
+    payload = {
+        "userId": str(user_id),
+        "path": str(target),
+        "mimeType": body.mime_type.lower(),
+        "originalName": body.name,
+        "size": len(content),
+        "updatedAt": datetime.now(timezone.utc).isoformat(),
+    }
+    if row:
+        row.payload = payload
+        row.updated_at = datetime.now(timezone.utc)
+    else:
+        session.add(Resource(
+            id=str(user_id),
+            kind="user-profile-photos",
+            school_id=current.school_id,
+            establishment_id=resolve_establishment_id(session, current.school_id),
+            payload=payload,
+        ))
+    if old_path and old_path != target and old_path.is_file() and old_path.parent == target_dir:
+        old_path.unlink(missing_ok=True)
+    session.commit()
+    return {"updatedAt": payload["updatedAt"]}
+
 @app.post("/api/v1/auth/change-password")
 def change_password(body: ChangePasswordInput, current: Principal = Depends(principal), session: Session = Depends(db)):
     user = session.get(User, uuid.UUID(current.id))
@@ -7954,6 +8077,11 @@ def _compute_school_results(
                 'evaluationId': str(grade.evaluation_id),
                 'evaluation': evaluation_by_id[grade.evaluation_id].name,
                 'type': evaluation_by_id[grade.evaluation_id].type,
+                'examCode': evaluation_by_id[grade.evaluation_id].exam_code,
+                'date': evaluation_by_id[grade.evaluation_id].date_scheduled.isoformat()
+                    if evaluation_by_id[grade.evaluation_id].date_scheduled else None,
+                'status': grade.status,
+                'presence': grade.presence,
                 'value': effective_grade_value(grade),
                 'maxValue': float(grade.max_value),
                 'comment': grade.comment,
@@ -9869,33 +9997,108 @@ def recent_valid_establishments(session: Session, limit: int = 5) -> list[dict[s
         "plan": resource.payload.get("plan"),
     } for establishment, resource in items[:limit]]
 
+def _platform_monthly_counts(
+    rows: list[Any],
+    date_getter,
+    *,
+    months: int = 12,
+) -> list[dict[str, Any]]:
+    now = datetime.now(timezone.utc)
+    year = now.year
+    month = now.month
+    keys: list[str] = []
+    for offset in range(months - 1, -1, -1):
+        absolute = year * 12 + (month - 1) - offset
+        y, m = divmod(absolute, 12)
+        keys.append(f"{y:04d}-{m + 1:02d}")
+    counts = {key: 0 for key in keys}
+    for row in rows:
+        value = date_getter(row)
+        if value is None:
+            continue
+        if isinstance(value, date) and not isinstance(value, datetime):
+            dt = datetime.combine(value, dt_time.min, tzinfo=timezone.utc)
+        elif isinstance(value, datetime):
+            dt = value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+        else:
+            try:
+                parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+            except (TypeError, ValueError):
+                continue
+            dt = parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+        key = dt.strftime("%Y-%m")
+        if key in counts:
+            counts[key] += 1
+    return [{"month": key, "count": counts[key]} for key in keys]
+
+
 @app.get("/api/v1/superadmin/dashboard")
 def superadmin_dashboard(current: Principal = Depends(require("superadmin")), session: Session = Depends(db)):
     establishments = list(session.scalars(select(Establishment)).all())
     subscriptions = list(session.scalars(select(Resource).where(Resource.kind == "subscriptions")).all())
+    users = list(session.scalars(select(User)).all())
+    plans = list(session.scalars(select(Resource).where(Resource.kind == "plans")).all())
     subscriptions_summary = subscription_summary(subscriptions)
+    user_roles = {
+        role: sum(item.role == role and item.status == "active" for item in users)
+        for role in ("admin", "teacher", "student", "parent")
+    }
+    status_distribution = [
+        {"label": "Actifs", "count": subscriptions_summary["active"]},
+        {"label": "À venir", "count": subscriptions_summary["upcoming"]},
+        {"label": "En retard", "count": subscriptions_summary["overdue"]},
+        {"label": "Expirés", "count": subscriptions_summary["expired"]},
+    ]
+    plan_distribution: dict[str, int] = {}
+    for row in subscriptions:
+        plan = str(
+            row.payload.get("planName")
+            or row.payload.get("plan")
+            or row.payload.get("planId")
+            or "Non renseigné"
+        )
+        plan_distribution[plan] = plan_distribution.get(plan, 0) + 1
     return {
+        "generatedAt": datetime.now(timezone.utc).isoformat(),
+        "privacyScope": "platform-only",
         "establishments": {
             "total": len(establishments),
             "active": sum(item.status == "active" for item in establishments),
             "suspended": sum(item.status == "suspended" for item in establishments),
             "recent": recent_valid_establishments(session),
+            "trend": _platform_monthly_counts(
+                establishments, lambda item: item.created_at
+            ),
         },
         "subscriptions": {
             key: subscriptions_summary[key]
             for key in ("total", "active", "upcoming", "overdue", "expired", "activeAmountTotal")
+        } | {
+            "trend": _platform_monthly_counts(
+                subscriptions, lambda item: item.created_at
+            ),
+            "statusDistribution": status_distribution,
+            "planDistribution": [
+                {"label": key, "count": value}
+                for key, value in sorted(plan_distribution.items())
+            ],
         },
         "users": {
-            "total": session.scalar(select(func.count()).select_from(User)),
-            "admins": session.scalar(select(func.count()).select_from(User).where(User.role == "admin")),
-            "teachers": session.scalar(select(func.count()).select_from(User).where(User.role == "teacher", User.status == "active")),
-            "students": session.scalar(select(func.count()).select_from(User).where(User.role == "student", User.status == "active")),
-            "parents": session.scalar(select(func.count()).select_from(User).where(User.role == "parent", User.status == "active")),
+            "total": len(users),
+            "admins": user_roles["admin"],
+            "teachers": user_roles["teacher"],
+            "students": user_roles["student"],
+            "parents": user_roles["parent"],
+            "trend": _platform_monthly_counts(users, lambda item: item.created_at),
+            "distribution": [
+                {"label": "Administrateurs", "count": user_roles["admin"]},
+                {"label": "Enseignants", "count": user_roles["teacher"]},
+                {"label": "Élèves", "count": user_roles["student"]},
+                {"label": "Parents", "count": user_roles["parent"]},
+            ],
         },
         "plans": {
-            "total": session.scalar(select(func.count()).select_from(Resource).where(
-                Resource.kind == "plans"
-            )) or 0,
+            "total": len(plans),
         },
     }
 
@@ -10996,7 +11199,7 @@ def statistics(
         if (
             not selected_stat_period
             or selected_stat_period.establishment_id != database_id
-            or selected_stat_period.period_type != "trimester"
+            or selected_stat_period.status != "active"
             or (
                 requested_year_id is not None
                 and selected_stat_period.academic_year_id != requested_year_id
@@ -11043,6 +11246,14 @@ def statistics(
     school_classes = filtered_classes
     class_ids = [item.id for item in school_classes]
     classes_by_id = {item.id: item for item in school_classes}
+    selected_level_ids = {
+        item.school_level_id for item in school_classes if item.school_level_id
+    }
+    levels_by_id: dict[uuid.UUID, SchoolLevel] = {
+        item.id: item for item in session.scalars(select(SchoolLevel).where(
+            SchoolLevel.id.in_(selected_level_ids)
+        )).all()
+    } if selected_level_ids else {}
 
     latest_by_class: dict[uuid.UUID, tuple[ResultCalculation, int]] = {}
     valid_snapshots: list[tuple[ResultCalculation, AcademicPeriod]] = []
@@ -11062,10 +11273,17 @@ def statistics(
             if payload.get("calculationRuleVersion") != RESULT_CALCULATION_RULE_VERSION:
                 continue
             period = periods.get(snap.academic_period_id)
-            if not period or period.period_type != "trimester":
+            if not period or period.status != "active":
                 continue
             valid_snapshots.append((snap, period))
-            if requested_period_id and snap.academic_period_id != requested_period_id:
+            if requested_period_id:
+                if snap.academic_period_id != requested_period_id:
+                    continue
+            elif period.period_type != "trimester":
+                # Preserve the historical dashboard default: without an
+                # explicit filter, headline KPIs use the latest official
+                # trimester. Month/custom snapshots are available through
+                # their own configured period filters and evolution series.
                 continue
             order = int(period.sort_order or 0)
             previous = latest_by_class.get(snap.class_id)
@@ -11081,6 +11299,7 @@ def statistics(
     official_result_averages: list[float] = []
     subject_values: dict[str, dict[str, Any]] = {}
     class_values: dict[str, list[float]] = {}
+    level_values: dict[str, list[float]] = {}
     cycle_values: dict[str, list[float]] = {}
     distribution = {
         "Excellent": 0,
@@ -11098,6 +11317,8 @@ def statistics(
         scale = _statistics_class_scale(session, school_class)
         cycle_row = cycles_by_id.get(school_class.cycle_id) if school_class.cycle_id else None
         cycle_name = cycle_row.name if cycle_row else "Cycle non renseigné"
+        level_row = levels_by_id.get(school_class.school_level_id) if school_class.school_level_id else None
+        level_name = level_row.name if level_row else "Niveau non renseigné"
         for result in (snapshot.payload or {}).get("students") or []:
             general_average = result.get("average")
             if general_average is not None:
@@ -11122,6 +11343,9 @@ def statistics(
                 "className": school_class.name,
                 "cycleId": str(school_class.cycle_id) if school_class.cycle_id else None,
                 "cycle": cycle_name,
+                "levelId": str(school_class.school_level_id)
+                    if school_class.school_level_id else None,
+                "level": level_name,
                 "average": round(raw_average, 2),
                 "average20": average20,
                 "scale": scale,
@@ -11130,6 +11354,7 @@ def statistics(
             ranking.append(entry)
             distribution[entry["mention"]] += 1
             class_values.setdefault(str(school_class.id), []).append(average20)
+            level_values.setdefault(level_name, []).append(average20)
             cycle_values.setdefault(cycle_name, []).append(average20)
             for subject in result.get("subjects") or []:
                 if subject.get("average") is None:
@@ -11180,6 +11405,15 @@ def statistics(
         for class_key, values in class_values.items() if values
     ]
     by_class.sort(key=lambda item: item["className"].casefold())
+    by_level = [
+        {
+            "level": name,
+            "studentCount": len(values),
+            "average20": round(sum(values) / len(values), 2),
+        }
+        for name, values in level_values.items() if values
+    ]
+    by_level.sort(key=lambda item: item["level"].casefold())
     by_cycle = [
         {"cycle": name, "studentCount": len(values), "average20": round(sum(values) / len(values), 2)}
         for name, values in cycle_values.items() if values
@@ -11203,6 +11437,8 @@ def statistics(
     evolution_buckets: dict[uuid.UUID, dict[str, Any]] = {}
     class_period_averages: dict[uuid.UUID, list[tuple[int, float]]] = {}
     for snapshot, period in valid_snapshots:
+        if period.period_type != "trimester":
+            continue
         school_class = classes_by_id.get(snapshot.class_id)
         if not school_class:
             continue
@@ -11592,7 +11828,6 @@ def statistics(
         })
     period_filter_statement = select(AcademicPeriod).where(
         AcademicPeriod.establishment_id == database_id,
-        AcademicPeriod.period_type == "trimester",
         AcademicPeriod.status == "active",
     )
     if academic_year_id:
@@ -11643,6 +11878,7 @@ def statistics(
         "top10": top10,
         "distribution": distribution,
         "byCycle": by_cycle,
+        "byLevel": by_level,
         "byClass": by_class,
         "bySubject": by_subject,
         "evolution": evolution,
@@ -11652,8 +11888,14 @@ def statistics(
         "gradeCompletionRate": completion_rate,
         "finance": finance,
         "filters": {
-            "periods": [{"id": str(item.id), "name": item.name}
-                        for item in filter_periods],
+            "periods": [{
+                "id": str(item.id),
+                "name": item.name,
+                "periodType": item.period_type,
+                "parentPeriodId": str(item.parent_period_id)
+                    if item.parent_period_id else None,
+                "sortOrder": item.sort_order,
+            } for item in filter_periods],
             "subjects": [{"id": str(item.id), "name": item.name}
                          for item in filter_subjects],
         },
@@ -13040,6 +13282,75 @@ def generate_document_report(
     session.commit()
     return {"document": document, "report": payload}
 
+@app.post("/api/v1/school/notifications/teachers", status_code=201)
+def create_teacher_in_app_notification(
+    body: InAppTeacherNotificationInput,
+    current: Principal = Depends(principal),
+    session: Session = Depends(db),
+):
+    if current.role != "admin":
+        raise HTTPException(
+            403, "Les notifications groupées des enseignants sont réservées à l'administration"
+        )
+    school_id, database_id = module_tenant_scope(current, session)
+    statement = select(Teacher).where(
+        Teacher.establishment_id == database_id,
+        Teacher.status == "active",
+    )
+    if body.teacher_ids:
+        statement = statement.where(Teacher.id.in_(body.teacher_ids))
+    allowed = direction_cycle_scope(current)
+    if allowed is not None:
+        scoped_teacher_ids = select(Affectation.teacher_id).join(
+            SchoolClass, SchoolClass.id == Affectation.class_id
+        ).where(
+            Affectation.establishment_id == database_id,
+            Affectation.status == "active",
+            SchoolClass.cycle_id.in_(allowed),
+        )
+        statement = statement.where(Teacher.id.in_(scoped_teacher_ids))
+    teachers = list(session.scalars(
+        statement.order_by(Teacher.last_name, Teacher.first_name)
+    ).all())
+    if body.teacher_ids and len(teachers) != len(body.teacher_ids):
+        raise HTTPException(
+            403,
+            "Un ou plusieurs enseignants sont hors de votre périmètre",
+        )
+    if not teachers:
+        raise HTTPException(422, "Aucun enseignant actif dans ce périmètre")
+    if len(teachers) > 500:
+        raise HTTPException(409, "Notification groupée limitée à 500 enseignants")
+
+    now = datetime.now(timezone.utc)
+    notification_id = f"teacher-announcement-{uuid.uuid4().hex}"
+    payload = {
+        "id": notification_id,
+        "type": "teacher_announcement",
+        "category": body.category,
+        "title": body.title,
+        "message": body.message,
+        "teacherIds": [str(item.id) for item in teachers],
+        "schoolId": school_id,
+        "createdBy": current.id,
+        "read": False,
+        "time": now.isoformat(),
+    }
+    session.add(Resource(
+        id=notification_id,
+        kind="notifications",
+        school_id=school_id,
+        establishment_id=database_id,
+        academic_year_id=None,
+        payload=payload,
+    ))
+    session.commit()
+    return {
+        **payload,
+        "recipientCount": len(teachers),
+    }
+
+
 @app.put("/api/v1/notifications/{notification_id}/read", status_code=204)
 def mark_workflow_notification_read(
     notification_id: str,
@@ -13742,6 +14053,61 @@ def student_results(student_id: uuid.UUID, academic_year_id: uuid.UUID,
     payload = []
     school_class = session.get(SchoolClass, registration.class_id)
     average_scale = general_average_scale(session, school_class)
+
+    period_by_id = {item.id: item for item in periods}
+    subject_ids = set(session.scalars(select(Grade.subject_id).join(
+        Evaluation, Evaluation.id == Grade.evaluation_id
+    ).where(
+        Grade.establishment_id == student.establishment_id,
+        Grade.student_id == student.id,
+        Evaluation.establishment_id == student.establishment_id,
+        Evaluation.class_id == registration.class_id,
+        Evaluation.academic_year_id == academic_year_id,
+        Evaluation.status.in_(('submitted', 'validated', 'locked')),
+    )).all())
+    subjects_by_id = {
+        item.id: item for item in session.scalars(
+            select(Subject).where(Subject.id.in_(subject_ids))
+        ).all()
+    } if subject_ids else {}
+    submitted_notes = []
+    note_rows = session.execute(select(Grade, Evaluation).join(
+        Evaluation, Evaluation.id == Grade.evaluation_id
+    ).where(
+        Grade.establishment_id == student.establishment_id,
+        Grade.student_id == student.id,
+        Evaluation.establishment_id == student.establishment_id,
+        Evaluation.class_id == registration.class_id,
+        Evaluation.academic_year_id == academic_year_id,
+        Evaluation.status.in_(('submitted', 'validated', 'locked')),
+    ).order_by(
+        Evaluation.date_scheduled.asc().nulls_last(),
+        Evaluation.created_at.asc(),
+        Grade.updated_at.asc(),
+    )).all()
+    for grade, evaluation in note_rows:
+        period = period_by_id.get(evaluation.academic_period_id)
+        subject = subjects_by_id.get(grade.subject_id)
+        submitted_notes.append({
+            'gradeId': str(grade.id),
+            'evaluationId': str(evaluation.id),
+            'evaluation': evaluation.name,
+            'evaluationType': evaluation.type,
+            'examCode': evaluation.exam_code,
+            'periodId': str(period.id) if period else None,
+            'period': period.name if period else evaluation.period,
+            'periodType': period.period_type if period else None,
+            'periodOrder': period.sort_order if period else None,
+            'subjectId': str(grade.subject_id),
+            'subject': subject.name if subject else '',
+            'date': evaluation.date_scheduled.isoformat()
+                if evaluation.date_scheduled else grade.updated_at.date().isoformat(),
+            'value': effective_grade_value(grade),
+            'maxValue': float(grade.max_value),
+            'presence': grade.presence,
+            'status': evaluation.status,
+            'comment': grade.comment,
+        })
     for period in periods:
         class_result = school_results(registration.class_id, period.id, current, session)
         if class_result.get('calculationStatus') != 'official':
@@ -13779,6 +14145,11 @@ def student_results(student_id: uuid.UUID, academic_year_id: uuid.UUID,
         # assigned teacher keep the existing detailed class-ranking payload.
         can_view_class_ranking = current.role not in {'student', 'parent'}
         payload.append({'periodId': str(period.id), 'period': period.name,
+            'periodType': period.period_type,
+            'periodOrder': period.sort_order,
+            'parentPeriodId': str(period.parent_period_id) if period.parent_period_id else None,
+            'startDate': period.start_date.isoformat() if period.start_date else None,
+            'endDate': period.end_date.isoformat() if period.end_date else None,
             'average': average,
             'averageScale': average_scale,
             'rank': own_result.get('rank'),
@@ -13794,7 +14165,9 @@ def student_results(student_id: uuid.UUID, academic_year_id: uuid.UUID,
             'rankingCount': len(class_ranking),
             'ranking': class_ranking if can_view_class_ranking else []})
     return {'studentId': str(student.id), 'academicYearId': str(academic_year_id),
-        'registration': registration_json(registration, session), 'periods': payload}
+        'registration': registration_json(registration, session),
+        'notes': submitted_notes,
+        'periods': payload}
 
 @app.get('/api/v1/school/my-results')
 def my_student_results(

@@ -93,6 +93,11 @@ class NavItems {
               icon: Icons.calendar_month_rounded,
               section: 'PÉDAGOGIE'),
           NavItem(
+              id: 'periods',
+              label: 'Périodes',
+              icon: Icons.date_range_rounded,
+              section: 'PÉDAGOGIE'),
+          NavItem(
               id: 'grades',
               label: 'Résultats & soumissions',
               icon: Icons.grade_rounded,
@@ -126,6 +131,11 @@ class NavItems {
               id: 'statistics',
               label: 'Statistiques',
               icon: Icons.bar_chart_rounded,
+              section: 'ADMINISTRATION'),
+          NavItem(
+              id: 'notifications',
+              label: 'Notifications',
+              icon: Icons.notifications_rounded,
               section: 'ADMINISTRATION'),
           NavItem(
               id: 'settings',
@@ -166,6 +176,11 @@ class NavItems {
               label: 'Comportement',
               icon: Icons.stars_rounded,
               section: 'PÉDAGOGIE'),
+          NavItem(
+              id: 'notifications',
+              label: 'Notifications',
+              icon: Icons.notifications_rounded,
+              section: 'ESPACE ENSEIGNANT'),
         ];
 
       case UserRole.student:
@@ -184,6 +199,11 @@ class NavItems {
               id: 'schedule',
               label: 'Emploi du temps',
               icon: Icons.calendar_today_rounded,
+              section: 'SCOLAIRE'),
+          NavItem(
+              id: 'notifications',
+              label: 'Notifications',
+              icon: Icons.notifications_rounded,
               section: 'SCOLAIRE'),
         ];
 
@@ -208,6 +228,11 @@ class NavItems {
               id: 'schedule',
               label: 'Emplois du temps',
               icon: Icons.calendar_today_rounded,
+              section: 'SUIVI'),
+          NavItem(
+              id: 'notifications',
+              label: 'Notifications',
+              icon: Icons.notifications_rounded,
               section: 'SUIVI'),
         ];
     }

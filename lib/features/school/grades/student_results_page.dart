@@ -49,6 +49,9 @@ class StudentResultsPage extends StatefulWidget {
 
 class _StudentResultsPageState extends State<StudentResultsPage> {
   Future<Map<String, dynamic>>? _request;
+  String? _periodFilter;
+  String? _subjectFilter;
+  String? _typeFilter;
 
   @override
   void didChangeDependencies() {
@@ -63,6 +66,9 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.request != widget.request || oldWidget.loader != widget.loader) {
       _request = widget.request ?? widget.loader?.call();
+      _periodFilter = null;
+      _subjectFilter = null;
+      _typeFilter = null;
     }
   }
 
@@ -108,6 +114,45 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
                     'Les résultats apparaîtront après leur validation par l’administration.',
               );
             }
+            final periodOptions = <String>{};
+            final subjectOptions = <String>{};
+            final typeOptions = <String>{};
+            for (final year in years) {
+              for (final period in (year['periods'] as List? ?? const [])) {
+                final row = Map<String, dynamic>.from(period as Map);
+                final name = '${row['period'] ?? ''}'.trim();
+                if (name.isNotEmpty) periodOptions.add(name);
+                for (final subject in (row['subjects'] as List? ?? const [])) {
+                  final item = Map<String, dynamic>.from(subject as Map);
+                  final subjectName = '${item['subject'] ?? ''}'.trim();
+                  if (subjectName.isNotEmpty) subjectOptions.add(subjectName);
+                  for (final grade in (item['grades'] as List? ?? const [])) {
+                    final value = Map<String, dynamic>.from(grade as Map);
+                    final code = '${value['examCode'] ?? value['type'] ?? ''}'.trim();
+                    if (code.isNotEmpty) typeOptions.add(code);
+                  }
+                }
+                for (final exam in (row['exams'] as List? ?? const [])) {
+                  final item = Map<String, dynamic>.from(exam as Map);
+                  final code = '${item['code'] ?? ''}'.trim();
+                  if (code.isNotEmpty) typeOptions.add(code);
+                }
+              }
+              for (final note in (year['notes'] as List? ?? const [])) {
+                final row = Map<String, dynamic>.from(note as Map);
+                final periodName = '${row['period'] ?? ''}'.trim();
+                final subjectName = '${row['subject'] ?? ''}'.trim();
+                final code =
+                    '${row['examCode'] ?? row['evaluationType'] ?? ''}'.trim();
+                if (periodName.isNotEmpty) periodOptions.add(periodName);
+                if (subjectName.isNotEmpty) subjectOptions.add(subjectName);
+                if (code.isNotEmpty) typeOptions.add(code);
+              }
+            }
+            final sortedPeriods = periodOptions.toList()..sort();
+            final sortedSubjects = subjectOptions.toList()..sort();
+            final sortedTypes = typeOptions.toList()..sort();
+
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -115,6 +160,75 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
                   Text(
                     '${data['studentName']}',
                     style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: AppSpacing.s4),
+                ],
+                if (sortedPeriods.isNotEmpty ||
+                    sortedSubjects.isNotEmpty ||
+                    sortedTypes.isNotEmpty) ...[
+                  AppCard(
+                    title: 'Filtres',
+                    child: Wrap(
+                      spacing: AppSpacing.s3,
+                      runSpacing: AppSpacing.s3,
+                      children: [
+                        SizedBox(
+                          width: 230,
+                          child: DropdownButtonFormField<String?>(
+                            isExpanded: true,
+                            initialValue: _periodFilter,
+                            decoration:
+                                const InputDecoration(labelText: 'Période'),
+                            items: [
+                              const DropdownMenuItem<String?>(
+                                  value: null, child: Text('Toutes')),
+                              ...sortedPeriods.map((value) =>
+                                  DropdownMenuItem<String?>(
+                                      value: value, child: Text(value))),
+                            ],
+                            onChanged: (value) =>
+                                setState(() => _periodFilter = value),
+                          ),
+                        ),
+                        SizedBox(
+                          width: 230,
+                          child: DropdownButtonFormField<String?>(
+                            isExpanded: true,
+                            initialValue: _subjectFilter,
+                            decoration:
+                                const InputDecoration(labelText: 'Matière'),
+                            items: [
+                              const DropdownMenuItem<String?>(
+                                  value: null, child: Text('Toutes')),
+                              ...sortedSubjects.map((value) =>
+                                  DropdownMenuItem<String?>(
+                                      value: value, child: Text(value))),
+                            ],
+                            onChanged: (value) =>
+                                setState(() => _subjectFilter = value),
+                          ),
+                        ),
+                        SizedBox(
+                          width: 230,
+                          child: DropdownButtonFormField<String?>(
+                            isExpanded: true,
+                            initialValue: _typeFilter,
+                            decoration: const InputDecoration(
+                                labelText: 'Type d’évaluation'),
+                            items: [
+                              const DropdownMenuItem<String?>(
+                                  value: null, child: Text('Tous')),
+                              ...sortedTypes.map((value) =>
+                                  DropdownMenuItem<String?>(
+                                      value: value,
+                                      child: Text(_evaluationTypeLabel(value)))),
+                            ],
+                            onChanged: (value) =>
+                                setState(() => _typeFilter = value),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: AppSpacing.s4),
                 ],
@@ -142,10 +256,43 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
     final registration = Map<String, dynamic>.from(
       year['registration'] as Map? ?? const <String, dynamic>{},
     );
-    final periods = List<Map<String, dynamic>>.from(
+    var periods = List<Map<String, dynamic>>.from(
       (year['periods'] as List? ?? const [])
           .map((item) => Map<String, dynamic>.from(item as Map)),
     );
+    periods.sort((left, right) {
+      final byOrder = ((left['periodOrder'] as num?)?.toInt() ?? 0)
+          .compareTo((right['periodOrder'] as num?)?.toInt() ?? 0);
+      if (byOrder != 0) return byOrder;
+      return '${left['period']}'.compareTo('${right['period']}');
+    });
+    if (_periodFilter != null) {
+      periods = periods
+          .where((item) => item['period']?.toString() == _periodFilter)
+          .toList();
+    }
+    var notes = List<Map<String, dynamic>>.from(
+      (year['notes'] as List? ?? const [])
+          .map((item) => Map<String, dynamic>.from(item as Map)),
+    );
+    notes = notes.where((note) {
+      if (_periodFilter != null &&
+          note['period']?.toString() != _periodFilter) return false;
+      if (_subjectFilter != null &&
+          note['subject']?.toString() != _subjectFilter) return false;
+      final type = '${note['examCode'] ?? note['evaluationType'] ?? ''}';
+      if (_typeFilter != null && type != _typeFilter) return false;
+      return true;
+    }).toList()
+      ..sort((left, right) {
+        final byPeriod = ((left['periodOrder'] as num?)?.toInt() ?? 0)
+            .compareTo((right['periodOrder'] as num?)?.toInt() ?? 0);
+        if (byPeriod != 0) return byPeriod;
+        final bySubject =
+            '${left['subject']}'.compareTo('${right['subject']}');
+        if (bySubject != 0) return bySubject;
+        return '${left['date']}'.compareTo('${right['date']}');
+      });
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.s4),
       child: AppCard(
@@ -156,12 +303,21 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
           registration['level'],
           registration['series'],
         ].where((value) => value != null && '$value'.isNotEmpty).join(' · '),
-        child: periods.isEmpty
-            ? const Text('Aucune période avec des résultats validés.')
-            : Column(
-                children: periods
-                    .map((period) => _periodCard(period, registration))
-                    .toList()),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (notes.isNotEmpty) ...[
+              _submittedNotesTable(notes),
+              const SizedBox(height: AppSpacing.s4),
+            ],
+            if (periods.isNotEmpty) ...[
+              _evolutionSection(periods),
+              const SizedBox(height: AppSpacing.s4),
+              ...periods.map((period) => _periodCard(period, registration)),
+            ] else if (notes.isEmpty)
+              const Text('Aucune donnée ne correspond aux filtres sélectionnés.'),
+          ],
+        ),
       ),
     );
   }
@@ -185,10 +341,29 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
       }
       subjects = grouped.values.toList();
     }
-    final exams = List<Map<String, dynamic>>.from(
+    if (_subjectFilter != null) {
+      subjects = subjects
+          .where((item) => item['subject']?.toString() == _subjectFilter)
+          .toList();
+    }
+    if (_typeFilter != null &&
+        const {'devoir', 'composition'}.contains(_typeFilter)) {
+      subjects = subjects.where((subject) {
+        final grades = (subject['grades'] as List? ?? const [])
+            .map((item) => Map<String, dynamic>.from(item as Map));
+        return grades.any((grade) =>
+            '${grade['examCode'] ?? grade['type'] ?? ''}' == _typeFilter);
+      }).toList();
+    }
+    var exams = List<Map<String, dynamic>>.from(
       (period['exams'] as List? ?? const [])
           .map((item) => Map<String, dynamic>.from(item as Map)),
     );
+    if (_typeFilter != null) {
+      exams = exams
+          .where((item) => item['code']?.toString() == _typeFilter)
+          .toList();
+    }
     final ranking = List<Map<String, dynamic>>.from(
       (period['ranking'] as List? ?? const [])
           .map((item) => Map<String, dynamic>.from(item as Map)),
@@ -276,6 +451,120 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
     );
   }
 
+
+  String _evaluationTypeLabel(String value) => const {
+        'devoir': 'Devoir',
+        'devoir_1': 'Devoir 1',
+        'devoir_2': 'Devoir 2',
+        'composition': 'Composition',
+        'cepe_test': 'CEPE Test',
+        'cepe_blanc': 'CEPE Blanc',
+        'bepc_test': 'BEPC Test',
+        'bepc_blanc': 'BEPC Blanc',
+        'bac_test': 'BAC Test',
+        'bac_blanc': 'BAC Blanc',
+        'test': 'Test',
+        'exam': 'Examen',
+        'exam_blanc': 'Examen blanc',
+      }[value] ??
+      value;
+
+  Widget _submittedNotesTable(List<Map<String, dynamic>> notes) => AppCard(
+        title: 'Notes récemment soumises',
+        subtitle:
+            'Ces notes proviennent directement des relevés soumis/validés par les enseignants.',
+        child: ResponsiveDataTable(
+          child: DataTable(
+            columns: const [
+              DataColumn(label: Text('Période')),
+              DataColumn(label: Text('Date')),
+              DataColumn(label: Text('Matière')),
+              DataColumn(label: Text('Évaluation')),
+              DataColumn(label: Text('État')),
+              DataColumn(label: Text('Note')),
+            ],
+            rows: notes.map((note) {
+              final presence = '${note['presence'] ?? 'not_recorded'}';
+              final state = switch (presence) {
+                'absent' => 'Absent',
+                'present' => 'Noté',
+                _ => 'Non noté',
+              };
+              final value = presence == 'present'
+                  ? '${note['value'] ?? '—'} / ${note['maxValue'] ?? '—'}'
+                  : '—';
+              return DataRow(cells: [
+                DataCell(Text('${note['period'] ?? '—'}')),
+                DataCell(Text('${note['date'] ?? '—'}')),
+                DataCell(Text('${note['subject'] ?? '—'}')),
+                DataCell(Text('${note['evaluation'] ?? '—'}')),
+                DataCell(Text(state)),
+                DataCell(Text(value)),
+              ]);
+            }).toList(),
+          ),
+        ),
+      );
+
+  Widget _evolutionSection(List<Map<String, dynamic>> periods) {
+    final groups = <String, List<Map<String, dynamic>>>{};
+    for (final period in periods) {
+      if (period['average'] == null) continue;
+      final type = '${period['periodType'] ?? 'custom'}';
+      groups.putIfAbsent(type, () => []).add(period);
+    }
+    final charts = <Widget>[];
+    for (final entry in groups.entries) {
+      if (entry.value.length < 2) continue;
+      charts.add(_ResultTrendCard(
+        title: switch (entry.key) {
+          'trimester' => 'Évolution trimestrielle',
+          'month' => 'Évolution mensuelle',
+          _ => 'Évolution par période',
+        },
+        rows: entry.value,
+      ));
+    }
+
+    if (_subjectFilter != null) {
+      final subjectRows = <Map<String, dynamic>>[];
+      for (final period in periods) {
+        final matches = (period['subjects'] as List? ?? const [])
+            .map((item) => Map<String, dynamic>.from(item as Map))
+            .where((item) => item['subject']?.toString() == _subjectFilter)
+            .toList();
+        final subject = matches.isEmpty ? null : matches.first;
+        if (subject != null && subject['average'] != null) {
+          subjectRows.add({
+            'period': period['period'],
+            'average': subject['average'],
+            'averageScale': period['averageScale'],
+          });
+        }
+      }
+      if (subjectRows.length >= 2) {
+        charts.add(_ResultTrendCard(
+          title: 'Évolution — $_subjectFilter',
+          rows: subjectRows,
+        ));
+      }
+    }
+    if (charts.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Évolution',
+            style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: AppSpacing.s3),
+        ResponsiveGrid(
+          desktopColumns: 2,
+          tabletColumns: 1,
+          children: charts,
+        ),
+      ],
+    );
+  }
+
   bool _isLycee(Map<String, dynamic> registration) =>
       '${registration['cycleCode'] ?? registration['cycle']}'
           .toUpperCase()
@@ -359,6 +648,97 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
       ),
     );
   }
+}
+
+
+class _ResultTrendCard extends StatelessWidget {
+  const _ResultTrendCard({
+    required this.title,
+    required this.rows,
+  });
+
+  final String title;
+  final List<Map<String, dynamic>> rows;
+
+  @override
+  Widget build(BuildContext context) {
+    final points = rows.map((row) {
+      final average = (row['average'] as num?)?.toDouble() ?? 0;
+      final scale = (row['averageScale'] as num?)?.toDouble() ?? 20;
+      return scale <= 0 ? 0.0 : (average / scale).clamp(0.0, 1.0);
+    }).toList();
+    final color = Theme.of(context).colorScheme.primary;
+    return AppCard(
+      title: title,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            height: 150,
+            width: double.infinity,
+            child: CustomPaint(
+              painter: _ResultTrendPainter(points: points, color: color),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.s2),
+          Wrap(
+            spacing: AppSpacing.s3,
+            runSpacing: AppSpacing.s2,
+            children: rows.map((row) => Text(
+              '${row['period'] ?? 'Période'} : ${row['average'] ?? '—'} / ${row['averageScale'] ?? 20}',
+              style: Theme.of(context).textTheme.bodySmall,
+            )).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ResultTrendPainter extends CustomPainter {
+  const _ResultTrendPainter({
+    required this.points,
+    required this.color,
+  });
+
+  final List<double> points;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (points.isEmpty) return;
+    final gridPaint = Paint()
+      ..color = color.withValues(alpha: .12)
+      ..strokeWidth = 1;
+    for (var index = 0; index <= 4; index++) {
+      final y = size.height * index / 4;
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
+    }
+
+    final linePaint = Paint()
+      ..color = color
+      ..strokeWidth = 2.5
+      ..style = PaintingStyle.stroke;
+    final dotPaint = Paint()..color = color;
+    final path = Path();
+    for (var index = 0; index < points.length; index++) {
+      final x = points.length == 1
+          ? size.width / 2
+          : size.width * index / (points.length - 1);
+      final y = size.height - (points[index] * size.height);
+      if (index == 0) {
+        path.moveTo(x, y);
+      } else {
+        path.lineTo(x, y);
+      }
+      canvas.drawCircle(Offset(x, y), 4, dotPaint);
+    }
+    if (points.length > 1) canvas.drawPath(path, linePaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _ResultTrendPainter oldDelegate) =>
+      oldDelegate.points != points || oldDelegate.color != color;
 }
 
 /// Consultation parent limitée aux enfants explicitement liés à son compte.

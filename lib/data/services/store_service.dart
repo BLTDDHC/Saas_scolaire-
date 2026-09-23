@@ -121,6 +121,38 @@ class StoreService extends ChangeNotifier {
   int studentPhotoRevision(String studentId) =>
       _studentPhotoRevisions[studentId] ?? 0;
 
+  int _ownProfilePhotoRevision = 0;
+  int get ownProfilePhotoRevision => _ownProfilePhotoRevision;
+
+  Future<Uint8List?> ownProfilePhotoRemote() async {
+    try {
+      return await _repository.ownProfilePhoto();
+    } on ApiException catch (error) {
+      if (error.statusCode == 404) return null;
+      rethrow;
+    }
+  }
+
+  Future<void> updateOwnProfilePhotoRemote(Map<String, dynamic> file) async {
+    await _repository.updateOwnProfilePhoto(file);
+    _ownProfilePhotoRevision++;
+    notifyListeners();
+  }
+
+  Future<UserModel> updateOwnProfileRemote({
+    required String name,
+    required String email,
+  }) async {
+    final updated = UserModel.fromJson(await _repository.updateOwnProfile({
+      'name': name.trim(),
+      'email': email.trim(),
+    }));
+    _currentUser = updated;
+    await _storage.set('currentUser', updated.toJson());
+    notifyListeners();
+    return updated;
+  }
+
   void _clearBusinessMemory() {
     _selectedAcademicYearId = null;
     _lockedAnnualBulletins = {};
@@ -4886,8 +4918,26 @@ class StoreService extends ChangeNotifier {
 
   Future<void> refreshWorkflowNotificationsRemote() async {
     final rows = await _repository.workflowNotifications();
-    _notifications = rows.map(NotificationModel.fromJson).toList();
+    _notifications = rows.map(NotificationModel.fromJson).toList()
+      ..sort((left, right) => right.time.compareTo(left.time));
     notifyListeners();
+  }
+
+  Future<Map<String, dynamic>> notifyTeachersInApp({
+    required String title,
+    required String message,
+    String category = 'administrative',
+    List<String>? teacherIds,
+  }) async {
+    final result = await _repository.notifyTeachersInApp({
+      'title': title.trim(),
+      'message': message.trim(),
+      'category': category,
+      if (teacherIds != null && teacherIds.isNotEmpty)
+        'teacherIds': teacherIds,
+    });
+    await refreshWorkflowNotificationsRemote();
+    return result;
   }
 
   List<AuditLogModel> getAuditLogs({String? schoolId}) {

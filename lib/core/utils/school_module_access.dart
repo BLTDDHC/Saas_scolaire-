@@ -2,6 +2,8 @@
 /// activables d'un établissement.
 const Map<String, String> schoolPageModules = {
   'academic_years': 'academic_years',
+  // Academic periods are part of the canonical grades/results engine.
+  'periods': 'grades',
   'classes': 'classes',
   'students': 'students',
   'teachers': 'teachers',

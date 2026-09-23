@@ -13,6 +13,10 @@ class SchoolRepository {
       _api.put('/api/v1/notifications/$id/read', const {});
   Future<void> markAllWorkflowNotificationsRead() =>
       _api.post('/api/v1/notifications/read-all', const {});
+  Future<Map<String, dynamic>> notifyTeachersInApp(
+          Map<String, dynamic> payload) async =>
+      Map<String, dynamic>.from(await _api.post(
+          '/api/v1/school/notifications/teachers', payload));
   Future<List<Map<String, dynamic>>> schoolDocuments() async =>
       List<Map<String, dynamic>>.from(
           (await _api.get('/api/v1/documents') as List)
@@ -45,6 +49,16 @@ class SchoolRepository {
           {'identifier': identifier, 'password': password}));
   Future<Map<String, dynamic>> me() async =>
       Map<String, dynamic>.from(await _api.get('/api/v1/auth/me'));
+  Future<Map<String, dynamic>> updateOwnProfile(
+          Map<String, dynamic> payload) async =>
+      Map<String, dynamic>.from(
+          await _api.put('/api/v1/auth/profile', payload));
+  Future<Map<String, dynamic>> updateOwnProfilePhoto(
+          Map<String, dynamic> payload) async =>
+      Map<String, dynamic>.from(
+          await _api.put('/api/v1/auth/profile/photo', payload));
+  Future<Uint8List> ownProfilePhoto() =>
+      _api.getBytes('/api/v1/auth/profile/photo');
   Future<Map<String, dynamic>> changeRequiredPassword(
           String newPassword) async =>
       Map<String, dynamic>.from(

@@ -46,6 +46,9 @@ class _CanonicalGradesPageState extends State<CanonicalGradesPage> {
   Map<String, String> _readyClassesForBatch = const {};
   final Map<String, TextEditingController> _gradeControllers = {};
   final Map<String, String> _presence = {};
+  final Map<String, TextEditingController> _combinedGradeControllers = {};
+  final Map<String, String> _combinedPresence = {};
+  bool _combinedEntry = false;
 
   void _disposeControllersAfterFrame(
       Iterable<TextEditingController> controllers) {
@@ -64,6 +67,9 @@ class _CanonicalGradesPageState extends State<CanonicalGradesPage> {
   @override
   void dispose() {
     for (final controller in _gradeControllers.values) {
+      controller.dispose();
+    }
+    for (final controller in _combinedGradeControllers.values) {
       controller.dispose();
     }
     super.dispose();
@@ -119,9 +125,15 @@ class _CanonicalGradesPageState extends State<CanonicalGradesPage> {
   }
 
   void _clearGradeEditors() {
-    final previous = _gradeControllers.values.toList();
+    final previous = [
+      ..._gradeControllers.values,
+      ..._combinedGradeControllers.values,
+    ];
     _gradeControllers.clear();
     _presence.clear();
+    _combinedGradeControllers.clear();
+    _combinedPresence.clear();
+    _combinedEntry = false;
     // The previous TextFields remain mounted until the current frame is
     // committed. Disposing synchronously here makes Flutter Web reuse a
     // controller that has already been disposed when the context changes.
@@ -254,6 +266,364 @@ class _CanonicalGradesPageState extends State<CanonicalGradesPage> {
         'bac_blanc': 'BAC blanc',
       }[code] ??
       code;
+
+
+  List<EvaluationModel> _ordinaryEvaluations(StoreService store) {
+    const ordinary = {'devoir_1', 'devoir_2', 'composition'};
+    final rows = _contextEvaluations(store)
+        .where((item) => ordinary.contains(_eventCode(item)))
+        .toList();
+    const order = {'devoir_1': 1, 'devoir_2': 2, 'composition': 3};
+    rows.sort((left, right) =>
+        (order[_eventCode(left)] ?? 99).compareTo(order[_eventCode(right)] ?? 99));
+    return rows;
+  }
+
+  String _combinedKey(String evaluationId, String studentId) =>
+      '${evaluationId}|${studentId}';
+
+  void _prepareCombinedEditors(StoreService store) {
+    final previous = _combinedGradeControllers.values.toList();
+    _combinedGradeControllers.clear();
+    _combinedPresence.clear();
+    final students = store.getStudents()
+        .where((item) => item.classId == _classId)
+        .toList()
+      ..sort((a, b) {
+        final byLast = a.lastName.toLowerCase().compareTo(b.lastName.toLowerCase());
+        if (byLast != 0) return byLast;
+        final byFirst =
+            a.firstName.toLowerCase().compareTo(b.firstName.toLowerCase());
+        return byFirst != 0 ? byFirst : a.id.compareTo(b.id);
+      });
+    for (final evaluation in _ordinaryEvaluations(store)) {
+      final grades = store.getGradesByEvaluation(evaluation.id);
+      for (final student in students) {
+        final grade =
+            grades.where((item) => item.studentId == student.id).firstOrNull;
+        final key = _combinedKey(evaluation.id, student.id);
+        _combinedGradeControllers[key] = TextEditingController(
+          text: grade?.grade == null ? '' : _formatNumber(grade!.grade!),
+        );
+        _combinedPresence[key] = grade?.presence ?? 'not_recorded';
+      }
+    }
+    _disposeControllersAfterFrame(previous);
+  }
+
+  GradeModel? _combinedGradeFor(
+    EvaluationModel evaluation,
+    StudentModel student,
+  ) {
+    final key = _combinedKey(evaluation.id, student.id);
+    final raw = _combinedGradeControllers[key]?.text.trim() ?? '';
+    final previousState = _combinedPresence[key] ?? 'not_recorded';
+    final value = raw.isEmpty ? null : double.tryParse(raw.replaceAll(',', '.'));
+    final state = raw.isEmpty
+        ? (previousState == 'absent' ? 'absent' : 'not_recorded')
+        : 'present';
+    if (raw.isNotEmpty &&
+        (value == null || value < 0 || value > evaluation.maxScore)) {
+      return null;
+    }
+    return GradeModel(
+      id: '',
+      studentId: student.id,
+      subjectId: evaluation.subjectId,
+      eval: evaluation.title,
+      grade: state == 'present' ? value : null,
+      evaluationId: evaluation.id,
+      presence: state,
+      academicYearId: evaluation.academicYearId,
+    );
+  }
+
+  Future<void> _saveCombinedGrades(
+    StoreService store, {
+    required bool submit,
+  }) async {
+    final evaluations = _ordinaryEvaluations(store)
+        .where((item) => const {'draft', 'rejected'}.contains(item.status))
+        .toList();
+    if (evaluations.isEmpty || _classId == null) return;
+    final students = store.getStudents()
+        .where((item) => item.classId == _classId)
+        .toList()
+      ..sort((a, b) {
+        final byLast = a.lastName.toLowerCase().compareTo(b.lastName.toLowerCase());
+        if (byLast != 0) return byLast;
+        final byFirst =
+            a.firstName.toLowerCase().compareTo(b.firstName.toLowerCase());
+        return byFirst != 0 ? byFirst : a.id.compareTo(b.id);
+      });
+    if (students.isEmpty) {
+      AppToast.warning(context, 'Aucun élève inscrit dans cette classe.');
+      return;
+    }
+
+    final sheets = <EvaluationModel, List<GradeModel>>{};
+    for (final evaluation in evaluations) {
+      final entries = <GradeModel>[];
+      for (final student in students) {
+        final key = _combinedKey(evaluation.id, student.id);
+        final raw = _combinedGradeControllers[key]?.text.trim() ?? '';
+        final value =
+            raw.isEmpty ? null : double.tryParse(raw.replaceAll(',', '.'));
+        if (raw.isNotEmpty &&
+            (value == null || value < 0 || value > evaluation.maxScore)) {
+          AppToast.error(
+            context,
+            'Note invalide pour ${student.fullName} — ${evaluation.title}.',
+          );
+          return;
+        }
+        final grade = _combinedGradeFor(evaluation, student)!;
+        if (submit && grade.presence == 'not_recorded') {
+          AppToast.warning(
+            context,
+            'Complétez ${evaluation.title} pour ${student.fullName} ou marquez l’élève absent.',
+          );
+          return;
+        }
+        entries.add(grade);
+      }
+      sheets[evaluation] = entries;
+    }
+
+    setState(() => _saving = true);
+    try {
+      for (final entry in sheets.entries) {
+        await store.saveEvaluationGradesRemote(entry.key.id, entry.value);
+      }
+      if (submit) {
+        for (final evaluation in evaluations) {
+          await store.changeEvaluationStatusRemote(
+            evaluation.id,
+            'submitted',
+          );
+        }
+        await store.refreshEvaluationsRemote(
+          academicYearId: _loadedYearId,
+          classId: _classId,
+          subjectId: _subjectId,
+          periodId: _periodId,
+        );
+      }
+      if (!mounted) return;
+      _prepareCombinedEditors(store);
+      setState(() {});
+      AppToast.success(
+        context,
+        submit
+            ? 'Les notes programmées ont été enregistrées et soumises.'
+            : 'Brouillon combiné enregistré.',
+      );
+    } catch (error) {
+      if (mounted) {
+        AppToast.error(
+          context,
+          _readableError(
+            error,
+            submit
+                ? 'La validation combinée a échoué. Vérifiez les relevés avant de réessayer.'
+                : 'Impossible d’enregistrer le brouillon combiné.',
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Widget _separatePresenceField(
+    StudentModel student, {
+    required bool enabled,
+  }) {
+    final value = _presence[student.id] ?? 'not_recorded';
+    return DropdownButtonFormField<String>(
+      key: ValueKey('grade-presence-${student.id}'),
+      isExpanded: true,
+      initialValue: value,
+      decoration: const InputDecoration(labelText: 'État', isDense: true),
+      items: const [
+        DropdownMenuItem(value: 'present', child: Text('Note')),
+        DropdownMenuItem(value: 'absent', child: Text('Absent')),
+        DropdownMenuItem(value: 'not_recorded', child: Text('Non noté')),
+      ],
+      onChanged: !enabled
+          ? null
+          : (next) => setState(() {
+                final state = next ?? 'not_recorded';
+                _presence[student.id] = state;
+                if (state != 'present') {
+                  _gradeControllers[student.id]?.clear();
+                }
+              }),
+    );
+  }
+
+  Widget _combinedPresenceField(
+    EvaluationModel evaluation,
+    StudentModel student,
+  ) {
+    final key = _combinedKey(evaluation.id, student.id);
+    final value = _combinedPresence[key] ?? 'not_recorded';
+    return DropdownButtonFormField<String>(
+      key: ValueKey('combined-presence-$key'),
+      isExpanded: true,
+      initialValue: value,
+      decoration: const InputDecoration(
+        labelText: 'État',
+        isDense: true,
+      ),
+      items: const [
+        DropdownMenuItem(value: 'present', child: Text('Note')),
+        DropdownMenuItem(value: 'absent', child: Text('Absent')),
+        DropdownMenuItem(value: 'not_recorded', child: Text('Non noté')),
+      ],
+      onChanged: _saving
+          ? null
+          : (next) => setState(() {
+                final state = next ?? 'not_recorded';
+                _combinedPresence[key] = state;
+                if (state != 'present') {
+                  _combinedGradeControllers[key]?.clear();
+                }
+              }),
+    );
+  }
+
+  Widget _combinedGradeCell(
+    EvaluationModel evaluation,
+    StudentModel student, {
+    required bool compact,
+  }) {
+    final key = _combinedKey(evaluation.id, student.id);
+    final editable = const {'draft', 'rejected'}.contains(evaluation.status);
+    return SizedBox(
+      width: compact ? double.infinity : 185,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            key: ValueKey('combined-grade-$key'),
+            controller: _combinedGradeControllers[key],
+            enabled: editable && !_saving,
+            keyboardType:
+                const TextInputType.numberWithOptions(decimal: true),
+            decoration: InputDecoration(
+              labelText:
+                  '${_eventLabel(_eventCode(evaluation) ?? evaluation.type)} /${_formatNumber(evaluation.maxScore)}',
+              isDense: true,
+            ),
+            onChanged: (value) {
+              if (value.trim().isNotEmpty) {
+                _combinedPresence[key] = 'present';
+              }
+            },
+          ),
+          const SizedBox(height: 6),
+          _combinedPresenceField(evaluation, student),
+        ],
+      ),
+    );
+  }
+
+  Widget _combinedEntryCard(
+    StoreService store,
+    List<StudentModel> students,
+    List<EvaluationModel> evaluations,
+  ) {
+    return AppCard(
+      key: const Key('combined-grade-entry-card'),
+      title: 'Saisie combinée',
+      subtitle:
+          'Une seule vue pour les évaluations ordinaires réellement programmées dans ce contexte.',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          LayoutBuilder(builder: (context, constraints) {
+            final compact = constraints.maxWidth < 900;
+            if (compact) {
+              return Column(
+                children: students.map((student) => Padding(
+                  padding: const EdgeInsets.only(bottom: AppSpacing.s3),
+                  child: AppCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('${student.lastName} ${student.firstName}',
+                            style: const TextStyle(fontWeight: FontWeight.w700)),
+                        const SizedBox(height: AppSpacing.s3),
+                        ...evaluations.map((evaluation) => Padding(
+                          padding: const EdgeInsets.only(bottom: AppSpacing.s3),
+                          child: _combinedGradeCell(
+                            evaluation,
+                            student,
+                            compact: true,
+                          ),
+                        )),
+                      ],
+                    ),
+                  ),
+                )).toList(),
+              );
+            }
+            return SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: DataTable(
+                dataRowMinHeight: 112,
+                dataRowMaxHeight: 132,
+                columns: [
+                  const DataColumn(label: Text('Nom et prénom')),
+                  ...evaluations.map((evaluation) => DataColumn(
+                    label: Text(_eventLabel(
+                        _eventCode(evaluation) ?? evaluation.type)),
+                  )),
+                ],
+                rows: students.map((student) => DataRow(cells: [
+                  DataCell(SizedBox(
+                    width: 210,
+                    child: Text('${student.lastName} ${student.firstName}'),
+                  )),
+                  ...evaluations.map((evaluation) => DataCell(
+                    _combinedGradeCell(
+                      evaluation,
+                      student,
+                      compact: false,
+                    ),
+                  )),
+                ])).toList(),
+              ),
+            );
+          }),
+          const SizedBox(height: AppSpacing.s4),
+          Wrap(
+            spacing: AppSpacing.s3,
+            runSpacing: AppSpacing.s3,
+            children: [
+              AppButton(
+                label: _saving ? 'Enregistrement…' : 'Enregistrer le brouillon',
+                icon: Icons.save_outlined,
+                variant: AppButtonVariant.secondary,
+                onPressed: _saving
+                    ? null
+                    : () => _saveCombinedGrades(store, submit: false),
+              ),
+              AppButton(
+                key: const Key('submit-combined-grades'),
+                label: _saving ? 'Validation…' : 'Valider les notes',
+                icon: Icons.send_rounded,
+                onPressed: _saving
+                    ? null
+                    : () => _saveCombinedGrades(store, submit: true),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 
   Future<void> _refreshBatchAvailability(StoreService store) async {
     final yearId = store.getSelectedAcademicYearId();
@@ -1035,12 +1405,28 @@ class _CanonicalGradesPageState extends State<CanonicalGradesPage> {
     students.sort((left, right) {
       final byLastName =
           left.lastName.toLowerCase().compareTo(right.lastName.toLowerCase());
-      return byLastName != 0
-          ? byLastName
-          : left.firstName
-              .toLowerCase()
-              .compareTo(right.firstName.toLowerCase());
+      if (byLastName != 0) return byLastName;
+      final byFirstName =
+          left.firstName.toLowerCase().compareTo(right.firstName.toLowerCase());
+      return byFirstName != 0 ? byFirstName : left.id.compareTo(right.id);
     });
+    final ordinaryEvaluations =
+        isTeacher ? _ordinaryEvaluations(store) : <EvaluationModel>[];
+    final combinedStudents = _classId == null
+        ? <StudentModel>[]
+        : store
+            .getStudents()
+            .where((item) => item.classId == _classId)
+            .toList()
+      ..sort((left, right) {
+        final byLastName =
+            left.lastName.toLowerCase().compareTo(right.lastName.toLowerCase());
+        if (byLastName != 0) return byLastName;
+        final byFirstName = left.firstName
+            .toLowerCase()
+            .compareTo(right.firstName.toLowerCase());
+        return byFirstName != 0 ? byFirstName : left.id.compareTo(right.id);
+      });
     final isAdmin =
         store.isSuperAdmin() || store.currentUser?.role == UserRole.admin;
     final availableEventCodes = store
@@ -1498,23 +1884,71 @@ class _CanonicalGradesPageState extends State<CanonicalGradesPage> {
             AppCard(
               title:
                   '${subjects.length > 1 ? 4 : 3}. Mes évaluations à compléter',
-              subtitle:
-                  'Sélectionnez une évaluation pour afficher immédiatement les élèves.',
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: evaluations
-                    .map((evaluation) => ChoiceChip(
-                          selected: evaluation.id == _evaluationId,
-                          label: Text(
-                              '${evaluation.title} · ${evaluation.status}'),
-                          onSelected: (_) =>
-                              _selectEvaluation(evaluation, store),
-                        ))
-                    .toList(),
+              subtitle: ordinaryEvaluations.length >= 2
+                  ? 'Choisissez la saisie séparée ou combinée pour les devoirs/composition programmés.'
+                  : 'Sélectionnez une évaluation pour afficher immédiatement les élèves.',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (ordinaryEvaluations.length >= 2) ...[
+                    Wrap(
+                      spacing: AppSpacing.s2,
+                      runSpacing: AppSpacing.s2,
+                      children: [
+                        ChoiceChip(
+                          key: const Key('grade-entry-separated'),
+                          selected: !_combinedEntry,
+                          label: const Text('Saisie séparée'),
+                          onSelected: _saving
+                              ? null
+                              : (_) => setState(() {
+                                    _combinedEntry = false;
+                                    _combinedGradeControllers.clear();
+                                    _combinedPresence.clear();
+                                  }),
+                        ),
+                        ChoiceChip(
+                          key: const Key('grade-entry-combined'),
+                          selected: _combinedEntry,
+                          label: const Text('Saisie combinée'),
+                          onSelected: _saving
+                              ? null
+                              : (_) {
+                                  _prepareCombinedEditors(store);
+                                  setState(() {
+                                    _combinedEntry = true;
+                                    _evaluationId = null;
+                                  });
+                                },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.s3),
+                  ],
+                  if (!_combinedEntry)
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: evaluations
+                          .map((evaluation) => ChoiceChip(
+                                selected: evaluation.id == _evaluationId,
+                                label: Text(
+                                    '${evaluation.title} · ${evaluation.status}'),
+                                onSelected: (_) =>
+                                    _selectEvaluation(evaluation, store),
+                              ))
+                          .toList(),
+                    ),
+                ],
               ),
             ),
-          if (selected != null) ...[
+          if (!isAdmin &&
+              _combinedEntry &&
+              ordinaryEvaluations.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.s4),
+            _combinedEntryCard(store, combinedStudents, ordinaryEvaluations),
+          ],
+          if (!_combinedEntry && selected != null) ...[
             const SizedBox(height: AppSpacing.s4),
             AppCard(
               title: isAdmin
@@ -1561,6 +1995,15 @@ class _CanonicalGradesPageState extends State<CanonicalGradesPage> {
                                                   labelText: 'Note /${_formatNumber(selected.maxScore)}',
                                                   helperText: 'Laissez vide si la note n’est pas renseignée.',
                                                 ),
+                                                onChanged: (value) {
+                                                  if (value.trim().isNotEmpty) {
+                                                    _presence[student.id] = 'present';
+                                                  }
+                                                },
+                                              ),
+                                              _separatePresenceField(
+                                                student,
+                                                enabled: editable && !_saving,
                                               ),
                                             ],
                                           ),
@@ -1577,6 +2020,7 @@ class _CanonicalGradesPageState extends State<CanonicalGradesPage> {
                                   Expanded(flex: 2, child: Text('Nom')),
                                   Expanded(flex: 2, child: Text('Prénom')),
                                   SizedBox(width: 160, child: Text('Note')),
+                                  SizedBox(width: 150, child: Text('État')),
                                 ]),
                                 const SizedBox(height: 8),
                                 ...students.map((student) => Padding(
@@ -1594,6 +2038,19 @@ class _CanonicalGradesPageState extends State<CanonicalGradesPage> {
                                             decoration: InputDecoration(
                                               labelText: 'Note /${_formatNumber(selected.maxScore)}',
                                             ),
+                                            onChanged: (value) {
+                                              if (value.trim().isNotEmpty) {
+                                                _presence[student.id] = 'present';
+                                              }
+                                            },
+                                          ),
+                                        ),
+                                        const SizedBox(width: 10),
+                                        SizedBox(
+                                          width: 150,
+                                          child: _separatePresenceField(
+                                            student,
+                                            enabled: editable && !_saving,
                                           ),
                                         ),
                                       ]),

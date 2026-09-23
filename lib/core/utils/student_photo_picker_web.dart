@@ -1,8 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:html' as html;
-import 'dart:typed_data';
-
 import 'student_photo_picker_model.dart';
 
 String _mimeTypeFor(html.File file) {
@@ -46,24 +44,37 @@ Future<List<PickedStudentPhoto>> pickStudentPhotos({bool multiple = true}) async
         continue;
       }
       final reader = html.FileReader();
-      reader.readAsArrayBuffer(file);
-      await reader.onLoad.first;
-      final raw = reader.result;
-      if (raw is! ByteBuffer) {
+      try {
+        reader.readAsArrayBuffer(file);
+        await Future.any([
+          reader.onLoad.first,
+          reader.onError.first.then((_) =>
+              throw StateError('Lecture du fichier impossible.')),
+        ]);
+        final bytes = studentPhotoBytesFromReaderResult(reader.result);
+        if (bytes == null || bytes.isEmpty) {
+          result.add(PickedStudentPhoto.rejected(
+            name: file.name,
+            mimeType: mimeType,
+            sizeBytes: file.size,
+            reason: 'Lecture du fichier impossible.',
+          ));
+          continue;
+        }
+        result.add(PickedStudentPhoto(
+          name: file.name,
+          mimeType: mimeType,
+          sizeBytes: file.size,
+          contentBase64: base64Encode(bytes),
+        ));
+      } catch (_) {
         result.add(PickedStudentPhoto.rejected(
           name: file.name,
           mimeType: mimeType,
           sizeBytes: file.size,
           reason: 'Lecture du fichier impossible.',
         ));
-        continue;
       }
-      result.add(PickedStudentPhoto(
-        name: file.name,
-        mimeType: mimeType,
-        sizeBytes: file.size,
-        contentBase64: base64Encode(Uint8List.view(raw)),
-      ));
     }
     selected.complete(result);
   });

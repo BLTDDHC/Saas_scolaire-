@@ -50,6 +50,9 @@ List<pw.Widget> _statisticsDashboard(Map<String, dynamic> statistics) {
   final byClass = (statistics['byClass'] as List? ?? const [])
       .map((item) => Map<String, dynamic>.from(item as Map))
       .toList();
+  final byLevel = (statistics['byLevel'] as List? ?? const [])
+      .map((item) => Map<String, dynamic>.from(item as Map))
+      .toList();
   final bySubject = (statistics['bySubject'] as List? ?? const [])
       .map((item) => Map<String, dynamic>.from(item as Map))
       .toList();
@@ -196,6 +199,14 @@ List<pw.Widget> _statisticsDashboard(Map<String, dynamic> statistics) {
                   (row['average20'] as num?)?.toDouble() ?? 0))
               .toList(),
           PdfColors.teal600),
+    if (byLevel.isNotEmpty)
+      chart(
+          'Comparaison graphique des niveaux',
+          byLevel
+              .map((row) => MapEntry('${row['level']}',
+                  (row['average20'] as num?)?.toDouble() ?? 0))
+              .toList(),
+          PdfColors.indigo600),
     if (byClass.isNotEmpty)
       chart(
           'Comparaison graphique des classes',
@@ -253,6 +264,16 @@ List<pw.Widget> _statisticsDashboard(Map<String, dynamic> statistics) {
             ['Reste à encaisser', '${_cell(finance['remaining'])} FCFA'],
             ['Taux de recouvrement', '${_cell(finance['collectionRate'])} %'],
           ]),
+    table(
+        'Comparaison des niveaux',
+        ['Niveau', 'Élèves', 'Moyenne /20'],
+        byLevel
+            .map((row) => [
+                  _cell(row['level']),
+                  _cell(row['studentCount']),
+                  _cell(row['average20']),
+                ])
+            .toList()),
     table(
         'Comparaison des classes',
         ['Classe', 'Élèves', 'Moyenne /20', 'Réussite'],

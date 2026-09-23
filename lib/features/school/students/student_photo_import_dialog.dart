@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -175,16 +177,36 @@ class _StudentPhotoImportDialogState extends State<_StudentPhotoImportDialog> {
               Wrap(
                 spacing: AppSpacing.s2,
                 runSpacing: AppSpacing.s2,
-                children: _files
-                    .map((file) => Chip(
-                          avatar: const Icon(Icons.image_outlined, size: 16),
-                          label: ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 170),
-                            child: Text(file.name,
-                                overflow: TextOverflow.ellipsis),
-                          ),
-                        ))
-                    .toList(),
+                children: _files.map((file) {
+                  Widget avatar = const Icon(Icons.image_outlined, size: 16);
+                  if (file.isValid) {
+                    try {
+                      avatar = ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: Image.memory(
+                          base64Decode(file.contentBase64),
+                          width: 28,
+                          height: 28,
+                          fit: BoxFit.cover,
+                        ),
+                      );
+                    } catch (_) {
+                      avatar = const Icon(Icons.broken_image_outlined, size: 16);
+                    }
+                  }
+                  return Chip(
+                    avatar: avatar,
+                    label: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 170),
+                      child: Text(
+                        file.isRejected
+                            ? '${file.name} — refusée'
+                            : file.name,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  );
+                }).toList(),
               ),
             ],
             if (_busy || _processed > 0) ...[

@@ -78,7 +78,7 @@ class _ParentTrackingPageState extends State<ParentTrackingPage> {
   Widget build(BuildContext context) => WorkspacePage(
         title: 'Suivi de mes enfants',
         subtitle:
-            'Résultats, présence et comportement par trimestre, à partir des données officielles',
+            'Résultats par périodes configurées, présence et comportement à partir des données officielles',
         actions: [
           IconButton.filledTonal(
             onPressed: _trackingRequest == null ? null : _retry,
@@ -194,7 +194,7 @@ class _ParentTrackingPageState extends State<ParentTrackingPage> {
       children: [
         AppCard(
           title: 'Évolution académique',
-          subtitle: 'Comparaison des trois trimestres publiés',
+          subtitle: 'Comparaison des périodes de résultats publiées',
           child: periods.isEmpty
               ? const Text('Aucun résultat officiel publié pour cette année.')
               : Wrap(
