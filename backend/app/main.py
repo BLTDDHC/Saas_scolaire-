@@ -10996,7 +10996,7 @@ def statistics(
         if (
             not selected_stat_period
             or selected_stat_period.establishment_id != database_id
-            or selected_stat_period.period_type != "trimester"
+            or selected_stat_period.status != "active"
             or (
                 requested_year_id is not None
                 and selected_stat_period.academic_year_id != requested_year_id
@@ -11062,10 +11062,17 @@ def statistics(
             if payload.get("calculationRuleVersion") != RESULT_CALCULATION_RULE_VERSION:
                 continue
             period = periods.get(snap.academic_period_id)
-            if not period or period.period_type != "trimester":
+            if not period or period.status != "active":
                 continue
             valid_snapshots.append((snap, period))
-            if requested_period_id and snap.academic_period_id != requested_period_id:
+            if requested_period_id:
+                if snap.academic_period_id != requested_period_id:
+                    continue
+            elif period.period_type != "trimester":
+                # Preserve the historical dashboard default: without an
+                # explicit filter, headline KPIs use the latest official
+                # trimester. Month/custom snapshots are available through
+                # their own configured period filters and evolution series.
                 continue
             order = int(period.sort_order or 0)
             previous = latest_by_class.get(snap.class_id)
@@ -11203,6 +11210,8 @@ def statistics(
     evolution_buckets: dict[uuid.UUID, dict[str, Any]] = {}
     class_period_averages: dict[uuid.UUID, list[tuple[int, float]]] = {}
     for snapshot, period in valid_snapshots:
+        if period.period_type != "trimester":
+            continue
         school_class = classes_by_id.get(snapshot.class_id)
         if not school_class:
             continue
@@ -11592,7 +11601,6 @@ def statistics(
         })
     period_filter_statement = select(AcademicPeriod).where(
         AcademicPeriod.establishment_id == database_id,
-        AcademicPeriod.period_type == "trimester",
         AcademicPeriod.status == "active",
     )
     if academic_year_id:
@@ -11652,8 +11660,14 @@ def statistics(
         "gradeCompletionRate": completion_rate,
         "finance": finance,
         "filters": {
-            "periods": [{"id": str(item.id), "name": item.name}
-                        for item in filter_periods],
+            "periods": [{
+                "id": str(item.id),
+                "name": item.name,
+                "periodType": item.period_type,
+                "parentPeriodId": str(item.parent_period_id)
+                    if item.parent_period_id else None,
+                "sortOrder": item.sort_order,
+            } for item in filter_periods],
             "subjects": [{"id": str(item.id), "name": item.name}
                          for item in filter_subjects],
         },
