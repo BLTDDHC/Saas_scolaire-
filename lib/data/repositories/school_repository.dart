@@ -49,6 +49,16 @@ class SchoolRepository {
           {'identifier': identifier, 'password': password}));
   Future<Map<String, dynamic>> me() async =>
       Map<String, dynamic>.from(await _api.get('/api/v1/auth/me'));
+  Future<Map<String, dynamic>> updateOwnProfile(
+          Map<String, dynamic> payload) async =>
+      Map<String, dynamic>.from(
+          await _api.put('/api/v1/auth/profile', payload));
+  Future<Map<String, dynamic>> updateOwnProfilePhoto(
+          Map<String, dynamic> payload) async =>
+      Map<String, dynamic>.from(
+          await _api.put('/api/v1/auth/profile/photo', payload));
+  Future<Uint8List> ownProfilePhoto() =>
+      _api.getBytes('/api/v1/auth/profile/photo');
   Future<Map<String, dynamic>> changeRequiredPassword(
           String newPassword) async =>
       Map<String, dynamic>.from(
