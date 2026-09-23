@@ -646,9 +646,10 @@ class _StatisticsContent extends StatelessWidget {
             _VerticalBarsCard(
               key: const Key('statistics-class-bars'),
               title: 'Moyenne par classe',
-              subtitle: _periodId == null
-                  ? 'Dernier trimestre officiel disponible'
-                  : 'Période officielle sélectionnée',
+              subtitle:
+                  ((data['appliedFilters'] as Map?)?['periodId'] == null)
+                      ? 'Dernier trimestre officiel disponible'
+                      : 'Période officielle sélectionnée',
               rows: byClass,
               labelKey: 'className',
               valueKey: 'average20',
