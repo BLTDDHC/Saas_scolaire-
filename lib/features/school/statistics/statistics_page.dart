@@ -376,6 +376,10 @@ class _StatisticsContent extends StatelessWidget {
       (data['byCycle'] as List? ?? const [])
           .map((item) => Map<String, dynamic>.from(item as Map)),
     );
+    final byLevel = List<Map<String, dynamic>>.from(
+      (data['byLevel'] as List? ?? const [])
+          .map((item) => Map<String, dynamic>.from(item as Map)),
+    );
     final bySubject = List<Map<String, dynamic>>.from(
       (data['bySubject'] as List? ?? const [])
           .map((item) => Map<String, dynamic>.from(item as Map)),
@@ -581,7 +585,7 @@ class _StatisticsContent extends StatelessWidget {
         if (insights.isNotEmpty || alerts.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.s6),
           ResponsiveGrid(
-            desktopColumns: 2,
+            desktopColumns: 3,
             tabletColumns: 1,
             mobileColumns: 1,
             children: [
@@ -641,6 +645,13 @@ class _StatisticsContent extends StatelessWidget {
               subtitle: 'Comparaison normalisée sur 20',
               rows: byCycle,
               labelKey: 'cycle',
+              valueKey: 'average20',
+            ),
+            _AverageBarsCard(
+              title: 'Moyenne par niveau',
+              subtitle: 'Comparaison des niveaux du périmètre sélectionné',
+              rows: byLevel,
+              labelKey: 'level',
               valueKey: 'average20',
             ),
             _VerticalBarsCard(
