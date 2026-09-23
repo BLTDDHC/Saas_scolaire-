@@ -7954,6 +7954,11 @@ def _compute_school_results(
                 'evaluationId': str(grade.evaluation_id),
                 'evaluation': evaluation_by_id[grade.evaluation_id].name,
                 'type': evaluation_by_id[grade.evaluation_id].type,
+                'examCode': evaluation_by_id[grade.evaluation_id].exam_code,
+                'date': evaluation_by_id[grade.evaluation_id].date_scheduled.isoformat()
+                    if evaluation_by_id[grade.evaluation_id].date_scheduled else None,
+                'status': grade.status,
+                'presence': grade.presence,
                 'value': effective_grade_value(grade),
                 'maxValue': float(grade.max_value),
                 'comment': grade.comment,
@@ -13756,6 +13761,61 @@ def student_results(student_id: uuid.UUID, academic_year_id: uuid.UUID,
     payload = []
     school_class = session.get(SchoolClass, registration.class_id)
     average_scale = general_average_scale(session, school_class)
+
+    period_by_id = {item.id: item for item in periods}
+    subject_ids = set(session.scalars(select(Grade.subject_id).join(
+        Evaluation, Evaluation.id == Grade.evaluation_id
+    ).where(
+        Grade.establishment_id == student.establishment_id,
+        Grade.student_id == student.id,
+        Evaluation.establishment_id == student.establishment_id,
+        Evaluation.class_id == registration.class_id,
+        Evaluation.academic_year_id == academic_year_id,
+        Evaluation.status.in_(('submitted', 'validated', 'locked')),
+    )).all())
+    subjects_by_id = {
+        item.id: item for item in session.scalars(
+            select(Subject).where(Subject.id.in_(subject_ids))
+        ).all()
+    } if subject_ids else {}
+    submitted_notes = []
+    note_rows = session.execute(select(Grade, Evaluation).join(
+        Evaluation, Evaluation.id == Grade.evaluation_id
+    ).where(
+        Grade.establishment_id == student.establishment_id,
+        Grade.student_id == student.id,
+        Evaluation.establishment_id == student.establishment_id,
+        Evaluation.class_id == registration.class_id,
+        Evaluation.academic_year_id == academic_year_id,
+        Evaluation.status.in_(('submitted', 'validated', 'locked')),
+    ).order_by(
+        Evaluation.date_scheduled.asc().nulls_last(),
+        Evaluation.created_at.asc(),
+        Grade.updated_at.asc(),
+    )).all()
+    for grade, evaluation in note_rows:
+        period = period_by_id.get(evaluation.academic_period_id)
+        subject = subjects_by_id.get(grade.subject_id)
+        submitted_notes.append({
+            'gradeId': str(grade.id),
+            'evaluationId': str(evaluation.id),
+            'evaluation': evaluation.name,
+            'evaluationType': evaluation.type,
+            'examCode': evaluation.exam_code,
+            'periodId': str(period.id) if period else None,
+            'period': period.name if period else evaluation.period,
+            'periodType': period.period_type if period else None,
+            'periodOrder': period.sort_order if period else None,
+            'subjectId': str(grade.subject_id),
+            'subject': subject.name if subject else '',
+            'date': evaluation.date_scheduled.isoformat()
+                if evaluation.date_scheduled else grade.updated_at.date().isoformat(),
+            'value': effective_grade_value(grade),
+            'maxValue': float(grade.max_value),
+            'presence': grade.presence,
+            'status': evaluation.status,
+            'comment': grade.comment,
+        })
     for period in periods:
         class_result = school_results(registration.class_id, period.id, current, session)
         if class_result.get('calculationStatus') != 'official':
@@ -13793,6 +13853,11 @@ def student_results(student_id: uuid.UUID, academic_year_id: uuid.UUID,
         # assigned teacher keep the existing detailed class-ranking payload.
         can_view_class_ranking = current.role not in {'student', 'parent'}
         payload.append({'periodId': str(period.id), 'period': period.name,
+            'periodType': period.period_type,
+            'periodOrder': period.sort_order,
+            'parentPeriodId': str(period.parent_period_id) if period.parent_period_id else None,
+            'startDate': period.start_date.isoformat() if period.start_date else None,
+            'endDate': period.end_date.isoformat() if period.end_date else None,
             'average': average,
             'averageScale': average_scale,
             'rank': own_result.get('rank'),
@@ -13808,7 +13873,9 @@ def student_results(student_id: uuid.UUID, academic_year_id: uuid.UUID,
             'rankingCount': len(class_ranking),
             'ranking': class_ranking if can_view_class_ranking else []})
     return {'studentId': str(student.id), 'academicYearId': str(academic_year_id),
-        'registration': registration_json(registration, session), 'periods': payload}
+        'registration': registration_json(registration, session),
+        'notes': submitted_notes,
+        'periods': payload}
 
 @app.get('/api/v1/school/my-results')
 def my_student_results(
