@@ -529,10 +529,11 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
     if (_subjectFilter != null) {
       final subjectRows = <Map<String, dynamic>>[];
       for (final period in periods) {
-        final subject = (period['subjects'] as List? ?? const [])
+        final matches = (period['subjects'] as List? ?? const [])
             .map((item) => Map<String, dynamic>.from(item as Map))
             .where((item) => item['subject']?.toString() == _subjectFilter)
-            .firstOrNull;
+            .toList();
+        final subject = matches.isEmpty ? null : matches.first;
         if (subject != null && subject['average'] != null) {
           subjectRows.add({
             'period': period['period'],
@@ -647,6 +648,97 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
       ),
     );
   }
+}
+
+
+class _ResultTrendCard extends StatelessWidget {
+  const _ResultTrendCard({
+    required this.title,
+    required this.rows,
+  });
+
+  final String title;
+  final List<Map<String, dynamic>> rows;
+
+  @override
+  Widget build(BuildContext context) {
+    final points = rows.map((row) {
+      final average = (row['average'] as num?)?.toDouble() ?? 0;
+      final scale = (row['averageScale'] as num?)?.toDouble() ?? 20;
+      return scale <= 0 ? 0.0 : (average / scale).clamp(0.0, 1.0);
+    }).toList();
+    final color = Theme.of(context).colorScheme.primary;
+    return AppCard(
+      title: title,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            height: 150,
+            width: double.infinity,
+            child: CustomPaint(
+              painter: _ResultTrendPainter(points: points, color: color),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.s2),
+          Wrap(
+            spacing: AppSpacing.s3,
+            runSpacing: AppSpacing.s2,
+            children: rows.map((row) => Text(
+              '${row['period'] ?? 'Période'} : ${row['average'] ?? '—'} / ${row['averageScale'] ?? 20}',
+              style: Theme.of(context).textTheme.bodySmall,
+            )).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ResultTrendPainter extends CustomPainter {
+  const _ResultTrendPainter({
+    required this.points,
+    required this.color,
+  });
+
+  final List<double> points;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (points.isEmpty) return;
+    final gridPaint = Paint()
+      ..color = color.withValues(alpha: .12)
+      ..strokeWidth = 1;
+    for (var index = 0; index <= 4; index++) {
+      final y = size.height * index / 4;
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
+    }
+
+    final linePaint = Paint()
+      ..color = color
+      ..strokeWidth = 2.5
+      ..style = PaintingStyle.stroke;
+    final dotPaint = Paint()..color = color;
+    final path = Path();
+    for (var index = 0; index < points.length; index++) {
+      final x = points.length == 1
+          ? size.width / 2
+          : size.width * index / (points.length - 1);
+      final y = size.height - (points[index] * size.height);
+      if (index == 0) {
+        path.moveTo(x, y);
+      } else {
+        path.lineTo(x, y);
+      }
+      canvas.drawCircle(Offset(x, y), 4, dotPaint);
+    }
+    if (points.length > 1) canvas.drawPath(path, linePaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _ResultTrendPainter oldDelegate) =>
+      oldDelegate.points != points || oldDelegate.color != color;
 }
 
 /// Consultation parent limitée aux enfants explicitement liés à son compte.
