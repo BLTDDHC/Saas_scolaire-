@@ -572,6 +572,8 @@ class _CanonicalGradesPageState extends State<CanonicalGradesPage> {
             return SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: DataTable(
+                dataRowMinHeight: 112,
+                dataRowMaxHeight: 132,
                 columns: [
                   const DataColumn(label: Text('Nom et prénom')),
                   ...evaluations.map((evaluation) => DataColumn(
