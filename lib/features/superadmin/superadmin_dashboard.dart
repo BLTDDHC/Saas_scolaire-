@@ -278,6 +278,18 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       (establishments['recent'] as List? ?? const [])
           .map((item) => Map<String, dynamic>.from(item as Map)),
     );
+    List<Map<String, dynamic>> listOfMaps(Object? value) =>
+        List<Map<String, dynamic>>.from(
+          (value as List? ?? const [])
+              .map((item) => Map<String, dynamic>.from(item as Map)),
+        );
+    final establishmentTrend = listOfMaps(establishments['trend']);
+    final subscriptionTrend = listOfMaps(subscriptions['trend']);
+    final userTrend = listOfMaps(users['trend']);
+    final userDistribution = listOfMaps(users['distribution']);
+    final subscriptionDistribution =
+        listOfMaps(subscriptions['statusDistribution']);
+    final planDistribution = listOfMaps(subscriptions['planDistribution']);
     int metric(Map<String, dynamic> section, String key) =>
         (section[key] as num?)?.toInt() ?? 0;
 
@@ -423,6 +435,52 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         const SizedBox(height: AppSpacing.s6),
         statusCard,
         const SizedBox(height: AppSpacing.s6),
+        const WorkspaceSectionHeader(
+          title: 'Tendances de la plateforme',
+          subtitle:
+              'Agrégats de plateforme uniquement — aucune note, absence ou donnée pédagogique privée',
+        ),
+        const SizedBox(height: AppSpacing.s3),
+        ResponsiveGrid(
+          desktopColumns: 3,
+          tabletColumns: 1,
+          mobileColumns: 1,
+          children: [
+            _PlatformTrendCard(
+              title: 'Nouveaux établissements',
+              rows: establishmentTrend,
+            ),
+            _PlatformTrendCard(
+              title: 'Nouveaux utilisateurs',
+              rows: userTrend,
+            ),
+            _PlatformTrendCard(
+              title: 'Nouveaux abonnements',
+              rows: subscriptionTrend,
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.s6),
+        ResponsiveGrid(
+          desktopColumns: 3,
+          tabletColumns: 1,
+          mobileColumns: 1,
+          children: [
+            _PlatformDistributionCard(
+              title: 'Répartition des utilisateurs',
+              rows: userDistribution,
+            ),
+            _PlatformDistributionCard(
+              title: 'État des abonnements',
+              rows: subscriptionDistribution,
+            ),
+            _PlatformDistributionCard(
+              title: 'Répartition par plan',
+              rows: planDistribution,
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.s6),
         if (isMobile) ...[
           recentCard,
           const SizedBox(height: AppSpacing.s4),
@@ -437,6 +495,130 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
             ],
           ),
       ],
+    );
+  }
+}
+
+
+class _PlatformTrendCard extends StatelessWidget {
+  const _PlatformTrendCard({
+    required this.title,
+    required this.rows,
+  });
+
+  final String title;
+  final List<Map<String, dynamic>> rows;
+
+  @override
+  Widget build(BuildContext context) {
+    final maxValue = rows.fold<int>(
+      0,
+      (value, row) =>
+          ((row['count'] as num?)?.toInt() ?? 0) > value
+              ? ((row['count'] as num?)?.toInt() ?? 0)
+              : value,
+    );
+    return AppCard(
+      title: title,
+      child: rows.isEmpty
+          ? const Text('Aucune donnée disponible.')
+          : SizedBox(
+              height: 190,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: rows.map((row) {
+                  final value = (row['count'] as num?)?.toDouble() ?? 0;
+                  final ratio = maxValue <= 0 ? 0.0 : value / maxValue;
+                  return Expanded(
+                    child: Tooltip(
+                      message: '${row['month']} : ${value.toInt()}',
+                      child: Padding(
+                        padding:
+                            const EdgeInsets.symmetric(horizontal: 2),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            Text(
+                              value.toInt().toString(),
+                              style: Theme.of(context).textTheme.labelSmall,
+                            ),
+                            const SizedBox(height: 4),
+                            AnimatedContainer(
+                              duration: const Duration(milliseconds: 250),
+                              height: 120 * ratio + 4,
+                              decoration: BoxDecoration(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .primary
+                                    .withValues(alpha: .75),
+                                borderRadius: BorderRadius.circular(5),
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              '${row['month']}'.substring(5),
+                              style: Theme.of(context).textTheme.labelSmall,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+    );
+  }
+}
+
+class _PlatformDistributionCard extends StatelessWidget {
+  const _PlatformDistributionCard({
+    required this.title,
+    required this.rows,
+  });
+
+  final String title;
+  final List<Map<String, dynamic>> rows;
+
+  @override
+  Widget build(BuildContext context) {
+    final total = rows.fold<int>(
+      0,
+      (sum, row) => sum + ((row['count'] as num?)?.toInt() ?? 0),
+    );
+    return AppCard(
+      title: title,
+      child: rows.isEmpty
+          ? const Text('Aucune donnée disponible.')
+          : Column(
+              children: rows.map((row) {
+                final count = (row['count'] as num?)?.toInt() ?? 0;
+                final ratio = total <= 0 ? 0.0 : count / total;
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: AppSpacing.s3),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(child: Text('${row['label'] ?? '—'}')),
+                          Text(
+                            '$count',
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w700),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 5),
+                      LinearProgressIndicator(
+                        value: ratio,
+                        minHeight: 7,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
     );
   }
 }
