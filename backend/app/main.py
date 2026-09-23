@@ -9895,33 +9895,108 @@ def recent_valid_establishments(session: Session, limit: int = 5) -> list[dict[s
         "plan": resource.payload.get("plan"),
     } for establishment, resource in items[:limit]]
 
+def _platform_monthly_counts(
+    rows: list[Any],
+    date_getter,
+    *,
+    months: int = 12,
+) -> list[dict[str, Any]]:
+    now = datetime.now(timezone.utc)
+    year = now.year
+    month = now.month
+    keys: list[str] = []
+    for offset in range(months - 1, -1, -1):
+        absolute = year * 12 + (month - 1) - offset
+        y, m = divmod(absolute, 12)
+        keys.append(f"{y:04d}-{m + 1:02d}")
+    counts = {key: 0 for key in keys}
+    for row in rows:
+        value = date_getter(row)
+        if value is None:
+            continue
+        if isinstance(value, date) and not isinstance(value, datetime):
+            dt = datetime.combine(value, dt_time.min, tzinfo=timezone.utc)
+        elif isinstance(value, datetime):
+            dt = value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+        else:
+            try:
+                parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+            except (TypeError, ValueError):
+                continue
+            dt = parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+        key = dt.strftime("%Y-%m")
+        if key in counts:
+            counts[key] += 1
+    return [{"month": key, "count": counts[key]} for key in keys]
+
+
 @app.get("/api/v1/superadmin/dashboard")
 def superadmin_dashboard(current: Principal = Depends(require("superadmin")), session: Session = Depends(db)):
     establishments = list(session.scalars(select(Establishment)).all())
     subscriptions = list(session.scalars(select(Resource).where(Resource.kind == "subscriptions")).all())
+    users = list(session.scalars(select(User)).all())
+    plans = list(session.scalars(select(Resource).where(Resource.kind == "plans")).all())
     subscriptions_summary = subscription_summary(subscriptions)
+    user_roles = {
+        role: sum(item.role == role and item.status == "active" for item in users)
+        for role in ("admin", "teacher", "student", "parent")
+    }
+    status_distribution = [
+        {"label": "Actifs", "count": subscriptions_summary["active"]},
+        {"label": "À venir", "count": subscriptions_summary["upcoming"]},
+        {"label": "En retard", "count": subscriptions_summary["overdue"]},
+        {"label": "Expirés", "count": subscriptions_summary["expired"]},
+    ]
+    plan_distribution: dict[str, int] = {}
+    for row in subscriptions:
+        plan = str(
+            row.payload.get("planName")
+            or row.payload.get("plan")
+            or row.payload.get("planId")
+            or "Non renseigné"
+        )
+        plan_distribution[plan] = plan_distribution.get(plan, 0) + 1
     return {
+        "generatedAt": datetime.now(timezone.utc).isoformat(),
+        "privacyScope": "platform-only",
         "establishments": {
             "total": len(establishments),
             "active": sum(item.status == "active" for item in establishments),
             "suspended": sum(item.status == "suspended" for item in establishments),
             "recent": recent_valid_establishments(session),
+            "trend": _platform_monthly_counts(
+                establishments, lambda item: item.created_at
+            ),
         },
         "subscriptions": {
             key: subscriptions_summary[key]
             for key in ("total", "active", "upcoming", "overdue", "expired", "activeAmountTotal")
+        } | {
+            "trend": _platform_monthly_counts(
+                subscriptions, lambda item: item.created_at
+            ),
+            "statusDistribution": status_distribution,
+            "planDistribution": [
+                {"label": key, "count": value}
+                for key, value in sorted(plan_distribution.items())
+            ],
         },
         "users": {
-            "total": session.scalar(select(func.count()).select_from(User)),
-            "admins": session.scalar(select(func.count()).select_from(User).where(User.role == "admin")),
-            "teachers": session.scalar(select(func.count()).select_from(User).where(User.role == "teacher", User.status == "active")),
-            "students": session.scalar(select(func.count()).select_from(User).where(User.role == "student", User.status == "active")),
-            "parents": session.scalar(select(func.count()).select_from(User).where(User.role == "parent", User.status == "active")),
+            "total": len(users),
+            "admins": user_roles["admin"],
+            "teachers": user_roles["teacher"],
+            "students": user_roles["student"],
+            "parents": user_roles["parent"],
+            "trend": _platform_monthly_counts(users, lambda item: item.created_at),
+            "distribution": [
+                {"label": "Administrateurs", "count": user_roles["admin"]},
+                {"label": "Enseignants", "count": user_roles["teacher"]},
+                {"label": "Élèves", "count": user_roles["student"]},
+                {"label": "Parents", "count": user_roles["parent"]},
+            ],
         },
         "plans": {
-            "total": session.scalar(select(func.count()).select_from(Resource).where(
-                Resource.kind == "plans"
-            )) or 0,
+            "total": len(plans),
         },
     }
 
