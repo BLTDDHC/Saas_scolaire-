@@ -435,6 +435,33 @@ class _CanonicalGradesPageState extends State<CanonicalGradesPage> {
     }
   }
 
+  Widget _separatePresenceField(
+    StudentModel student, {
+    required bool enabled,
+  }) {
+    final value = _presence[student.id] ?? 'not_recorded';
+    return DropdownButtonFormField<String>(
+      key: ValueKey('grade-presence-${student.id}'),
+      isExpanded: true,
+      initialValue: value,
+      decoration: const InputDecoration(labelText: 'État', isDense: true),
+      items: const [
+        DropdownMenuItem(value: 'present', child: Text('Note')),
+        DropdownMenuItem(value: 'absent', child: Text('Absent')),
+        DropdownMenuItem(value: 'not_recorded', child: Text('Non noté')),
+      ],
+      onChanged: !enabled
+          ? null
+          : (next) => setState(() {
+                final state = next ?? 'not_recorded';
+                _presence[student.id] = state;
+                if (state != 'present') {
+                  _gradeControllers[student.id]?.clear();
+                }
+              }),
+    );
+  }
+
   Widget _combinedPresenceField(
     EvaluationModel evaluation,
     StudentModel student,
@@ -1966,6 +1993,15 @@ class _CanonicalGradesPageState extends State<CanonicalGradesPage> {
                                                   labelText: 'Note /${_formatNumber(selected.maxScore)}',
                                                   helperText: 'Laissez vide si la note n’est pas renseignée.',
                                                 ),
+                                                onChanged: (value) {
+                                                  if (value.trim().isNotEmpty) {
+                                                    _presence[student.id] = 'present';
+                                                  }
+                                                },
+                                              ),
+                                              _separatePresenceField(
+                                                student,
+                                                enabled: editable && !_saving,
                                               ),
                                             ],
                                           ),
@@ -1982,6 +2018,7 @@ class _CanonicalGradesPageState extends State<CanonicalGradesPage> {
                                   Expanded(flex: 2, child: Text('Nom')),
                                   Expanded(flex: 2, child: Text('Prénom')),
                                   SizedBox(width: 160, child: Text('Note')),
+                                  SizedBox(width: 150, child: Text('État')),
                                 ]),
                                 const SizedBox(height: 8),
                                 ...students.map((student) => Padding(
@@ -1999,6 +2036,19 @@ class _CanonicalGradesPageState extends State<CanonicalGradesPage> {
                                             decoration: InputDecoration(
                                               labelText: 'Note /${_formatNumber(selected.maxScore)}',
                                             ),
+                                            onChanged: (value) {
+                                              if (value.trim().isNotEmpty) {
+                                                _presence[student.id] = 'present';
+                                              }
+                                            },
+                                          ),
+                                        ),
+                                        const SizedBox(width: 10),
+                                        SizedBox(
+                                          width: 150,
+                                          child: _separatePresenceField(
+                                            student,
+                                            enabled: editable && !_saving,
                                           ),
                                         ),
                                       ]),
