@@ -80,6 +80,10 @@ jobs:
             ON school_series (id, establishment_id);
           CREATE UNIQUE INDEX IF NOT EXISTS ci_uq_school_directions_id_establishment
             ON school_directions (id, establishment_id);
+          CREATE UNIQUE INDEX IF NOT EXISTS ci_uq_school_directions_establishment_code
+            ON school_directions (establishment_id, code);
+          CREATE UNIQUE INDEX IF NOT EXISTS ci_uq_school_direction_cycles_establishment_cycle
+            ON school_direction_cycles (establishment_id, cycle_id);
           SQL
 
       - name: Apply migrations to isolated test database
