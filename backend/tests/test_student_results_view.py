@@ -88,7 +88,7 @@ class StudentResultsView(unittest.TestCase):
             period='T1',
             max_value=20,
             status='submitted',
-            created_by=m.uuid.uuid4(),
+            created_by=m.uuid.UUID(self.principals[0].id),
         ))
         self.add(m.Grade(
             establishment_id=self.tenant.id,
