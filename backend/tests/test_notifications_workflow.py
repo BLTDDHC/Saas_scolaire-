@@ -18,6 +18,8 @@ class NotificationWorkflowTests(unittest.TestCase):
             id=self.principals[0].id,
             role="admin",
             school_id=self.school_id,
+            direction_id=str(uuid.uuid4()),
+            direction_cycle_ids=[str(self.cycle.id)],
         )
 
     def test_group_notification_targets_only_active_scoped_teachers(self):
