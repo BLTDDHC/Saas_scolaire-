@@ -12,6 +12,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: saas-school-ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   backend:
     name: Backend + PostgreSQL tests
@@ -90,3 +94,6 @@ jobs:
 
       - name: Flutter tests
         run: flutter test
+
+      - name: Flutter Web photo regression test
+        run: flutter test --platform chrome test/student_photo_picker_web_test.dart
