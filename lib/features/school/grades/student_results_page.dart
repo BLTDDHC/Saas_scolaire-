@@ -256,10 +256,43 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
     final registration = Map<String, dynamic>.from(
       year['registration'] as Map? ?? const <String, dynamic>{},
     );
-    final periods = List<Map<String, dynamic>>.from(
+    var periods = List<Map<String, dynamic>>.from(
       (year['periods'] as List? ?? const [])
           .map((item) => Map<String, dynamic>.from(item as Map)),
     );
+    periods.sort((left, right) {
+      final byOrder = ((left['periodOrder'] as num?)?.toInt() ?? 0)
+          .compareTo((right['periodOrder'] as num?)?.toInt() ?? 0);
+      if (byOrder != 0) return byOrder;
+      return '${left['period']}'.compareTo('${right['period']}');
+    });
+    if (_periodFilter != null) {
+      periods = periods
+          .where((item) => item['period']?.toString() == _periodFilter)
+          .toList();
+    }
+    var notes = List<Map<String, dynamic>>.from(
+      (year['notes'] as List? ?? const [])
+          .map((item) => Map<String, dynamic>.from(item as Map)),
+    );
+    notes = notes.where((note) {
+      if (_periodFilter != null &&
+          note['period']?.toString() != _periodFilter) return false;
+      if (_subjectFilter != null &&
+          note['subject']?.toString() != _subjectFilter) return false;
+      final type = '${note['examCode'] ?? note['evaluationType'] ?? ''}';
+      if (_typeFilter != null && type != _typeFilter) return false;
+      return true;
+    }).toList()
+      ..sort((left, right) {
+        final byPeriod = ((left['periodOrder'] as num?)?.toInt() ?? 0)
+            .compareTo((right['periodOrder'] as num?)?.toInt() ?? 0);
+        if (byPeriod != 0) return byPeriod;
+        final bySubject =
+            '${left['subject']}'.compareTo('${right['subject']}');
+        if (bySubject != 0) return bySubject;
+        return '${left['date']}'.compareTo('${right['date']}');
+      });
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.s4),
       child: AppCard(
@@ -270,12 +303,21 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
           registration['level'],
           registration['series'],
         ].where((value) => value != null && '$value'.isNotEmpty).join(' · '),
-        child: periods.isEmpty
-            ? const Text('Aucune période avec des résultats validés.')
-            : Column(
-                children: periods
-                    .map((period) => _periodCard(period, registration))
-                    .toList()),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (notes.isNotEmpty) ...[
+              _submittedNotesTable(notes),
+              const SizedBox(height: AppSpacing.s4),
+            ],
+            if (periods.isNotEmpty) ...[
+              _evolutionSection(periods),
+              const SizedBox(height: AppSpacing.s4),
+              ...periods.map((period) => _periodCard(period, registration)),
+            ] else if (notes.isEmpty)
+              const Text('Aucune donnée ne correspond aux filtres sélectionnés.'),
+          ],
+        ),
       ),
     );
   }
@@ -299,10 +341,29 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
       }
       subjects = grouped.values.toList();
     }
-    final exams = List<Map<String, dynamic>>.from(
+    if (_subjectFilter != null) {
+      subjects = subjects
+          .where((item) => item['subject']?.toString() == _subjectFilter)
+          .toList();
+    }
+    if (_typeFilter != null &&
+        const {'devoir', 'composition'}.contains(_typeFilter)) {
+      subjects = subjects.where((subject) {
+        final grades = (subject['grades'] as List? ?? const [])
+            .map((item) => Map<String, dynamic>.from(item as Map));
+        return grades.any((grade) =>
+            '${grade['examCode'] ?? grade['type'] ?? ''}' == _typeFilter);
+      }).toList();
+    }
+    var exams = List<Map<String, dynamic>>.from(
       (period['exams'] as List? ?? const [])
           .map((item) => Map<String, dynamic>.from(item as Map)),
     );
+    if (_typeFilter != null) {
+      exams = exams
+          .where((item) => item['code']?.toString() == _typeFilter)
+          .toList();
+    }
     final ranking = List<Map<String, dynamic>>.from(
       (period['ranking'] as List? ?? const [])
           .map((item) => Map<String, dynamic>.from(item as Map)),
@@ -387,6 +448,119 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
             ),
         ],
       ),
+    );
+  }
+
+
+  String _evaluationTypeLabel(String value) => const {
+        'devoir': 'Devoir',
+        'devoir_1': 'Devoir 1',
+        'devoir_2': 'Devoir 2',
+        'composition': 'Composition',
+        'cepe_test': 'CEPE Test',
+        'cepe_blanc': 'CEPE Blanc',
+        'bepc_test': 'BEPC Test',
+        'bepc_blanc': 'BEPC Blanc',
+        'bac_test': 'BAC Test',
+        'bac_blanc': 'BAC Blanc',
+        'test': 'Test',
+        'exam': 'Examen',
+        'exam_blanc': 'Examen blanc',
+      }[value] ??
+      value;
+
+  Widget _submittedNotesTable(List<Map<String, dynamic>> notes) => AppCard(
+        title: 'Notes récemment soumises',
+        subtitle:
+            'Ces notes proviennent directement des relevés soumis/validés par les enseignants.',
+        child: ResponsiveDataTable(
+          child: DataTable(
+            columns: const [
+              DataColumn(label: Text('Période')),
+              DataColumn(label: Text('Date')),
+              DataColumn(label: Text('Matière')),
+              DataColumn(label: Text('Évaluation')),
+              DataColumn(label: Text('État')),
+              DataColumn(label: Text('Note')),
+            ],
+            rows: notes.map((note) {
+              final presence = '${note['presence'] ?? 'not_recorded'}';
+              final state = switch (presence) {
+                'absent' => 'Absent',
+                'present' => 'Noté',
+                _ => 'Non noté',
+              };
+              final value = presence == 'present'
+                  ? '${note['value'] ?? '—'} / ${note['maxValue'] ?? '—'}'
+                  : '—';
+              return DataRow(cells: [
+                DataCell(Text('${note['period'] ?? '—'}')),
+                DataCell(Text('${note['date'] ?? '—'}')),
+                DataCell(Text('${note['subject'] ?? '—'}')),
+                DataCell(Text('${note['evaluation'] ?? '—'}')),
+                DataCell(Text(state)),
+                DataCell(Text(value)),
+              ]);
+            }).toList(),
+          ),
+        ),
+      );
+
+  Widget _evolutionSection(List<Map<String, dynamic>> periods) {
+    final groups = <String, List<Map<String, dynamic>>>{};
+    for (final period in periods) {
+      if (period['average'] == null) continue;
+      final type = '${period['periodType'] ?? 'custom'}';
+      groups.putIfAbsent(type, () => []).add(period);
+    }
+    final charts = <Widget>[];
+    for (final entry in groups.entries) {
+      if (entry.value.length < 2) continue;
+      charts.add(_ResultTrendCard(
+        title: switch (entry.key) {
+          'trimester' => 'Évolution trimestrielle',
+          'month' => 'Évolution mensuelle',
+          _ => 'Évolution par période',
+        },
+        rows: entry.value,
+      ));
+    }
+
+    if (_subjectFilter != null) {
+      final subjectRows = <Map<String, dynamic>>[];
+      for (final period in periods) {
+        final subject = (period['subjects'] as List? ?? const [])
+            .map((item) => Map<String, dynamic>.from(item as Map))
+            .where((item) => item['subject']?.toString() == _subjectFilter)
+            .firstOrNull;
+        if (subject != null && subject['average'] != null) {
+          subjectRows.add({
+            'period': period['period'],
+            'average': subject['average'],
+            'averageScale': period['averageScale'],
+          });
+        }
+      }
+      if (subjectRows.length >= 2) {
+        charts.add(_ResultTrendCard(
+          title: 'Évolution — $_subjectFilter',
+          rows: subjectRows,
+        ));
+      }
+    }
+    if (charts.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Évolution',
+            style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: AppSpacing.s3),
+        ResponsiveGrid(
+          desktopColumns: 2,
+          tabletColumns: 1,
+          children: charts,
+        ),
+      ],
     );
   }
 
