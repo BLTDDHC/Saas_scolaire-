@@ -1563,6 +1563,27 @@ class ExternalNotificationInput(BaseModel):
         return self
 
 
+class InAppTeacherNotificationInput(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
+    title: str = Field(min_length=1, max_length=160)
+    message: str = Field(min_length=1, max_length=4000)
+    category: str = Field(default="administrative", min_length=1, max_length=80)
+    teacher_ids: list[uuid.UUID] | None = Field(
+        default=None, alias="teacherIds", max_length=500
+    )
+
+    @model_validator(mode="after")
+    def normalize_in_app_teacher_notification(self):
+        self.title = self.title.strip()
+        self.message = self.message.strip()
+        self.category = self.category.strip().lower()
+        if self.teacher_ids is not None:
+            self.teacher_ids = list(dict.fromkeys(self.teacher_ids))
+            if not self.teacher_ids:
+                self.teacher_ids = None
+        return self
+
+
 class TeacherBroadcastInput(BaseModel):
     model_config = ConfigDict(populate_by_name=True, extra="forbid")
     channel: Literal["email", "sms", "whatsapp"]
@@ -13058,6 +13079,75 @@ def generate_document_report(
     ))
     session.commit()
     return {"document": document, "report": payload}
+
+@app.post("/api/v1/school/notifications/teachers", status_code=201)
+def create_teacher_in_app_notification(
+    body: InAppTeacherNotificationInput,
+    current: Principal = Depends(principal),
+    session: Session = Depends(db),
+):
+    if current.role != "admin":
+        raise HTTPException(
+            403, "Les notifications groupées des enseignants sont réservées à l'administration"
+        )
+    school_id, database_id = module_tenant_scope(current, session)
+    statement = select(Teacher).where(
+        Teacher.establishment_id == database_id,
+        Teacher.status == "active",
+    )
+    if body.teacher_ids:
+        statement = statement.where(Teacher.id.in_(body.teacher_ids))
+    allowed = direction_cycle_scope(current)
+    if allowed is not None:
+        scoped_teacher_ids = select(Affectation.teacher_id).join(
+            SchoolClass, SchoolClass.id == Affectation.class_id
+        ).where(
+            Affectation.establishment_id == database_id,
+            Affectation.status == "active",
+            SchoolClass.cycle_id.in_(allowed),
+        )
+        statement = statement.where(Teacher.id.in_(scoped_teacher_ids))
+    teachers = list(session.scalars(
+        statement.order_by(Teacher.last_name, Teacher.first_name)
+    ).all())
+    if body.teacher_ids and len(teachers) != len(body.teacher_ids):
+        raise HTTPException(
+            403,
+            "Un ou plusieurs enseignants sont hors de votre périmètre",
+        )
+    if not teachers:
+        raise HTTPException(422, "Aucun enseignant actif dans ce périmètre")
+    if len(teachers) > 500:
+        raise HTTPException(409, "Notification groupée limitée à 500 enseignants")
+
+    now = datetime.now(timezone.utc)
+    notification_id = f"teacher-announcement-{uuid.uuid4().hex}"
+    payload = {
+        "id": notification_id,
+        "type": "teacher_announcement",
+        "category": body.category,
+        "title": body.title,
+        "message": body.message,
+        "teacherIds": [str(item.id) for item in teachers],
+        "schoolId": school_id,
+        "createdBy": current.id,
+        "read": False,
+        "time": now.isoformat(),
+    }
+    session.add(Resource(
+        id=notification_id,
+        kind="notifications",
+        school_id=school_id,
+        establishment_id=database_id,
+        academic_year_id=None,
+        payload=payload,
+    ))
+    session.commit()
+    return {
+        **payload,
+        "recipientCount": len(teachers),
+    }
+
 
 @app.put("/api/v1/notifications/{notification_id}/read", status_code=204)
 def mark_workflow_notification_read(
