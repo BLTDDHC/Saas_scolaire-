@@ -1904,7 +1904,7 @@ class StoreService extends ChangeNotifier {
 
   Future<StudentModel> createStudentRemote(Map<String, dynamic> identity,
       {String? classId,
-      String schoolRegime = 'normal',
+      String? schoolRegime,
       bool hasTd = false,
       Map<String, dynamic> registrationOptions = const {}}) async {
     final created =
