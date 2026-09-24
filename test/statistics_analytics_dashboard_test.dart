@@ -52,6 +52,14 @@ Map<String, dynamic> snapshot({
         },
       ],
       'byCycle': const [],
+      'byLevel': const [
+        {'levelId': 'l1', 'level': '6e', 'studentCount': 3, 'average20': 11.5},
+        {'levelId': 'l2', 'level': '5e', 'studentCount': 3, 'average20': 12.5},
+      ],
+      'levelDistribution': const [
+        {'levelId': 'l1', 'level': '6e', 'studentCount': 3},
+        {'levelId': 'l2', 'level': '5e', 'studentCount': 3},
+      ],
       'bySubject': const [
         {
           'subject': 'Mathématiques',
@@ -71,7 +79,21 @@ Map<String, dynamic> snapshot({
           'message': 'La moyenne officielle progresse entre T1 et T2.',
         },
       ],
-      'alerts': const [],
+      'alerts': const [
+        {
+          'title': 'Présence insuffisante',
+          'message': 'Alerte issue des données réelles du périmètre.',
+        }
+      ],
+      'appliedFilters': const {
+        'academicYearId': 'year-1',
+        'cycleId': 'cycle-1',
+        'levelId': null,
+        'classId': null,
+        'periodId': null,
+        'subjectId': null,
+        'eventCode': null,
+      },
     };
 
 Widget app(Widget child) => MaterialApp(
@@ -128,8 +150,13 @@ void main() {
     )));
     await tester.pumpAndSettle();
 
-    expect(find.text('Évolution trimestrielle'), findsOneWidget);
+    expect(find.text('Évolution des résultats'), findsOneWidget);
+    expect(find.text('Répartition des élèves par niveau'), findsOneWidget);
+    expect(find.text('Résultats moyens par classe'), findsOneWidget);
+    expect(find.text('Classement des classes'), findsOneWidget);
+    expect(find.text('Alertes et notifications'), findsOneWidget);
     expect(find.text('Performance par matière'), findsOneWidget);
+    expect(find.text('Moyenne par cycle'), findsNothing);
     expect(find.text('Moyenne générale'), findsWidgets);
     expect(tester.takeException(), isNull);
   });
