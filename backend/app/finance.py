@@ -549,6 +549,11 @@ def parent_financial_situation(
         row for row in months
         if row.get('status') in {'unpaid', 'partial'}
     ]
+    advance = [
+        row for row in months
+        if row.get('month') and row['month'] > today_month
+        and int(row.get('paid') or 0) > 0
+    ]
     school_class = session.get(m.SchoolClass, registration.class_id)
     cycle_code = m.class_cycle_code(school_class, session) if school_class else ''
     return {
@@ -568,6 +573,7 @@ def parent_financial_situation(
         },
         'unpaidMonths': unpaid,
         'overdueMonths': overdue,
+        'advanceMonths': advance,
     }
 
 
