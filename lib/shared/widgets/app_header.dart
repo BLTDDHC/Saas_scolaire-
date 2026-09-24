@@ -246,8 +246,33 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (dialogContext, refresh) {
-          final items = store.getNotifications().reversed.take(50).toList();
-          final unread = items.where((item) => !item.read).length;
+          DateTime? notificationDate(String raw) =>
+              DateTime.tryParse(raw)?.toLocal();
+          String monthLabel(DateTime? value) {
+            if (value == null) return 'Date non disponible';
+            const months = [
+              'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+              'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre',
+            ];
+            return '${months[value.month - 1]} ${value.year}';
+          }
+          final items = store.getNotifications().toList()
+            ..sort((left, right) {
+              final l = notificationDate(left.time);
+              final r = notificationDate(right.time);
+              if (l != null && r != null) return r.compareTo(l);
+              if (l != null) return -1;
+              if (r != null) return 1;
+              return right.time.compareTo(left.time);
+            });
+          final limited = items.take(50).toList();
+          final groups = <String, List<dynamic>>{};
+          for (final item in limited) {
+            groups
+                .putIfAbsent(monthLabel(notificationDate(item.time)), () => [])
+                .add(item);
+          }
+          final unread = limited.where((item) => !item.read).length;
           return AlertDialog(
             title: Row(children: [
               const Expanded(child: Text('Notifications')),
@@ -268,44 +293,59 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
                       padding: EdgeInsets.symmetric(vertical: AppSpacing.s8),
                       child: Center(child: Text('Aucune notification.')),
                     )
-                  : ListView.separated(
+                  : ListView(
                       shrinkWrap: true,
-                      itemCount: items.length,
-                      separatorBuilder: (_, __) => const Divider(height: 1),
-                      itemBuilder: (context, index) {
-                        final item = items[index];
-                        return ListTile(
-                          leading: Icon(item.read
-                              ? Icons.notifications_none_rounded
-                              : Icons.notifications_active_rounded),
-                          title: Text(
-                            item.title,
-                            style: TextStyle(
-                                fontWeight: item.read
-                                    ? FontWeight.w400
-                                    : FontWeight.w700),
+                      children: groups.entries.expand((entry) sync* {
+                        yield Padding(
+                          padding: const EdgeInsets.only(
+                            top: AppSpacing.s2,
+                            bottom: AppSpacing.s1,
                           ),
-                          subtitle: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              if (item.message?.isNotEmpty == true)
-                                Text(item.message!),
-                              Text(item.time,
-                                  style: Theme.of(context).textTheme.bodySmall),
-                            ],
+                          child: Text(
+                            entry.key,
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleSmall
+                                ?.copyWith(fontWeight: FontWeight.w800),
                           ),
-                          trailing: item.read
-                              ? null
-                              : IconButton(
-                                  tooltip: 'Marquer comme lu',
-                                  onPressed: () {
-                                    store.markNotificationAsRead(item.id);
-                                    refresh(() {});
-                                  },
-                                  icon: const Icon(Icons.done_rounded),
-                                ),
                         );
-                      },
+                        for (final item in entry.value) {
+                          yield ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: Icon(item.read
+                                ? Icons.notifications_none_rounded
+                                : Icons.notifications_active_rounded),
+                            title: Text(
+                              item.title,
+                              style: TextStyle(
+                                  fontWeight: item.read
+                                      ? FontWeight.w400
+                                      : FontWeight.w700),
+                            ),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                if (item.message?.isNotEmpty == true)
+                                  Text(item.message!),
+                                Text(
+                                  item.time,
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                              ],
+                            ),
+                            trailing: item.read
+                                ? null
+                                : IconButton(
+                                    tooltip: 'Marquer comme lu',
+                                    onPressed: () {
+                                      store.markNotificationAsRead(item.id);
+                                      refresh(() {});
+                                    },
+                                    icon: const Icon(Icons.done_rounded),
+                                  ),
+                          );
+                        }
+                      }).toList(),
                     ),
             ),
             actions: [
