@@ -456,10 +456,6 @@ class _StatisticsContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final top = List<Map<String, dynamic>>.from(
-      (data['top10'] as List? ?? const [])
-          .map((item) => Map<String, dynamic>.from(item as Map)),
-    );
     final byClass = List<Map<String, dynamic>>.from(
       (data['byClass'] as List? ?? const [])
           .map((item) => Map<String, dynamic>.from(item as Map)),
@@ -784,37 +780,6 @@ class _StatisticsContent extends StatelessWidget {
             ],
           ),
         ],
-        const SizedBox(height: AppSpacing.s6),
-        const WorkspaceSectionHeader(
-          title: '10 meilleurs du cycle / périmètre',
-          subtitle: 'Tous niveaux confondus selon les résultats officiels',
-        ),
-        if (top.isEmpty)
-          const AppEmptyState(
-            iconData: Icons.workspace_premium_outlined,
-            title: 'Aucun classement officiel disponible.',
-            message:
-                'Le classement apparaîtra après le calcul officiel des résultats.',
-          )
-        else
-          AppCard(
-            padding: const EdgeInsets.symmetric(vertical: AppSpacing.s2),
-            child: Column(
-              children: [
-                for (var index = 0; index < top.length; index++)
-                  ListTile(
-                    leading: CircleAvatar(child: Text('${index + 1}')),
-                    title: Text('${top[index]['name'] ?? 'Élève'}'),
-                    subtitle: Text(
-                        '${top[index]['className'] ?? 'Classe'} · ${top[index]['mention'] ?? ''}'),
-                    trailing: Text(
-                      '${top[index]['average20'] ?? '—'} / 20',
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                  ),
-              ],
-            ),
-          ),
       ],
     ),
     );
@@ -1330,7 +1295,8 @@ class _BarChartPainter extends CustomPainter {
       oldDelegate.gridColor != gridColor;
 }
 
-class _Metric extends StatelessWidget {
+
+class _Metric extends StatefulWidget {
   const _Metric({
     required this.label,
     required this.value,
@@ -1344,30 +1310,49 @@ class _Metric extends StatelessWidget {
   final Color color;
 
   @override
-  Widget build(BuildContext context) => AppCard(
-        child: Row(
-          children: [
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: .1),
-                borderRadius: BorderRadius.circular(AppRadius.md),
-              ),
-              child: Icon(icon, color: color, size: 21),
+  State<_Metric> createState() => _MetricState();
+}
+
+class _MetricState extends State<_Metric> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) => MouseRegion(
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() => _hovered = false),
+        child: AnimatedScale(
+          scale: _hovered ? 1.012 : 1,
+          duration: AppDurations.fast,
+          curve: Curves.easeOut,
+          child: AppCard(
+            child: Row(
+              children: [
+                AnimatedContainer(
+                  duration: AppDurations.fast,
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: widget.color.withValues(
+                        alpha: _hovered ? .16 : .10),
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                  ),
+                  child: Icon(widget.icon, color: widget.color, size: 21),
+                ),
+                const SizedBox(width: AppSpacing.s3),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(widget.label,
+                          style: Theme.of(context).textTheme.bodySmall),
+                      const SizedBox(height: AppSpacing.s1),
+                      Text(widget.value, style: AppTypography.heading3()),
+                    ],
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: AppSpacing.s3),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(label, style: Theme.of(context).textTheme.bodySmall),
-                  const SizedBox(height: AppSpacing.s1),
-                  Text(value, style: AppTypography.heading3()),
-                ],
-              ),
-            ),
-          ],
+          ),
         ),
       );
 }
