@@ -1297,8 +1297,8 @@ class StudentPreEnrollmentUpdateInput(BaseModel):
     first_name: str = Field(alias="firstName", min_length=1, max_length=100)
     last_name: str = Field(alias="lastName", min_length=1, max_length=100)
     desired_class_id: uuid.UUID = Field(alias="desiredClassId")
-    school_regime: Literal["normal", "part_time", "full_time"] = Field(
-        default="normal", alias="schoolRegime"
+    school_regime: Literal["normal", "part_time", "full_time"] | None = Field(
+        default=None, alias="schoolRegime"
     )
 
     @field_validator("first_name", "last_name", mode="before")
@@ -5148,7 +5148,14 @@ def create_student_pre_enrollment(
         student.establishment_id, body.desired_class_id, session,
         year.id, current
     )
-    validate_school_regime(desired_class, body.school_regime, session)
+    desired_cycle_code = class_cycle_code(desired_class, session)
+    selected_regime = body.school_regime
+    if desired_cycle_code in {"MATERNELLE", "PRIMAIRE"}:
+        if selected_regime is None:
+            raise HTTPException(422, "Le régime est obligatoire en Maternelle et Primaire")
+    else:
+        selected_regime = "normal"
+    validate_school_regime(desired_class, selected_regime, session)
     prior_registration_exists = bool(session.scalar(
         select(StudentAcademicRegistration.id).join(
             AcademicYear,
@@ -5186,13 +5193,13 @@ def create_student_pre_enrollment(
         academic_year_id=year.id,
         registration_date=date.today(),
         registration_number=student.registration_number,
-        school_regime=body.school_regime,
+        school_regime=selected_regime,
         options={
             "preEnrollmentId": str(item.id),
             "registrationKind": expected_kind,
             "regimeHistory": (
                 [{
-                    "regime": body.school_regime,
+                    "regime": selected_regime,
                     "effectiveMonth": year.start_date.strftime("%Y-%m"),
                     "changedBy": current.id,
                     "changedAt": datetime.now(timezone.utc).isoformat(),
