@@ -2712,6 +2712,29 @@ class StoreService extends ChangeNotifier {
           String studentId, String academicYearId) =>
       _repository.myChildTracking(studentId, academicYearId);
 
+  Future<List<Map<String, dynamic>>> studentRegimeHistoryRemote(
+          String studentId, String academicYearId) =>
+      _repository.studentRegimeHistory(studentId, academicYearId);
+
+  Future<Map<String, dynamic>> changeStudentRegimeRemote({
+    required String studentId,
+    required String academicYearId,
+    required String schoolRegime,
+    required String effectiveFrom,
+  }) =>
+      _repository.changeStudentRegime(
+        studentId,
+        {
+          'academicYearId': academicYearId,
+          'schoolRegime': schoolRegime,
+          'effectiveFrom': effectiveFrom,
+        },
+      );
+
+  Future<Map<String, dynamic>> parentFinancialSituationRemote(
+          String studentId, String academicYearId) =>
+      _repository.parentFinancialSituation(studentId, academicYearId);
+
   Future<List<Map<String, dynamic>>> preEnrollmentsRemote(
           {String? academicYearId, String? status}) =>
       _repository.preEnrollments(
@@ -2725,6 +2748,7 @@ class StoreService extends ChangeNotifier {
     required String academicYearId,
     required String desiredClassId,
     String registrationKind = 'registration',
+    String? schoolRegime,
     bool submit = true,
   }) =>
       _repository.createPreEnrollment({
@@ -2734,6 +2758,7 @@ class StoreService extends ChangeNotifier {
         'academicYearId': academicYearId,
         'desiredClassId': desiredClassId,
         'registrationKind': registrationKind,
+        if (schoolRegime != null) 'schoolRegime': schoolRegime,
         'status': submit ? 'submitted' : 'draft',
       });
 
