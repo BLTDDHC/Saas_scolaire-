@@ -1999,6 +1999,14 @@ class StoreService extends ChangeNotifier {
           .map(StudentRegistrationModel.fromJson)
           .toList();
 
+  Future<Map<String, dynamic>> changeStudentRegimeRemote(
+          String registrationId, String schoolRegime, DateTime effectiveDate) =>
+      _repository.changeStudentRegime(
+        registrationId,
+        schoolRegime,
+        effectiveDate.toIso8601String().split('T').first,
+      );
+
   Future<void> changeStudentClassRemote(String studentId, String classId,
       {String schoolRegime = 'normal',
       bool hasTd = false,
@@ -2693,7 +2701,10 @@ class StoreService extends ChangeNotifier {
         return <String, dynamic>{
           'id': registration['academicYearId'],
           'name': year?['name'],
+          'registrationId': registration['id'],
           'className': registration['className'],
+          'cycleCode': registration['cycleCode'],
+          'schoolRegime': registration['schoolRegime'],
         };
       }).toList();
       return <String, dynamic>{
@@ -2712,6 +2723,10 @@ class StoreService extends ChangeNotifier {
           String studentId, String academicYearId) =>
       _repository.myChildTracking(studentId, academicYearId);
 
+  Future<Map<String, dynamic>> parentFinanceSituationRemote(
+          String studentId, String academicYearId) =>
+      _repository.parentFinanceSituation(studentId, academicYearId);
+
   Future<List<Map<String, dynamic>>> preEnrollmentsRemote(
           {String? academicYearId, String? status}) =>
       _repository.preEnrollments(
@@ -2724,6 +2739,7 @@ class StoreService extends ChangeNotifier {
     String? lastName,
     required String academicYearId,
     required String desiredClassId,
+    required String schoolRegime,
     String registrationKind = 'registration',
     bool submit = true,
   }) =>
@@ -2733,6 +2749,7 @@ class StoreService extends ChangeNotifier {
         if (lastName != null) 'lastName': lastName,
         'academicYearId': academicYearId,
         'desiredClassId': desiredClassId,
+        'schoolRegime': schoolRegime,
         'registrationKind': registrationKind,
         'status': submit ? 'submitted' : 'draft',
       });
