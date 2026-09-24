@@ -459,7 +459,8 @@ class _StudentsPageState extends State<StudentsPage> {
                         label: 'Date de naissance',
                         value: birthDate,
                         firstDate: DateTime(1900),
-                        lastDate: DateTime.now(),
+                        lastDate: AppDateUtils.parse(academicYear?.end) ??
+                        DateTime(now.year + 1, 12, 31),
                         onChanged: (value) =>
                             setDialogState(() => birthDate = value),
                       ),
@@ -1247,6 +1248,10 @@ class _StudentsPageState extends State<StudentsPage> {
         return;
       }
       final registration = matches.first;
+      final academicYears = store.getAcademicYears()
+          .where((item) => item.id == registration.academicYearId)
+          .toList();
+      final academicYear = academicYears.isEmpty ? null : academicYears.first;
       var regime = registration.schoolRegime == 'part_time'
           ? 'full_time'
           : 'part_time';
