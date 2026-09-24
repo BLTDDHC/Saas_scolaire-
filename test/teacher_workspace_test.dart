@@ -189,7 +189,8 @@ Map<String, dynamic> get _workspace => {
 
 MockClient _teacherClient(
     {List<Map<String, dynamic>> initialBehavior = const [],
-    Map<String, dynamic>? officialResults}) {
+    Map<String, dynamic>? officialResults,
+    Map<String, dynamic>? workspace}) {
   final behaviorEvents = <Map<String, dynamic>>[...initialBehavior];
   String attendanceStatus = 'draft';
   List<Map<String, dynamic>> attendanceRecords = [];
@@ -211,7 +212,7 @@ MockClient _teacherClient(
       return http.Response(jsonEncode(_teacherUser), 200);
     }
     if (request.url.path == '/api/v1/school/teacher/workspace') {
-      return http.Response(jsonEncode(_workspace), 200);
+      return http.Response(jsonEncode(workspace ?? _workspace), 200);
     }
     if (request.url.path == '/api/v1/school/evaluations') {
       return http.Response(jsonEncode(_teacherEvaluations), 200);
@@ -536,6 +537,101 @@ void main() {
         findsOneWidget);
     expect(find.text('Toutes mes classes'), findsOneWidget);
     expect(find.text('Ajouter un élève'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'Mes élèves filtre seulement parmi les classes enseignées et trie par classe nom prénom',
+      (tester) async {
+    tester.view.physicalSize = const Size(1440, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final workspace = _workspace;
+    (workspace['classes'] as List).add({
+      'id': 'class-2',
+      'schoolId': 'school_003',
+      'name': '2e B',
+      'academicYearId': 'year-active',
+      'cycleId': 'cycle-college',
+      'structuredLevelId': 'level-3e',
+      'levelId': 'level-3e',
+      'level': '3e',
+      'status': 'active',
+    });
+    (workspace['classes'] as List).add({
+      'id': 'class-hidden',
+      'schoolId': 'school_003',
+      'name': 'Classe cachée',
+      'academicYearId': 'year-active',
+      'cycleId': 'cycle-college',
+      'structuredLevelId': 'level-3e',
+      'levelId': 'level-3e',
+      'level': '3e',
+      'status': 'active',
+    });
+    (workspace['affectations'] as List).add({
+      'id': 'affectation-2',
+      'schoolId': 'school_003',
+      'teacherId': 'teacher-1',
+      'teacherName': 'Aline Mabiala',
+      'classId': 'class-2',
+      'className': '2e B',
+      'subjectId': 'subject-1',
+      'subject': 'Mathématiques',
+      'academicYearId': 'year-active',
+      'status': 'active',
+    });
+    (workspace['students'] as List).addAll([
+      {
+        'id': 'student-2',
+        'schoolId': 'school_003',
+        'firstName': 'Zoé',
+        'lastName': 'Ébala',
+        'classId': 'class-2',
+        'class': '2e B',
+        'level': '3e',
+        'matricule': 'ECOLE-2026-002',
+        'academicYearId': 'year-active',
+        'status': 'active',
+      },
+      {
+        'id': 'student-hidden',
+        'schoolId': 'school_003',
+        'firstName': 'Hors',
+        'lastName': 'Périmètre',
+        'classId': 'class-hidden',
+        'class': 'Classe cachée',
+        'level': '3e',
+        'matricule': 'ECOLE-2026-999',
+        'academicYearId': 'year-active',
+        'status': 'active',
+      },
+    ]);
+
+    final store = await _store(_teacherClient(workspace: workspace));
+    expect(await store.login(_email, _password), isTrue);
+    await tester.pumpWidget(ChangeNotifierProvider<StoreService>.value(
+      value: store,
+      child: const EduProApp(),
+    ));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Mes élèves'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Toutes mes classes'), findsOneWidget);
+    expect(find.text('Classe cachée'), findsNothing);
+    expect(find.text('Périmètre Hors'), findsNothing);
+    expect(find.text('Ébala Zoé'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('teacher-students-class-filter')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('2e B').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Ébala Zoé'), findsOneWidget);
+    expect(find.text('Massamba Chris'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
