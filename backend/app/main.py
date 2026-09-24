@@ -650,12 +650,27 @@ class StudentAcademicRegistration(Base):
     academic_year_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
     registration_date: Mapped[date] = mapped_column(Date, default=date.today)
     registration_number: Mapped[str | None] = mapped_column(String(50))
+    # Legacy compatibility: Collège/Lycée keep "normal" internally, but the
+    # business regime is exposed only for Maternelle/Primaire.
     school_regime: Mapped[str] = mapped_column(String(20), default='normal')
     has_td: Mapped[bool] = mapped_column(Boolean, default=False)
     options: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
     status: Mapped[str] = mapped_column(String(50), default="validated")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+class StudentRegimeHistory(Base):
+    __tablename__ = "student_regime_history"
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    establishment_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    registration_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    student_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    academic_year_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    regime: Mapped[str] = mapped_column(String(20))
+    effective_date: Mapped[date] = mapped_column(Date)
+    ended_at: Mapped[date | None] = mapped_column(Date)
+    changed_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 class GuardianPerson(Base):
     __tablename__ = 'guardian_people'
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -843,6 +858,7 @@ class FinanceFeeInput(BaseModel):
     type: Literal["registration", "reenrollment", "tuition", "td", "other"] = "tuition"
     frequency: Literal["once", "monthly", "annual"] = "monthly"
     month: str | None = Field(default=None, pattern=r"^\d{4}-\d{2}$")
+    regime: Literal["part_time", "full_time"] | None = None
     schoolId: str | None = None
 
 class FinancePaymentInput(BaseModel):
@@ -1270,6 +1286,9 @@ class StudentPreEnrollmentInput(BaseModel):
     registration_kind: Literal["registration", "reenrollment"] = Field(
         default="registration", alias="registrationKind"
     )
+    school_regime: Literal["part_time", "full_time"] | None = Field(
+        default=None, alias="schoolRegime"
+    )
     status: Literal["draft", "submitted"] = "draft"
 
     @model_validator(mode="after")
@@ -1293,6 +1312,9 @@ class StudentPreEnrollmentUpdateInput(BaseModel):
     first_name: str = Field(alias="firstName", min_length=1, max_length=100)
     last_name: str = Field(alias="lastName", min_length=1, max_length=100)
     desired_class_id: uuid.UUID = Field(alias="desiredClassId")
+    school_regime: Literal["part_time", "full_time"] | None = Field(
+        default=None, alias="schoolRegime"
+    )
 
     @field_validator("first_name", "last_name", mode="before")
     @classmethod
@@ -1300,8 +1322,8 @@ class StudentPreEnrollmentUpdateInput(BaseModel):
         return value.strip() if isinstance(value, str) else value
 
 class StudentPreEnrollmentApprovalInput(BaseModel):
-    school_regime: Literal['normal', 'part_time', 'full_time'] = Field(
-        default='normal', alias='schoolRegime'
+    school_regime: Literal['part_time', 'full_time'] | None = Field(
+        default=None, alias='schoolRegime'
     )
     has_td: bool = Field(default=False, alias='hasTd')
     options: dict[str, Any] = Field(default_factory=dict)
@@ -1774,9 +1796,14 @@ class StudentRegistrationInput(BaseModel):
     model_config = ConfigDict(populate_by_name=True, extra='forbid')
     class_id: uuid.UUID = Field(alias='classId')
     registration_date: date = Field(default_factory=date.today, alias='registrationDate')
-    school_regime: Literal['normal', 'part_time', 'full_time'] = Field(default='normal', alias='schoolRegime')
+    school_regime: Literal['part_time', 'full_time'] | None = Field(default=None, alias='schoolRegime')
     has_td: bool = Field(default=False, alias='hasTd')
     options: dict[str, Any] = Field(default_factory=dict)
+
+class StudentRegimeChangeInput(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, extra='forbid')
+    regime: Literal['part_time', 'full_time']
+    effective_date: date = Field(alias='effectiveDate')
 
 class StudentPhotoFileInput(BaseModel):
     model_config = ConfigDict(populate_by_name=True, extra="forbid")
@@ -2633,12 +2660,39 @@ def student_json(item: Student, session: Session, academic_year_id: uuid.UUID | 
         "updatedAt": item.updated_at.isoformat(),
     }
 
+def registration_business_regime(
+    school_class: SchoolClass | None,
+    value: str | None,
+    session: Session,
+) -> str | None:
+    cycle = session.get(SchoolCycle, school_class.cycle_id) if school_class and school_class.cycle_id else None
+    code = canonical_cycle_code(cycle.code) if cycle else ""
+    return value if code in {"MATERNELLE", "PRIMAIRE"} and value in {"part_time", "full_time"} else None
+
+def normalize_registration_regime(
+    school_class: SchoolClass,
+    value: str | None,
+    session: Session,
+) -> str:
+    cycle = session.get(SchoolCycle, school_class.cycle_id) if school_class.cycle_id else None
+    code = canonical_cycle_code(cycle.code) if cycle else ""
+    if code in {"MATERNELLE", "PRIMAIRE"}:
+        if value not in {"part_time", "full_time"}:
+            raise HTTPException(422, "Le régime Mi-temps ou Plein temps est obligatoire pour ce cycle")
+        return value
+    if value not in {None, "normal"}:
+        raise HTTPException(422, "Le régime ne s’applique pas au Collège/Lycée")
+    return "normal"
+
 def registration_json(item: StudentAcademicRegistration, session: Session) -> dict[str, Any]:
     school_class = session.get(SchoolClass, item.class_id)
     year = session.get(AcademicYear, item.academic_year_id)
     cycle = session.get(SchoolCycle, school_class.cycle_id) if school_class and school_class.cycle_id else None
     level = session.get(SchoolLevel, school_class.school_level_id) if school_class and school_class.school_level_id else None
     series = session.get(SchoolSeries, school_class.series_id) if school_class and school_class.series_id else None
+    regime_history = session.scalars(select(StudentRegimeHistory).where(
+        StudentRegimeHistory.registration_id == item.id
+    ).order_by(StudentRegimeHistory.effective_date, StudentRegimeHistory.created_at)).all()
     transfers = session.scalars(select(StudentClassTransfer).where(
         StudentClassTransfer.registration_id == item.id
     ).order_by(StudentClassTransfer.effective_date)).all()
@@ -2658,7 +2712,15 @@ def registration_json(item: StudentAcademicRegistration, session: Session) -> di
         'seriesId': str(school_class.series_id) if school_class and school_class.series_id else None,
         'series': series.name if series else None,
         'matricule': item.registration_number,
-        'schoolRegime': item.school_regime,
+        'schoolRegime': registration_business_regime(school_class, item.school_regime, session),
+        'regimeHistory': [{
+            'id': str(change.id),
+            'regime': change.regime,
+            'effectiveDate': change.effective_date.isoformat(),
+            'endDate': change.ended_at.isoformat() if change.ended_at else None,
+            'changedBy': str(change.changed_by) if change.changed_by else None,
+            'createdAt': change.created_at.isoformat(),
+        } for change in regime_history],
         'hasTd': item.has_td,
         'options': item.options or {},
         'registrationDate': item.registration_date.isoformat(),
@@ -2770,6 +2832,7 @@ def pre_enrollment_json(item: StudentPreEnrollment, session: Session) -> dict[st
         "desiredClassName": school_class.name if school_class else None,
         "provisionalRegistrationId": str(provisional.id) if provisional else None,
         "registrationKind": (provisional.options or {}).get("registrationKind") if provisional else None,
+        "schoolRegime": registration_business_regime(school_class, provisional.school_regime, session) if provisional else None,
         "status": item.status,
         "submittedAt": item.submitted_at.isoformat() if item.submitted_at else None,
         "decidedAt": item.decided_at.isoformat() if item.decided_at else None,
@@ -4887,6 +4950,12 @@ def create_student_registration(
     school_class = validate_registration_class(
         student.establishment_id, body.class_id, session, current=current
     )
+    school_regime = normalize_registration_regime(
+        school_class, body.school_regime, session
+    )
+    school_regime = normalize_registration_regime(
+        school_class, body.school_regime, session
+    )
     validate_registration_academic_options(school_class, body.has_td, session)
     matricule = ensure_student_permanent_matricule(
         session, student, school_class.academic_year_id
@@ -4898,12 +4967,23 @@ def create_student_registration(
         academic_year_id=school_class.academic_year_id,
         registration_date=body.registration_date,
         registration_number=matricule,
-        school_regime=body.school_regime,
+        school_regime=school_regime,
         has_td=body.has_td,
         options=body.options,
         status="validated",
     )
     session.add(item)
+    session.flush()
+    if registration_business_regime(school_class, school_regime, session):
+        session.add(StudentRegimeHistory(
+            establishment_id=item.establishment_id,
+            registration_id=item.id,
+            student_id=item.student_id,
+            academic_year_id=item.academic_year_id,
+            regime=school_regime,
+            effective_date=body.registration_date,
+            changed_by=uuid.UUID(current.id),
+        ))
     # The temporary creator scope is useful only until the first academic
     # registration. From here, class/cycle registrations are authoritative.
     student.created_direction_id = None
@@ -5003,9 +5083,12 @@ def create_student_pre_enrollment(
         session.flush()
     if year.establishment_id != student.establishment_id:
         raise HTTPException(403, "Année scolaire inter-établissement interdite")
-    validate_registration_class(
+    desired_class = validate_registration_class(
         student.establishment_id, body.desired_class_id, session,
         year.id, current
+    )
+    provisional_regime = normalize_registration_regime(
+        desired_class, body.school_regime, session
     )
     prior_registration_exists = bool(session.scalar(
         select(StudentAcademicRegistration.id).join(
@@ -5044,6 +5127,7 @@ def create_student_pre_enrollment(
         academic_year_id=year.id,
         registration_date=date.today(),
         registration_number=student.registration_number,
+        school_regime=provisional_regime,
         options={
             "preEnrollmentId": str(item.id),
             "registrationKind": expected_kind,
@@ -5135,6 +5219,9 @@ def update_student_pre_enrollment(
         item.establishment_id, body.desired_class_id, session,
         item.academic_year_id, current,
     )
+    school_regime = normalize_registration_regime(
+        school_class, body.school_regime, session
+    )
     provisional = session.scalar(select(StudentAcademicRegistration).where(
         StudentAcademicRegistration.student_id == student.id,
         StudentAcademicRegistration.academic_year_id == item.academic_year_id,
@@ -5155,6 +5242,7 @@ def update_student_pre_enrollment(
     item.desired_class_id = school_class.id
     item.updated_at = datetime.now(timezone.utc)
     provisional.class_id = school_class.id
+    provisional.school_regime = school_regime
     provisional.updated_at = datetime.now(timezone.utc)
     session.commit()
     return pre_enrollment_json(item, session)
@@ -5193,13 +5281,23 @@ def approve_student_pre_enrollment(
     registration.class_id = school_class.id
     registration.registration_date = body.registration_date
     registration.registration_number = matricule
-    registration.school_regime = body.school_regime
+    registration.school_regime = school_regime
     registration.has_td = body.has_td
     registration.options = {**(registration.options or {}), **body.options}
     registration.status = "validated"
     registration.updated_at = datetime.now(timezone.utc)
     student.status = "active"
     student.updated_at = datetime.now(timezone.utc)
+    if registration_business_regime(school_class, school_regime, session):
+        session.add(StudentRegimeHistory(
+            establishment_id=registration.establishment_id,
+            registration_id=registration.id,
+            student_id=registration.student_id,
+            academic_year_id=registration.academic_year_id,
+            regime=school_regime,
+            effective_date=body.registration_date,
+            changed_by=uuid.UUID(current.id),
+        ))
     item.status = "approved"
     item.desired_class_id = school_class.id
     item.decided_at = datetime.now(timezone.utc)
@@ -5211,6 +5309,63 @@ def approve_student_pre_enrollment(
         raise HTTPException(409, "Une inscription active existe déjà pour cet élève et cette année") from exc
     session.refresh(registration)
     return {"preEnrollment": pre_enrollment_json(item, session), "registration": registration_json(registration, session)}
+
+@app.get("/api/v1/school/student-registrations/{registration_id}/regime-history")
+def student_regime_history(
+    registration_id: uuid.UUID,
+    current: Principal = Depends(require_module("students")),
+    session: Session = Depends(db),
+):
+    registration = session.get(StudentAcademicRegistration, registration_id)
+    if not registration:
+        raise HTTPException(404, "Inscription introuvable")
+    ensure_student_scope(registration.student_id, current, session)
+    school_class = session.get(SchoolClass, registration.class_id)
+    if registration_business_regime(school_class, registration.school_regime, session) is None:
+        return []
+    return registration_json(registration, session)["regimeHistory"]
+
+@app.post("/api/v1/school/student-registrations/{registration_id}/regime", status_code=201)
+def change_student_regime(
+    registration_id: uuid.UUID,
+    body: StudentRegimeChangeInput,
+    current: Principal = Depends(require_module("students")),
+    session: Session = Depends(db),
+):
+    registration = session.get(StudentAcademicRegistration, registration_id)
+    if not registration:
+        raise HTTPException(404, "Inscription introuvable")
+    ensure_student_scope(registration.student_id, current, session)
+    school_class = session.get(SchoolClass, registration.class_id)
+    next_regime = normalize_registration_regime(school_class, body.regime, session)
+    year = session.get(AcademicYear, registration.academic_year_id)
+    if not year or body.effective_date < year.start_date or body.effective_date > year.end_date:
+        raise HTTPException(422, "La date d’effet doit appartenir à l’année scolaire")
+    if body.effective_date < registration.registration_date:
+        raise HTTPException(422, "La date d’effet ne peut pas précéder l’inscription")
+    latest = session.scalar(select(StudentRegimeHistory).where(
+        StudentRegimeHistory.registration_id == registration.id
+    ).order_by(StudentRegimeHistory.effective_date.desc(), StudentRegimeHistory.created_at.desc()))
+    if latest and body.effective_date <= latest.effective_date:
+        raise HTTPException(409, "La nouvelle date d’effet doit suivre le dernier changement de régime")
+    if latest and latest.regime == next_regime:
+        raise HTTPException(409, "Ce régime est déjà applicable")
+    if latest:
+        latest.ended_at = body.effective_date - timedelta(days=1)
+    session.add(StudentRegimeHistory(
+        establishment_id=registration.establishment_id,
+        registration_id=registration.id,
+        student_id=registration.student_id,
+        academic_year_id=registration.academic_year_id,
+        regime=next_regime,
+        effective_date=body.effective_date,
+        changed_by=uuid.UUID(current.id),
+    ))
+    registration.school_regime = next_regime
+    registration.updated_at = datetime.now(timezone.utc)
+    session.commit()
+    session.refresh(registration)
+    return registration_json(registration, session)
 
 @app.get("/api/v1/school/guardians")
 def list_guardians(
@@ -12263,6 +12418,7 @@ def create_finance_fee(
         and str(row.payload.get("academicYearId")) == body.academicYearId
         and row.payload.get('type', 'tuition') == body.type
         and row.payload.get('month') == body.month
+        and row.payload.get('regime') == body.regime
         and (body.type != 'other' or row.payload.get('name', '').strip().casefold() == body.name.strip().casefold())
         and row.payload.get("scope", "establishment") == body.scope
         and str(row.payload.get("classId")) == str(body.classId)
@@ -12277,6 +12433,7 @@ def create_finance_fee(
         "scope": body.scope, "cycle": body.cycle, "levelId": body.levelId,
         "classId": body.classId, "description": body.description.strip(),
         "type": body.type, "frequency": body.frequency, "month": body.month,
+        "regime": body.regime,
         "schoolId": school_id, "institutionId": school_id,
         "academicYearId": body.academicYearId, "schoolYearId": body.academicYearId,
         "status": "active", "createdAt": datetime.now(timezone.utc).isoformat(),
