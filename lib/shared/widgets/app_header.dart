@@ -242,12 +242,32 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
   }
 
   void _showNotifications(BuildContext context, StoreService store) {
+    DateTime notificationDate(dynamic item) =>
+        DateTime.tryParse(item.time)?.toLocal() ??
+        DateTime.fromMillisecondsSinceEpoch(0);
+    String monthLabel(DateTime value) {
+      const months = [
+        'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+        'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre',
+      ];
+      return '${months[value.month - 1]} ${value.year}';
+    }
+
     showDialog<void>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (dialogContext, refresh) {
-          final items = store.getNotifications().reversed.take(50).toList();
-          final unread = items.where((item) => !item.read).length;
+          final items = store.getNotifications().toList()
+            ..sort((left, right) =>
+                notificationDate(right).compareTo(notificationDate(left)));
+          final visible = items.take(50).toList();
+          final unread = visible.where((item) => !item.read).length;
+          final grouped = <String, List<dynamic>>{};
+          for (final item in visible) {
+            grouped
+                .putIfAbsent(monthLabel(notificationDate(item)), () => [])
+                .add(item);
+          }
           return AlertDialog(
             title: Row(children: [
               const Expanded(child: Text('Notifications')),
@@ -263,49 +283,67 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
             ]),
             content: SizedBox(
               width: 560,
-              child: items.isEmpty
+              child: visible.isEmpty
                   ? const Padding(
                       padding: EdgeInsets.symmetric(vertical: AppSpacing.s8),
                       child: Center(child: Text('Aucune notification.')),
                     )
-                  : ListView.separated(
+                  : ListView(
                       shrinkWrap: true,
-                      itemCount: items.length,
-                      separatorBuilder: (_, __) => const Divider(height: 1),
-                      itemBuilder: (context, index) {
-                        final item = items[index];
-                        return ListTile(
-                          leading: Icon(item.read
-                              ? Icons.notifications_none_rounded
-                              : Icons.notifications_active_rounded),
-                          title: Text(
-                            item.title,
-                            style: TextStyle(
-                                fontWeight: item.read
-                                    ? FontWeight.w400
-                                    : FontWeight.w700),
+                      children: grouped.entries.expand((group) sync* {
+                        yield Padding(
+                          padding: const EdgeInsets.only(
+                              top: AppSpacing.s3, bottom: AppSpacing.s2),
+                          child: Text(
+                            group.key,
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w800),
                           ),
-                          subtitle: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              if (item.message?.isNotEmpty == true)
-                                Text(item.message!),
-                              Text(item.time,
-                                  style: Theme.of(context).textTheme.bodySmall),
-                            ],
-                          ),
-                          trailing: item.read
-                              ? null
-                              : IconButton(
-                                  tooltip: 'Marquer comme lu',
-                                  onPressed: () {
-                                    store.markNotificationAsRead(item.id);
-                                    refresh(() {});
-                                  },
-                                  icon: const Icon(Icons.done_rounded),
-                                ),
                         );
-                      },
+                        for (final item in group.value) {
+                          final date = notificationDate(item);
+                          yield ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: Icon(item.read
+                                ? Icons.notifications_none_rounded
+                                : Icons.notifications_active_rounded),
+                            title: Text(
+                              item.title,
+                              style: TextStyle(
+                                  fontWeight: item.read
+                                      ? FontWeight.w400
+                                      : FontWeight.w700),
+                            ),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                if (item.message?.isNotEmpty == true)
+                                  Text(item.message!, softWrap: true),
+                                Text(
+                                  '${date.day.toString().padLeft(2, '0')}/'
+                                  '${date.month.toString().padLeft(2, '0')}/'
+                                  '${date.year} '
+                                  '${date.hour.toString().padLeft(2, '0')}:'
+                                  '${date.minute.toString().padLeft(2, '0')}',
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                              ],
+                            ),
+                            trailing: item.read
+                                ? null
+                                : IconButton(
+                                    tooltip: 'Marquer comme lu',
+                                    onPressed: () {
+                                      store.markNotificationAsRead(item.id);
+                                      refresh(() {});
+                                    },
+                                    icon: const Icon(Icons.done_rounded),
+                                  ),
+                          );
+                        }
+                      }).toList(),
                     ),
             ),
             actions: [
