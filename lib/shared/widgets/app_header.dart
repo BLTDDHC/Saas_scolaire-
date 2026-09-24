@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
+import '../../core/utils/notification_grouping.dart';
 import '../../core/constants/establishment_types.dart';
 import '../../core/utils/responsive_utils.dart';
 import '../../core/utils/student_photo_picker.dart';
@@ -246,7 +247,8 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (dialogContext, refresh) {
-          final items = store.getNotifications().reversed.take(50).toList();
+          final items = store.getNotifications().toList();
+          final groups = groupNotificationsByMonth(items.take(50));
           final unread = items.where((item) => !item.read).length;
           return AlertDialog(
             title: Row(children: [
@@ -268,44 +270,54 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
                       padding: EdgeInsets.symmetric(vertical: AppSpacing.s8),
                       child: Center(child: Text('Aucune notification.')),
                     )
-                  : ListView.separated(
+                  : ListView(
                       shrinkWrap: true,
-                      itemCount: items.length,
-                      separatorBuilder: (_, __) => const Divider(height: 1),
-                      itemBuilder: (context, index) {
-                        final item = items[index];
-                        return ListTile(
-                          leading: Icon(item.read
-                              ? Icons.notifications_none_rounded
-                              : Icons.notifications_active_rounded),
-                          title: Text(
-                            item.title,
-                            style: TextStyle(
-                                fontWeight: item.read
-                                    ? FontWeight.w400
-                                    : FontWeight.w700),
+                      children: groups.entries.expand((entry) sync* {
+                        yield Padding(
+                          padding: const EdgeInsets.only(
+                              top: AppSpacing.s3, bottom: AppSpacing.s1),
+                          child: Text(
+                            entry.key,
+                            style: Theme.of(context).textTheme.titleSmall,
                           ),
-                          subtitle: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              if (item.message?.isNotEmpty == true)
-                                Text(item.message!),
-                              Text(item.time,
-                                  style: Theme.of(context).textTheme.bodySmall),
-                            ],
-                          ),
-                          trailing: item.read
-                              ? null
-                              : IconButton(
-                                  tooltip: 'Marquer comme lu',
-                                  onPressed: () {
-                                    store.markNotificationAsRead(item.id);
-                                    refresh(() {});
-                                  },
-                                  icon: const Icon(Icons.done_rounded),
-                                ),
                         );
-                      },
+                        for (final item in entry.value) {
+                          yield ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: Icon(item.read
+                                ? Icons.notifications_none_rounded
+                                : Icons.notifications_active_rounded),
+                            title: Text(
+                              item.title,
+                              style: TextStyle(
+                                  fontWeight: item.read
+                                      ? FontWeight.w400
+                                      : FontWeight.w700),
+                            ),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                if (item.message?.isNotEmpty == true)
+                                  Text(item.message!, softWrap: true),
+                                Text(item.time,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodySmall),
+                              ],
+                            ),
+                            trailing: item.read
+                                ? null
+                                : IconButton(
+                                    tooltip: 'Marquer comme lu',
+                                    onPressed: () {
+                                      store.markNotificationAsRead(item.id);
+                                      refresh(() {});
+                                    },
+                                    icon: const Icon(Icons.done_rounded),
+                                  ),
+                          );
+                        }
+                      }).toList(),
                     ),
             ),
             actions: [
