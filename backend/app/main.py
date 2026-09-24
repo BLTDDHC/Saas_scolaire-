@@ -2562,6 +2562,27 @@ def validate_class_series_requirement(
     if canonical_cycle_code(cycle.code) == "LYCEE" and series_id is None:
         raise HTTPException(422, "Veuillez sélectionner une série.")
 
+def registration_effective_regime(
+    item: StudentAcademicRegistration,
+    target_date: date | None = None,
+) -> str:
+    """Resolve the regime active on a date from its non-destructive history."""
+    target = target_date or date.today()
+    history = [
+        row for row in (item.options or {}).get("regimeHistory", [])
+        if isinstance(row, dict) and row.get("regime") in {"part_time", "full_time"}
+    ]
+    for row in reversed(sorted(history, key=lambda value: str(value.get("startDate") or ""))):
+        try:
+            start = date.fromisoformat(str(row.get("startDate")))
+            end = date.fromisoformat(str(row.get("endDate"))) if row.get("endDate") else None
+        except ValueError:
+            continue
+        if start <= target and (end is None or target <= end):
+            return str(row["regime"])
+    return item.school_regime
+
+
 def registration_json(item: StudentAcademicRegistration, session: Session) -> dict[str, Any]:
     school_class = session.get(SchoolClass, item.class_id)
     year = session.get(AcademicYear, item.academic_year_id)
@@ -2671,7 +2692,8 @@ def registration_json(item: StudentAcademicRegistration, session: Session) -> di
         'seriesId': str(school_class.series_id) if school_class and school_class.series_id else None,
         'series': series.name if series else None,
         'matricule': item.registration_number,
-        'schoolRegime': item.school_regime,
+        'schoolRegime': registration_effective_regime(item),
+        'scheduledRegime': item.school_regime,
         'hasTd': item.has_td,
         'options': item.options or {},
         'registrationDate': item.registration_date.isoformat(),
