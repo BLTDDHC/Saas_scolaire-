@@ -180,6 +180,19 @@ void main() {
 
     await openProgram();
     await choose(const Key('program-cycle'), 'Collège');
+    await choose(const Key('program-level-scope'), '6e');
+    await tester.tap(find.byKey(const Key('program-evaluation-kind')));
+    await tester.pumpAndSettle();
+    expect(find.text('Devoir départemental'), findsOneWidget);
+    await tester.tap(find.text('Devoir départemental').last);
+    await tester.pumpAndSettle();
+    await create();
+    expect(payloads.last['examCode'], 'devoir_departemental');
+    expect(payloads.last['type'], 'exam');
+    expect(payloads.last['classIds'], ['six-a']);
+
+    await openProgram();
+    await choose(const Key('program-cycle'), 'Collège');
     await choose(const Key('program-level-scope'), '3e');
     await tester.tap(find.byKey(const Key('program-evaluation-kind')));
     await tester.pumpAndSettle();
