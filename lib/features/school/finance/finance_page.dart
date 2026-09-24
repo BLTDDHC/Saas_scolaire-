@@ -205,24 +205,6 @@ class _FinancePageState extends State<FinancePage> {
   }
 
   Future<void> _pay(Map<String, dynamic> row) async {
-    bool regimeRelevant() {
-      if (kind != 'tuition') return false;
-      Iterable<Map<String, dynamic>> scoped = classes;
-      if (scope == 'class' && target != null) {
-        scoped = classes.where((item) => item['id'] == target);
-      } else if (scope == 'level' && levelId != null) {
-        scoped = classes.where((item) => item['levelId'] == levelId);
-      } else if (scope == 'cycle' && cycleId != null) {
-        scoped = classes.where((item) => item['cycleId'] == cycleId);
-      }
-      final names = scoped
-          .map((item) => (item['cycleName'] ?? '').toString().toLowerCase())
-          .toSet();
-      return names.isNotEmpty &&
-          names.every((name) =>
-              name.contains('maternelle') || name.contains('primaire'));
-    }
-
     final store = context.read<StoreService>();
     Map<String, dynamic> situation = row;
     var monthRows = <Map<String, dynamic>>[];
@@ -457,6 +439,23 @@ class _FinancePageState extends State<FinancePage> {
           cl['cycleId'].toString():
               cl['cycleName']?.toString() ?? 'Cycle scolaire'
     };
+    bool regimeRelevant() {
+      if (kind != 'tuition') return false;
+      Iterable<Map<String, dynamic>> scoped = classes;
+      if (scope == 'class' && target != null) {
+        scoped = classes.where((item) => item['id'] == target);
+      } else if (scope == 'level' && levelId != null) {
+        scoped = classes.where((item) => item['levelId'] == levelId);
+      } else if (scope == 'cycle' && cycleId != null) {
+        scoped = classes.where((item) => item['cycleId'] == cycleId);
+      }
+      final names = scoped
+          .map((item) => (item['cycleName'] ?? '').toString().toLowerCase())
+          .toSet();
+      return names.isNotEmpty &&
+          names.every((name) =>
+              name.contains('maternelle') || name.contains('primaire'));
+    }
     final store = context.read<StoreService>();
     final route = DialogRoute<void>(
         context: context,
