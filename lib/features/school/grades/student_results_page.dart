@@ -971,6 +971,7 @@ class _ParentResultsPageState extends State<ParentResultsPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     DropdownButtonFormField<String>(
+                      key: const Key('parent-child-selector'),
                       isExpanded: true,
                       value: '${active['id']}',
                       decoration: const InputDecoration(labelText: 'Enfant'),
@@ -986,6 +987,7 @@ class _ParentResultsPageState extends State<ParentResultsPage> {
                     const SizedBox(height: AppSpacing.s4),
                     if (years.length > 1) ...[
                       DropdownButtonFormField<String>(
+                        key: const Key('parent-year-selector'),
                         isExpanded: true,
                         value: years.any((year) => '${year['id']}' == _yearId)
                             ? _yearId
