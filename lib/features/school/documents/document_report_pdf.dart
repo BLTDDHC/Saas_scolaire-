@@ -95,7 +95,7 @@ List<pw.Widget> _statisticsDashboard(Map<String, dynamic> statistics) {
         child: pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
-              pw.Text(label, style: const pw.TextStyle(fontSize: 8)),
+              pw.Text(label, style: const pw.TextStyle(fontSize: 9)),
               pw.SizedBox(height: 3),
               pw.Text(_cell(value),
                   style: pw.TextStyle(
@@ -111,15 +111,15 @@ List<pw.Widget> _statisticsDashboard(Map<String, dynamic> statistics) {
         pw.SizedBox(height: 5),
         if (rows.isEmpty)
           pw.Text('Aucune donnée pour les critères sélectionnés.',
-              style: const pw.TextStyle(fontSize: 8))
+              style: const pw.TextStyle(fontSize: 9))
         else
           pw.TableHelper.fromTextArray(
             data: [headers, ...rows],
             headerCount: 1,
             headerDecoration: const pw.BoxDecoration(color: PdfColors.grey200),
             headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-            cellStyle: const pw.TextStyle(fontSize: 8),
-            cellPadding: const pw.EdgeInsets.all(5),
+            cellStyle: const pw.TextStyle(fontSize: 9),
+            cellPadding: const pw.EdgeInsets.all(6),
           ),
       ]);
   pw.Widget chart(String title, List<MapEntry<String, double>> values,
@@ -137,7 +137,7 @@ List<pw.Widget> _statisticsDashboard(Map<String, dynamic> statistics) {
               pw.SizedBox(
                   width: 105,
                   child: pw.Text(item.key,
-                      style: const pw.TextStyle(fontSize: 8))),
+                      style: const pw.TextStyle(fontSize: 9))),
               pw.Container(
                 width: maximum <= 0 ? 0 : 280 * item.value / maximum,
                 height: 9,
@@ -145,7 +145,7 @@ List<pw.Widget> _statisticsDashboard(Map<String, dynamic> statistics) {
               ),
               pw.SizedBox(width: 6),
               pw.Text(_cell(item.value),
-                  style: const pw.TextStyle(fontSize: 8)),
+                  style: const pw.TextStyle(fontSize: 9)),
             ]),
           )),
     ]);
@@ -450,7 +450,7 @@ Future<pw.Document> buildSchoolReportPdf(Map<String, dynamic> report) async {
             ),
             headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
             headerDecoration: const pw.BoxDecoration(color: PdfColors.grey200),
-            cellStyle: const pw.TextStyle(fontSize: 8.5),
+            cellStyle: const pw.TextStyle(fontSize: 9.5),
           ),
         pw.SizedBox(height: 12),
         pw.Text(
