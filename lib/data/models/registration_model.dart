@@ -15,6 +15,8 @@ class StudentRegistrationModel {
   final List<String> feeIds;
   final String? type;
   final String? createdAt;
+  final String? schoolRegime;
+  final List<Map<String, dynamic>> regimeHistory;
   // Optional academic/university fields for compatibility
   final String? facultyId;
   final String? departmentId;
@@ -37,6 +39,8 @@ class StudentRegistrationModel {
     this.feeIds = const [],
     this.type,
     this.createdAt,
+    this.schoolRegime,
+    this.regimeHistory = const [],
     this.facultyId,
     this.departmentId,
     this.programId,
@@ -60,6 +64,11 @@ class StudentRegistrationModel {
       feeIds: json['feeIds'] != null ? List<String>.from(json['feeIds']) : [],
       type: json['type'],
       createdAt: json['createdAt'],
+      schoolRegime: json['schoolRegime'],
+      regimeHistory: List<Map<String, dynamic>>.from(
+        (json['regimeHistory'] as List? ?? const [])
+            .map((item) => Map<String, dynamic>.from(item as Map)),
+      ),
       facultyId: json['facultyId'],
       departmentId: json['departmentId'],
       programId: json['programId'],
@@ -85,6 +94,8 @@ class StudentRegistrationModel {
     'feeIds': feeIds,
     'type': type,
     'createdAt': createdAt,
+    'schoolRegime': schoolRegime,
+    'regimeHistory': regimeHistory,
     'facultyId': facultyId,
     'departmentId': departmentId,
     'programId': programId,
