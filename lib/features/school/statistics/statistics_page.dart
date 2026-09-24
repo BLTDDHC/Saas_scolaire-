@@ -896,8 +896,11 @@ class _AverageBarsCard extends StatelessWidget {
                       Row(
                         children: [
                           Expanded(
-                            child: Text('${row[labelKey] ?? '—'}',
-                                overflow: TextOverflow.ellipsis),
+                            child: Text(
+                              '${row[labelKey] ?? '—'}',
+                              maxLines: 2,
+                              softWrap: true,
+                            ),
                           ),
                           const SizedBox(width: 12),
                           Text('${value.toStringAsFixed(2)} $suffix'),
@@ -980,15 +983,30 @@ class _LineChartCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: AppSpacing.s3),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  spacing: AppSpacing.s4,
+                  runSpacing: AppSpacing.s2,
                   children: rows
-                      .map((row) => Flexible(
-                            child: Text(
-                              '${row[labelKey] ?? '—'}',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.bodySmall,
+                      .map((row) => SizedBox(
+                            width: 120,
+                            child: Column(
+                              children: [
+                                Text(
+                                  '${row[labelKey] ?? '—'}',
+                                  maxLines: 2,
+                                  textAlign: TextAlign.center,
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                                Text(
+                                  '${((row[valueKey] as num?)?.toDouble() ?? 0).toStringAsFixed(2)} / 20',
+                                  textAlign: TextAlign.center,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .labelSmall
+                                      ?.copyWith(fontWeight: FontWeight.w700),
+                                ),
+                              ],
                             ),
                           ))
                       .toList(),
@@ -1045,9 +1063,9 @@ class _VerticalBarsCard extends StatelessWidget {
                       .map((row) => Expanded(
                             child: Text(
                               '${row[labelKey] ?? '—'}',
-                              maxLines: 1,
+                              maxLines: 2,
                               textAlign: TextAlign.center,
-                              overflow: TextOverflow.ellipsis,
+                              softWrap: true,
                               style: Theme.of(context).textTheme.bodySmall,
                             ),
                           ))
