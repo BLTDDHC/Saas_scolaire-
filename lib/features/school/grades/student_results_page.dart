@@ -375,6 +375,12 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
         final bySubject =
             '${left['subject']}'.compareTo('${right['subject']}');
         if (bySubject != 0) return bySubject;
+        final leftType =
+            '${left['examCode'] ?? left['evaluationType'] ?? ''}';
+        final rightType =
+            '${right['examCode'] ?? right['evaluationType'] ?? ''}';
+        final byType = leftType.compareTo(rightType);
+        if (byType != 0) return byType;
         return '${left['date']}'.compareTo('${right['date']}');
       });
     return Padding(
@@ -435,14 +441,7 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
       }
       return _examCard(selectedExams.first, registration);
     }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _evolutionSection(periods),
-        const SizedBox(height: AppSpacing.s4),
-        _periodCard(period, registration, includeExams: false),
-      ],
-    );
+    return _periodCard(period, registration, includeExams: false);
   }
 
   Widget _periodCard(
