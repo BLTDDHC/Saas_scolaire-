@@ -352,7 +352,21 @@ class StatisticsSnapshotView extends StatelessWidget {
               message: 'Impossible de charger les statistiques.',
             );
           }
-          return _StatisticsContent(data: snapshot.data!);
+          final data = snapshot.data!;
+          return TweenAnimationBuilder<double>(
+            key: ValueKey('${data['snapshotGeneratedAt'] ?? data.hashCode}'),
+            tween: Tween(begin: 0, end: 1),
+            duration: const Duration(milliseconds: 260),
+            curve: Curves.easeOutCubic,
+            builder: (context, value, child) => Opacity(
+              opacity: value,
+              child: Transform.translate(
+                offset: Offset(0, 8 * (1 - value)),
+                child: child,
+              ),
+            ),
+            child: _StatisticsContent(data: data),
+          );
         },
       );
 }
@@ -370,10 +384,6 @@ class _StatisticsContent extends StatelessWidget {
     );
     final byClass = List<Map<String, dynamic>>.from(
       (data['byClass'] as List? ?? const [])
-          .map((item) => Map<String, dynamic>.from(item as Map)),
-    );
-    final byCycle = List<Map<String, dynamic>>.from(
-      (data['byCycle'] as List? ?? const [])
           .map((item) => Map<String, dynamic>.from(item as Map)),
     );
     final byLevel = List<Map<String, dynamic>>.from(
@@ -429,105 +439,43 @@ class _StatisticsContent extends StatelessWidget {
           mobileColumns: 1,
           children: [
             _Metric(
-              label: 'Élèves',
+              label: 'Total élèves',
               value: '${data['studentCount'] ?? 0}',
-              icon: Icons.school_outlined,
+              icon: Icons.groups_2_outlined,
               color: AppColors.info600,
-            ),
-            _Metric(
-              label: 'Résultats officiels analysés',
-              value: '${data['officialStudentCount'] ?? 0}',
-              icon: Icons.verified_outlined,
-              color: AppColors.success600,
-            ),
-            _Metric(
-              label: 'Moyenne générale',
-              value: data['overallAverage'] == null
-                  ? 'Non calculée'
-                  : '${data['overallAverage']} / 20',
-              icon: Icons.analytics_outlined,
-              color: AppColors.primary600,
-            ),
-            _Metric(
-              label: 'Taux de présence',
-              value: data['attendanceRate'] == null
-                  ? 'Non calculé'
-                  : '${data['attendanceRate']} %',
-              icon: Icons.how_to_reg_outlined,
-              color: AppColors.success600,
-            ),
-            _Metric(
-              label: 'Enseignants actifs du périmètre',
-              value: '${data['teacherCount'] ?? 0}',
-              icon: Icons.co_present_outlined,
-              color: AppColors.info600,
-            ),
-            _Metric(
-              label: 'Classes actives',
-              value: '${data['classCount'] ?? 0}',
-              icon: Icons.meeting_room_outlined,
-              color: AppColors.primary600,
-            ),
-            _Metric(
-              label: 'Créneaux de cours planifiés',
-              value: '${teacherStatistics['plannedCourses'] ?? 0}',
-              icon: Icons.calendar_month_outlined,
-              color: AppColors.info600,
-            ),
-            _Metric(
-              label: 'Appels de cours verrouillés',
-              value: '${teacherStatistics['completedCourses'] ?? 0}',
-              icon: Icons.fact_check_outlined,
-              color: AppColors.success600,
             ),
             _Metric(
               label: 'Taux de réussite',
               value: data['successRate'] == null
                   ? 'Non calculé'
                   : '${data['successRate']} %',
-              icon: Icons.trending_up_outlined,
+              icon: Icons.trending_up_rounded,
               color: AppColors.success600,
             ),
             _Metric(
-              label: 'Taux d’échec',
-              value: data['failureRate'] == null
+              label: 'Taux de présence',
+              value: data['attendanceRate'] == null
                   ? 'Non calculé'
-                  : '${data['failureRate']} %',
-              icon: Icons.trending_down_outlined,
-              color: AppColors.danger600,
-            ),
-            _Metric(
-              label: 'Moyenne maximale',
-              value: data['highestAverage'] == null
-                  ? 'Non calculée'
-                  : '${data['highestAverage']} / 20',
-              icon: Icons.arrow_upward_rounded,
+                  : '${data['attendanceRate']} %',
+              icon: Icons.calendar_month_outlined,
               color: AppColors.success600,
             ),
-            _Metric(
-              label: 'Moyenne minimale',
-              value: data['lowestAverage'] == null
-                  ? 'Non calculée'
-                  : '${data['lowestAverage']} / 20',
-              icon: Icons.arrow_downward_rounded,
-              color: AppColors.warning600,
-            ),
-            _Metric(
-              label: 'Médiane',
-              value: data['medianAverage'] == null
-                  ? 'Non calculée'
-                  : '${data['medianAverage']} / 20',
-              icon: Icons.horizontal_rule_rounded,
-              color: AppColors.info600,
-            ),
-            _Metric(
-              label: 'Écart-type',
-              value: data['standardDeviation'] == null
-                  ? 'Non calculé'
-                  : '${data['standardDeviation']}',
-              icon: Icons.scatter_plot_outlined,
-              color: AppColors.secondary600,
-            ),
+            if (finance != null)
+              _Metric(
+                label: 'Recettes encaissées',
+                value: '${finance['paid'] ?? 0} FCFA',
+                icon: Icons.account_balance_wallet_outlined,
+                color: AppColors.primary600,
+              )
+            else
+              _Metric(
+                label: 'Moyenne générale',
+                value: data['overallAverage'] == null
+                    ? 'Non calculée'
+                    : '${data['overallAverage']} / 20',
+                icon: Icons.analytics_outlined,
+                color: AppColors.primary600,
+              ),
           ],
         ),
         if (evolution.isNotEmpty) ...[
@@ -607,7 +555,7 @@ class _StatisticsContent extends StatelessWidget {
                       ),
               ),
               AppCard(
-                title: 'Points d’attention',
+                title: 'Alertes et notifications',
                 child: alerts.isEmpty
                     ? const Text(
                         'Aucune alerte calculée sur les données officielles.')
@@ -640,30 +588,24 @@ class _StatisticsContent extends StatelessWidget {
           tabletColumns: 1,
           mobileColumns: 1,
           children: [
-            _AverageBarsCard(
-              title: 'Moyenne par cycle',
-              subtitle: 'Comparaison normalisée sur 20',
-              rows: byCycle,
-              labelKey: 'cycle',
-              valueKey: 'average20',
-            ),
-            _AverageBarsCard(
-              title: 'Moyenne par niveau',
-              subtitle: 'Comparaison des niveaux du périmètre sélectionné',
+            _LevelDistributionCard(
+              key: const Key('statistics-level-distribution'),
               rows: byLevel,
-              labelKey: 'level',
-              valueKey: 'average20',
             ),
             _VerticalBarsCard(
               key: const Key('statistics-class-bars'),
-              title: 'Moyenne par classe',
+              title: 'Résultats moyens par classe',
               subtitle:
                   ((data['appliedFilters'] as Map?)?['periodId'] == null)
                       ? 'Dernier trimestre officiel disponible'
-                      : 'Période officielle sélectionnée',
+                      : 'Période / résultat sélectionné',
               rows: byClass,
               labelKey: 'className',
               valueKey: 'average20',
+            ),
+            _ClassRankingCard(
+              key: const Key('statistics-class-ranking'),
+              rows: byClass,
             ),
           ],
         ),
