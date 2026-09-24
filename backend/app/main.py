@@ -12471,6 +12471,7 @@ def create_finance_fee(
         "scope": body.scope, "cycle": body.cycle, "levelId": body.levelId,
         "classId": body.classId, "description": body.description.strip(),
         "type": body.type, "frequency": body.frequency, "month": body.month,
+        "regime": body.regime,
         "schoolId": school_id, "institutionId": school_id,
         "academicYearId": body.academicYearId, "schoolYearId": body.academicYearId,
         "status": "active", "createdAt": datetime.now(timezone.utc).isoformat(),
