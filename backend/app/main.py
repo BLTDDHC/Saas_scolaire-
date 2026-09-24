@@ -855,7 +855,14 @@ class FinanceFeeInput(BaseModel):
     type: Literal["registration", "reenrollment", "tuition", "td", "other"] = "tuition"
     frequency: Literal["once", "monthly", "annual"] = "monthly"
     month: str | None = Field(default=None, pattern=r"^\d{4}-\d{2}$")
+    schoolRegime: Literal["part_time", "full_time"] | None = None
     schoolId: str | None = None
+
+    @model_validator(mode="after")
+    def validate_school_regime_tariff(self):
+        if self.schoolRegime is not None and self.type != "tuition":
+            raise ValueError("Le régime ne peut être associé qu'aux frais mensuels")
+        return self
 
 class FinancePaymentInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -12359,6 +12366,8 @@ def finance_fee_matches_registration(
     session: Session,
     establishment_id: uuid.UUID,
 ) -> bool:
+    if body.schoolRegime is not None and registration.payload.get("schoolRegime") != body.schoolRegime:
+        return False
     if body.scope == "establishment":
         return True
     class_id = registration.payload.get("classId")
@@ -12432,6 +12441,32 @@ def create_finance_fee(
             403,
             "Un administrateur de direction doit choisir un perimetre cycle, niveau ou classe",
         )
+    if body.schoolRegime is not None:
+        if body.scope == "establishment":
+            raise HTTPException(
+                422,
+                "Un tarif lié au régime doit cibler un cycle, un niveau ou une classe",
+            )
+        target_cycle = None
+        if body.scope == "class":
+            target_class = session.get(SchoolClass, uuid.UUID(str(body.classId)))
+            target_cycle = session.get(SchoolCycle, target_class.cycle_id) if target_class else None
+        elif body.scope == "level":
+            target_level = session.get(SchoolLevel, uuid.UUID(str(body.levelId)))
+            target_cycle = session.get(SchoolCycle, target_level.cycle_id) if target_level else None
+        elif body.scope == "cycle":
+            try:
+                target_cycle = session.get(SchoolCycle, uuid.UUID(str(body.cycle)))
+            except (TypeError, ValueError):
+                target_cycle = session.scalar(select(SchoolCycle).where(
+                    SchoolCycle.establishment_id == establishment_id,
+                    SchoolCycle.code == canonical_cycle_code(str(body.cycle)),
+                ))
+        if not target_cycle or target_cycle.code.strip().upper() not in {"MATERNELLE", "PRIMAIRE"}:
+            raise HTTPException(
+                422,
+                "Les tarifs Mi-temps/Plein temps sont réservés à la Maternelle et au Primaire",
+            )
     finance_lock(session, f"tariffs:{school_id}:{body.academicYearId}")
     if body.month is not None:
         from .finance import month_key
@@ -12450,6 +12485,7 @@ def create_finance_fee(
         and str(row.payload.get("classId")) == str(body.classId)
         and str(row.payload.get("levelId")) == str(body.levelId)
         and str(row.payload.get("cycle")) == str(body.cycle)
+        and row.payload.get("schoolRegime") == body.schoolRegime
     ), None)
     if duplicate:
         raise HTTPException(409, "Ce frais existe déjà pour ce périmètre")
@@ -12459,6 +12495,7 @@ def create_finance_fee(
         "scope": body.scope, "cycle": body.cycle, "levelId": body.levelId,
         "classId": body.classId, "description": body.description.strip(),
         "type": body.type, "frequency": body.frequency, "month": body.month,
+        "schoolRegime": body.schoolRegime,
         "schoolId": school_id, "institutionId": school_id,
         "academicYearId": body.academicYearId, "schoolYearId": body.academicYearId,
         "status": "active", "createdAt": datetime.now(timezone.utc).isoformat(),
