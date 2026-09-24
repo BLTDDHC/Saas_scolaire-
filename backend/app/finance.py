@@ -243,6 +243,12 @@ def assignment_key(session, reg, kind, month, fee_id=None):
 def invoice(session, current, school, reg, cl, student, kind, month, fee_id=None):
     year = session.get(m.AcademicYear, reg.academic_year_id)
     month = month_key(month, year) if kind == 'tuition' else None
+    cycle_code = m.class_cycle_code(cl, session)
+    applicable_regime = (
+        m.regime_for_month(reg, month)
+        if kind == 'tuition' and cycle_code in {'MATERNELLE', 'PRIMAIRE'}
+        else None
+    )
     prior = prior_registration(session, reg, year)
     eligible = (kind != 'td' or reg.has_td) and (kind != 'registration' or not prior) and (kind != 'reenrollment' or bool(prior))
     if kind == 'td' and eligible:
