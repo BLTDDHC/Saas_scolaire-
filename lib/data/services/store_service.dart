@@ -2019,6 +2019,13 @@ class StoreService extends ChangeNotifier {
     await refreshStudentsRemote(academicYearId: selectedYearId);
   }
 
+  Future<Map<String, dynamic>> changeStudentRegimeRemote(
+          String registrationId, String schoolRegime, String effectiveMonth) async {
+    final result = await _repository.updateStudentRegime(
+        registrationId, schoolRegime, effectiveMonth);
+    await refreshStudentsRemote(academicYearId: getSelectedAcademicYearId());
+    return result;
+  }
   Future<void> createGuardianAndLinkRemote({
     required String studentId,
     required String firstName,
@@ -2705,6 +2712,9 @@ class StoreService extends ChangeNotifier {
     }).toList();
   }
 
+  Future<Map<String, dynamic>> parentFinancialSituationRemote(
+          String studentId, String academicYearId) =>
+      _repository.parentFinancialSituation(studentId, academicYearId);
   Future<Map<String, dynamic>> myStudentTrackingRemote(String academicYearId) =>
       _repository.myStudentTracking(academicYearId);
 
@@ -2725,6 +2735,7 @@ class StoreService extends ChangeNotifier {
     required String academicYearId,
     required String desiredClassId,
     String registrationKind = 'registration',
+    String schoolRegime = 'normal',
     bool submit = true,
   }) =>
       _repository.createPreEnrollment({
@@ -2734,6 +2745,7 @@ class StoreService extends ChangeNotifier {
         'academicYearId': academicYearId,
         'desiredClassId': desiredClassId,
         'registrationKind': registrationKind,
+        'schoolRegime': schoolRegime,
         'status': submit ? 'submitted' : 'draft',
       });
 
@@ -2743,7 +2755,7 @@ class StoreService extends ChangeNotifier {
 
   Future<Map<String, dynamic>> approvePreEnrollmentRemote(String id,
           {String? classId,
-          String schoolRegime = 'normal',
+          String? schoolRegime,
           bool hasTd = false,
           Map<String, dynamic> options = const {}}) =>
       _repository.approvePreEnrollment(
