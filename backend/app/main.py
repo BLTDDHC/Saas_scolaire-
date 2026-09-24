@@ -12074,7 +12074,8 @@ def statistics(
             "classId": class_id,
             "periodId": str(requested_period_id) if requested_period_id else None,
             "subjectId": str(requested_subject_id) if requested_subject_id else None,
-            "eventCode": requested_event_code,
+            **({"eventCode": requested_event_code}
+               if requested_event_code else {}),
         },
         "studentCount": student_count,
         "teacherCount": teacher_count,
