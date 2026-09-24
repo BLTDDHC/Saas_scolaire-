@@ -1339,10 +1339,10 @@ class _StudentsPageState extends State<StudentsPage> {
                   value: effectiveDate,
                   firstDate: DateTime(effectiveDate.year - 1),
                   lastDate: DateTime(effectiveDate.year + 1, 12, 31),
-                  onChanged: saving
-                      ? null
-                      : (value) => setDialogState(
-                          () => effectiveDate = value ?? effectiveDate),
+                  onChanged: (value) {
+                    if (saving) return;
+                    setDialogState(() => effectiveDate = value);
+                  },
                 ),
                 if (history.isNotEmpty) ...[
                   const SizedBox(height: AppSpacing.s4),
