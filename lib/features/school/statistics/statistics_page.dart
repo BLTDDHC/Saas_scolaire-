@@ -534,9 +534,9 @@ class _StatisticsContent extends StatelessWidget {
           const SizedBox(height: AppSpacing.s6),
           _LineChartCard(
             key: const Key('statistics-evolution-chart'),
-            title: 'Évolution trimestrielle',
+            title: 'Évolution des résultats officiels',
             subtitle:
-                'T1 → T2 → T3, uniquement à partir des résultats officiels',
+                'Moyenne générale sur 20, comparée entre les trimestres publiés',
             rows: evolution,
             labelKey: 'period',
             valueKey: 'average20',
@@ -980,16 +980,15 @@ class _LineChartCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: AppSpacing.s3),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                Wrap(
+                  spacing: AppSpacing.s3,
+                  runSpacing: AppSpacing.s2,
+                  alignment: WrapAlignment.center,
                   children: rows
-                      .map((row) => Flexible(
-                            child: Text(
-                              '${row[labelKey] ?? '—'}',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
+                      .map((row) => Text(
+                            '${row[labelKey] ?? '—'} : '
+                            '${((row[valueKey] as num?)?.toDouble() ?? 0).toStringAsFixed(2)} / 20',
+                            style: Theme.of(context).textTheme.bodySmall,
                           ))
                       .toList(),
                 ),
@@ -1040,14 +1039,18 @@ class _VerticalBarsCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: AppSpacing.s3),
-                Row(
+                Wrap(
+                  spacing: AppSpacing.s3,
+                  runSpacing: AppSpacing.s2,
+                  alignment: WrapAlignment.center,
                   children: visible
-                      .map((row) => Expanded(
+                      .map((row) => ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 180),
                             child: Text(
-                              '${row[labelKey] ?? '—'}',
-                              maxLines: 1,
+                              '${row[labelKey] ?? '—'} : '
+                              '${((row[valueKey] as num?)?.toDouble() ?? 0).toStringAsFixed(2)} / 20',
                               textAlign: TextAlign.center,
-                              overflow: TextOverflow.ellipsis,
+                              softWrap: true,
                               style: Theme.of(context).textTheme.bodySmall,
                             ),
                           ))
