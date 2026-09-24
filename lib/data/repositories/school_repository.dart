@@ -29,6 +29,13 @@ class SchoolRepository {
           String registrationId, Map<String, String> query) async =>
       Map<String, dynamic>.from(await _api.get(
           '/api/v1/school/finance/monthly-situation/${Uri.encodeComponent(registrationId)}?${Uri(queryParameters: query).query}'));
+
+  Future<Map<String, dynamic>> parentFinanceSituation(
+          String studentId, String academicYearId) async =>
+      Map<String, dynamic>.from(await _api.get(
+          '/api/v1/school/finance/parent-situation/${Uri.encodeComponent(studentId)}?${Uri(queryParameters: {
+            'academic_year_id': academicYearId,
+          }).query}'));
   Future<Map<String, dynamic>> schoolFinancePayment(
           Map<String, dynamic> body) async =>
       Map<String, dynamic>.from(
@@ -405,13 +412,13 @@ class SchoolRepository {
 
   Future<Map<String, dynamic>> createStudentRegistration(
           String studentId, String classId,
-          {String schoolRegime = 'normal',
+          {String? schoolRegime,
           bool hasTd = false,
           Map<String, dynamic> options = const {}}) async =>
       Map<String, dynamic>.from(
           await _api.post('/api/v1/school/students/$studentId/registrations', {
         'classId': classId,
-        'schoolRegime': schoolRegime,
+        if (schoolRegime != null) 'schoolRegime': schoolRegime,
         'hasTd': hasTd,
         'options': options,
       }));
@@ -421,6 +428,12 @@ class SchoolRepository {
       Map<String, dynamic>.from(await _api.put(
           '/api/v1/school/student-registrations/$registrationId',
           {'classId': classId}));
+
+  Future<Map<String, dynamic>> changeStudentRegime(
+          String registrationId, String regime, String effectiveDate) async =>
+      Map<String, dynamic>.from(await _api.post(
+          '/api/v1/school/student-registrations/$registrationId/regime',
+          {'regime': regime, 'effectiveDate': effectiveDate}));
 
   Future<List<Map<String, dynamic>>> preEnrollments(
       {String? academicYearId, String? status}) async {
@@ -459,7 +472,7 @@ class SchoolRepository {
       Map<String, dynamic>.from(
           await _api.post('/api/v1/school/pre-enrollments/$id/approve', {
         if (classId != null) 'classId': classId,
-        'schoolRegime': schoolRegime,
+        if (schoolRegime != null) 'schoolRegime': schoolRegime,
         'hasTd': hasTd,
         'options': options,
       }));
