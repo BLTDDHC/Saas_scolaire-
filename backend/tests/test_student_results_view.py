@@ -47,10 +47,23 @@ class StudentResultsView(unittest.TestCase):
                 }],
             }],
         }
+        departmental = {
+            'event': 'Devoir départemental',
+            'students': [{
+                'studentId': student_id, 'average': 15, 'rank': 1,
+                'subjects': [{
+                    'subject': 'Mathématiques', 'average': 15,
+                    'grades': [{'value': 15, 'maxValue': 20}],
+                }],
+            }],
+        }
         return {
             'calculationStatus': 'official',
             'students': [ordinary],
-            'eventResults': {'bepc_blanc': exam},
+            'eventResults': {
+                'bepc_blanc': exam,
+                'devoir_departemental': departmental,
+            },
         }
 
     def test_student_view_uses_only_official_snapshot_and_separates_exams(self):
@@ -67,8 +80,12 @@ class StudentResultsView(unittest.TestCase):
         self.assertEqual(period['mention'], 'Bien')
         self.assertEqual(period['subjects'][0]['grades'][0]['value'], 15)
         self.assertEqual(period['subjects'][0]['grades'][0]['maxValue'], 20)
-        self.assertEqual(period['exams'][0]['code'], 'bepc_blanc')
-        self.assertEqual(period['exams'][0]['subjects'][0]['grades'][0]['value'], 13)
+        exams = {item['code']: item for item in period['exams']}
+        self.assertEqual(exams['bepc_blanc']['subjects'][0]['grades'][0]['value'], 13)
+        self.assertEqual(
+            exams['devoir_departemental']['subjects'][0]['grades'][0]['value'],
+            15,
+        )
 
 
     def test_submitted_note_is_visible_before_official_result(self):
