@@ -1,5 +1,16 @@
 BEGIN;
 
+ALTER TABLE student_pre_enrollments
+  ADD COLUMN IF NOT EXISTS desired_school_regime varchar(20) NULL;
+
+ALTER TABLE student_pre_enrollments
+  DROP CONSTRAINT IF EXISTS ck_pre_enrollment_school_regime;
+
+ALTER TABLE student_pre_enrollments
+  ADD CONSTRAINT ck_pre_enrollment_school_regime
+  CHECK (desired_school_regime IS NULL OR desired_school_regime IN ('part_time', 'full_time'));
+
+
 CREATE TABLE IF NOT EXISTS student_regime_history (
   id uuid PRIMARY KEY,
   establishment_id uuid NOT NULL,
