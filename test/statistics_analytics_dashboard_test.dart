@@ -108,21 +108,15 @@ void main() {
     await tester.pumpWidget(app(StatisticsSnapshotView(request: first.future)));
     first.complete(snapshot(students: 6, average: 12, success: 80));
     await tester.pumpAndSettle();
-    debugPrint(
-        'stats-regression:first 80=${find.text('80.0 %').evaluate().length} loading=${find.text('Mise à jour des analyses…').evaluate().length}');
     expect(find.text('80.0 %'), findsOneWidget);
 
     await tester.pumpWidget(app(StatisticsSnapshotView(request: second.future)));
     await tester.pump();
-    debugPrint(
-        'stats-regression:loading 80=${find.text('80.0 %').evaluate().length} loading=${find.text('Mise à jour des analyses…').evaluate().length}');
     expect(find.text('Mise à jour des analyses…'), findsOneWidget);
     expect(find.text('80.0 %'), findsNothing);
 
     second.complete(snapshot(students: 3, average: 9, success: 40));
     await tester.pumpAndSettle();
-    debugPrint(
-        'stats-regression:second 40=${find.text('40.0 %').evaluate().length} 80=${find.text('80.0 %').evaluate().length} loading=${find.text('Mise à jour des analyses…').evaluate().length}');
     expect(find.text('40.0 %'), findsOneWidget);
     expect(find.text('80.0 %'), findsNothing);
   });
