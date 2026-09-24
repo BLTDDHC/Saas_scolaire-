@@ -11,6 +11,7 @@ import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/app_form_field.dart';
 import '../../../shared/widgets/app_toast.dart';
 import '../../../shared/widgets/workspace_header.dart';
+import '../../auth/change_password_dialog.dart';
 import 'calendar_settings_card.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -154,6 +155,26 @@ class _SettingsPageState extends State<SettingsPage> {
             title: Text(user?.name ?? '',
                 style: const TextStyle(fontWeight: FontWeight.bold)),
             subtitle: Text('${user?.email ?? ''} • ${user?.roleName ?? ''}'),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.s6),
+        AppCard(
+          title: 'Compte & sécurité',
+          subtitle: 'Informations de connexion et sécurité du compte administrateur',
+          child: Wrap(
+            spacing: AppSpacing.s3,
+            runSpacing: AppSpacing.s3,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Text(user?.email ?? 'Adresse e-mail non renseignée'),
+              Text('Rôle : ${user?.roleName ?? 'Administrateur'}'),
+              AppButton(
+                label: 'Modifier mon mot de passe',
+                icon: Icons.password_rounded,
+                variant: AppButtonVariant.secondary,
+                onPressed: () => showChangePasswordDialog(context),
+              ),
+            ],
           ),
         ),
         const SizedBox(height: AppSpacing.s6),
