@@ -225,6 +225,11 @@ class NavItems {
               icon: Icons.grade_rounded,
               section: 'SUIVI'),
           NavItem(
+              id: 'finance',
+              label: 'Paiements',
+              icon: Icons.account_balance_wallet_outlined,
+              section: 'SUIVI'),
+          NavItem(
               id: 'schedule',
               label: 'Emplois du temps',
               icon: Icons.calendar_today_rounded,
