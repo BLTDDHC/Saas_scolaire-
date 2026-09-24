@@ -417,7 +417,7 @@ class SchoolRepository {
       Map<String, dynamic>.from(
           await _api.post('/api/v1/school/students/$studentId/registrations', {
         'classId': classId,
-        if (schoolRegime != null) 'schoolRegime': schoolRegime,
+        'schoolRegime': schoolRegime,
         'hasTd': hasTd,
         'options': options,
       }));
