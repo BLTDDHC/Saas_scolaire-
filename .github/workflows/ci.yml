@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - finalisation/**
+      - mission/**
   pull_request:
     branches:
       - main
