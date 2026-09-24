@@ -65,12 +65,14 @@ void main() {
   });
 
   testWidgets(
-      'inscription expose régime et TD uniquement pour un niveau éligible',
+      'college masque régime et conserve TD pour un niveau éligible',
       (tester) async {
     final store = await createLegacyStore(withSeedData: true);
+    final cycle = await store.createSchoolCycle(code: 'COLLEGE');
     final schoolClass = ClassModel(
       id: 'class-3e',
       name: '3e A',
+      cycleId: cycle.id,
       level: '3e',
       schoolId: 'school-1',
       academicYearId: 'year-1',
@@ -106,14 +108,63 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Inscription académique'), findsOneWidget);
-    expect(find.text('Régime'), findsOneWidget);
-    expect(find.text('Normal'), findsOneWidget);
-    await tester.tap(find.text('Normal'));
-    await tester.pumpAndSettle();
-    expect(find.text('Plein temps'), findsOneWidget);
+    expect(find.text('Régime'), findsNothing);
+    expect(find.text('Régime *'), findsNothing);
+    expect(find.text('Mi-temps'), findsNothing);
+    expect(find.text('Plein temps'), findsNothing);
     expect(find.text('Option TD'), findsOneWidget);
-    expect(
-        find.text('Option académique, sans montant financier'), findsOneWidget);
+  });
+
+  testWidgets('primaire exige uniquement Mi-temps ou Plein temps',
+      (tester) async {
+    final store = await createLegacyStore(withSeedData: true);
+    final cycle = await store.createSchoolCycle(code: 'PRIMAIRE');
+    final year = store.getAcademicYears().first;
+    final schoolClass = ClassModel(
+      id: 'class-primary',
+      name: 'CM1 A',
+      cycleId: cycle.id,
+      level: 'CM1',
+      schoolId: 'school-1',
+      academicYearId: year.id,
+    );
+    store.addClass(schoolClass);
+    final student = StudentModel(
+      id: 'primary-student',
+      firstName: 'Primaire',
+      lastName: 'Élève',
+      schoolId: 'school-1',
+    );
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<StoreService>.value(
+        value: store,
+        child: MaterialApp(
+          home: Builder(
+            builder: (context) => FilledButton(
+              onPressed: () => openStudentRegistrationModal(
+                context,
+                student,
+                preselectedYearId: year.id,
+                preselectedClassId: schoolClass.id,
+              ),
+              child: const Text('Ouvrir primaire'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Ouvrir primaire'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Régime'), findsNothing);
+    expect(find.text('Régime *'), findsOneWidget);
+    expect(find.text('Normal'), findsNothing);
+    await tester.tap(find.text('Régime *'));
+    await tester.pumpAndSettle();
+    expect(find.text('Mi-temps'), findsOneWidget);
+    expect(find.text('Plein temps'), findsOneWidget);
   });
 
   testWidgets("l'interface ne propose que inscription et reinscription",
