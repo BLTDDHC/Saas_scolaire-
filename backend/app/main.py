@@ -1270,6 +1270,9 @@ class StudentPreEnrollmentInput(BaseModel):
     registration_kind: Literal["registration", "reenrollment"] = Field(
         default="registration", alias="registrationKind"
     )
+    school_regime: Literal["normal", "part_time", "full_time"] = Field(
+        default="normal", alias="schoolRegime"
+    )
     status: Literal["draft", "submitted"] = "draft"
 
     @model_validator(mode="after")
@@ -1293,6 +1296,9 @@ class StudentPreEnrollmentUpdateInput(BaseModel):
     first_name: str = Field(alias="firstName", min_length=1, max_length=100)
     last_name: str = Field(alias="lastName", min_length=1, max_length=100)
     desired_class_id: uuid.UUID = Field(alias="desiredClassId")
+    school_regime: Literal["normal", "part_time", "full_time"] = Field(
+        default="normal", alias="schoolRegime"
+    )
 
     @field_validator("first_name", "last_name", mode="before")
     @classmethod
@@ -1300,8 +1306,8 @@ class StudentPreEnrollmentUpdateInput(BaseModel):
         return value.strip() if isinstance(value, str) else value
 
 class StudentPreEnrollmentApprovalInput(BaseModel):
-    school_regime: Literal['normal', 'part_time', 'full_time'] = Field(
-        default='normal', alias='schoolRegime'
+    school_regime: Literal['normal', 'part_time', 'full_time'] | None = Field(
+        default=None, alias='schoolRegime'
     )
     has_td: bool = Field(default=False, alias='hasTd')
     options: dict[str, Any] = Field(default_factory=dict)
@@ -1777,6 +1783,11 @@ class StudentRegistrationInput(BaseModel):
     school_regime: Literal['normal', 'part_time', 'full_time'] = Field(default='normal', alias='schoolRegime')
     has_td: bool = Field(default=False, alias='hasTd')
     options: dict[str, Any] = Field(default_factory=dict)
+
+class StudentRegimeChangeInput(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
+    school_regime: Literal["part_time", "full_time"] = Field(alias="schoolRegime")
+    effective_month: str = Field(alias="effectiveMonth", pattern=r"^\d{4}-\d{2}$")
 
 class StudentPhotoFileInput(BaseModel):
     model_config = ConfigDict(populate_by_name=True, extra="forbid")
@@ -2873,6 +2884,51 @@ def validate_registration_academic_options(
             422,
             "L'option TD est réservée aux niveaux CM2, 3e et Terminale",
         )
+
+def class_cycle_code(school_class: SchoolClass, session: Session) -> str:
+    cycle = session.get(SchoolCycle, school_class.cycle_id) if school_class.cycle_id else None
+    return (cycle.code if cycle else "").strip().upper()
+
+def validate_school_regime(
+    school_class: SchoolClass,
+    school_regime: str,
+    session: Session,
+) -> str:
+    cycle_code = class_cycle_code(school_class, session)
+    if cycle_code in {"MATERNELLE", "PRIMAIRE"}:
+        if school_regime not in {"part_time", "full_time"}:
+            raise HTTPException(
+                422,
+                "Le régime Mi-temps ou Plein temps est obligatoire en Maternelle et Primaire",
+            )
+        return school_regime
+    if school_regime != "normal":
+        raise HTTPException(
+            422,
+            "Le régime ne s'applique pas au Collège ou au Lycée",
+        )
+    return "normal"
+
+def registration_regime_history(item: StudentAcademicRegistration) -> list[dict[str, Any]]:
+    raw = (item.options or {}).get("regimeHistory") or []
+    return [dict(entry) for entry in raw if isinstance(entry, dict)]
+
+def regime_for_month(
+    item: StudentAcademicRegistration,
+    month: str | None,
+) -> str:
+    if not month:
+        return item.school_regime
+    history = registration_regime_history(item)
+    applicable = [
+        entry for entry in history
+        if str(entry.get("effectiveMonth") or "") <= month
+        and entry.get("regime") in {"part_time", "full_time", "normal"}
+    ]
+    if applicable:
+        applicable.sort(key=lambda entry: str(entry.get("effectiveMonth") or ""))
+        return str(applicable[-1]["regime"])
+    return item.school_regime
 
 def validate_class_structure(
     establishment_id: uuid.UUID,
