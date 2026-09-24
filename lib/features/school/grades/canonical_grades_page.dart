@@ -435,62 +435,41 @@ class _CanonicalGradesPageState extends State<CanonicalGradesPage> {
     }
   }
 
-  Widget _separatePresenceField(
-    StudentModel student, {
+  Widget _absenceAction({
+    required bool absent,
     required bool enabled,
-  }) {
-    final value = _presence[student.id] ?? 'not_recorded';
-    return DropdownButtonFormField<String>(
-      key: ValueKey('grade-presence-${student.id}'),
-      isExpanded: true,
-      initialValue: value,
-      decoration: const InputDecoration(labelText: 'État', isDense: true),
-      items: const [
-        DropdownMenuItem(value: 'present', child: Text('Note')),
-        DropdownMenuItem(value: 'absent', child: Text('Absent')),
-        DropdownMenuItem(value: 'not_recorded', child: Text('Non noté')),
-      ],
-      onChanged: !enabled
-          ? null
-          : (next) => setState(() {
-                final state = next ?? 'not_recorded';
-                _presence[student.id] = state;
-                if (state != 'present') {
-                  _gradeControllers[student.id]?.clear();
-                }
-              }),
-    );
+    required VoidCallback onPressed,
+    required Key key,
+  }) =>
+      IconButton(
+        key: key,
+        tooltip: absent ? 'Annuler l’absence' : 'Marquer absent',
+        visualDensity: VisualDensity.compact,
+        onPressed: enabled ? onPressed : null,
+        icon: Icon(
+          absent ? Icons.person_off_rounded : Icons.person_off_outlined,
+          color: absent ? Colors.redAccent : null,
+        ),
+      );
+
+  void _toggleSeparateAbsence(StudentModel student) {
+    setState(() {
+      final absent = _presence[student.id] == 'absent';
+      _presence[student.id] = absent ? 'not_recorded' : 'absent';
+      _gradeControllers[student.id]?.clear();
+    });
   }
 
-  Widget _combinedPresenceField(
+  void _toggleCombinedAbsence(
     EvaluationModel evaluation,
     StudentModel student,
   ) {
     final key = _combinedKey(evaluation.id, student.id);
-    final value = _combinedPresence[key] ?? 'not_recorded';
-    return DropdownButtonFormField<String>(
-      key: ValueKey('combined-presence-$key'),
-      isExpanded: true,
-      initialValue: value,
-      decoration: const InputDecoration(
-        labelText: 'État',
-        isDense: true,
-      ),
-      items: const [
-        DropdownMenuItem(value: 'present', child: Text('Note')),
-        DropdownMenuItem(value: 'absent', child: Text('Absent')),
-        DropdownMenuItem(value: 'not_recorded', child: Text('Non noté')),
-      ],
-      onChanged: _saving
-          ? null
-          : (next) => setState(() {
-                final state = next ?? 'not_recorded';
-                _combinedPresence[key] = state;
-                if (state != 'present') {
-                  _combinedGradeControllers[key]?.clear();
-                }
-              }),
-    );
+    setState(() {
+      final absent = _combinedPresence[key] == 'absent';
+      _combinedPresence[key] = absent ? 'not_recorded' : 'absent';
+      _combinedGradeControllers[key]?.clear();
+    });
   }
 
   Widget _combinedGradeCell(
@@ -500,31 +479,34 @@ class _CanonicalGradesPageState extends State<CanonicalGradesPage> {
   }) {
     final key = _combinedKey(evaluation.id, student.id);
     final editable = const {'draft', 'rejected'}.contains(evaluation.status);
+    final absent = _combinedPresence[key] == 'absent';
     return SizedBox(
       width: compact ? double.infinity : 185,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          TextField(
-            key: ValueKey('combined-grade-$key'),
-            controller: _combinedGradeControllers[key],
+      child: TextField(
+        key: ValueKey('combined-grade-$key'),
+        controller: _combinedGradeControllers[key],
+        enabled: editable && !_saving && !absent,
+        keyboardType:
+            const TextInputType.numberWithOptions(decimal: true),
+        decoration: InputDecoration(
+          labelText: absent
+              ? 'Absent'
+              : '${_eventLabel(_eventCode(evaluation) ?? evaluation.type)} /${_formatNumber(evaluation.maxScore)}',
+          isDense: true,
+          suffixIcon: _absenceAction(
+            key: ValueKey('combined-absence-$key'),
+            absent: absent,
             enabled: editable && !_saving,
-            keyboardType:
-                const TextInputType.numberWithOptions(decimal: true),
-            decoration: InputDecoration(
-              labelText:
-                  '${_eventLabel(_eventCode(evaluation) ?? evaluation.type)} /${_formatNumber(evaluation.maxScore)}',
-              isDense: true,
-            ),
-            onChanged: (value) {
-              if (value.trim().isNotEmpty) {
-                _combinedPresence[key] = 'present';
-              }
-            },
+            onPressed: () => _toggleCombinedAbsence(evaluation, student),
           ),
-          const SizedBox(height: 6),
-          _combinedPresenceField(evaluation, student),
-        ],
+        ),
+        onChanged: (value) {
+          if (value.trim().isNotEmpty) {
+            _combinedPresence[key] = 'present';
+          } else if (_combinedPresence[key] == 'present') {
+            _combinedPresence[key] = 'not_recorded';
+          }
+        },
       ),
     );
   }
@@ -1866,7 +1848,7 @@ class _CanonicalGradesPageState extends State<CanonicalGradesPage> {
           if (_periods.isEmpty && !_loading)
             const AppCard(
               child: Text(
-                'Aucune période configurée. Créez les périodes dans Paramètres pédagogiques.',
+                'Aucune période configurée. Créez les périodes dans le module Périodes.',
               ),
             ),
           if (!isAdmin &&
@@ -1991,19 +1973,28 @@ class _CanonicalGradesPageState extends State<CanonicalGradesPage> {
                                                 controller: _gradeControllers[student.id],
                                                 enabled: editable && !_saving,
                                                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                                enabled: editable && !_saving && _presence[student.id] != 'absent',
                                                 decoration: InputDecoration(
-                                                  labelText: 'Note /${_formatNumber(selected.maxScore)}',
-                                                  helperText: 'Laissez vide si la note n’est pas renseignée.',
+                                                  labelText: _presence[student.id] == 'absent'
+                                                      ? 'Absent'
+                                                      : 'Note /${_formatNumber(selected.maxScore)}',
+                                                  helperText: _presence[student.id] == 'absent'
+                                                      ? 'Élève marqué absent.'
+                                                      : 'Laissez vide si la note n’est pas renseignée.',
+                                                  suffixIcon: _absenceAction(
+                                                    key: ValueKey('grade-absence-${student.id}'),
+                                                    absent: _presence[student.id] == 'absent',
+                                                    enabled: editable && !_saving,
+                                                    onPressed: () => _toggleSeparateAbsence(student),
+                                                  ),
                                                 ),
                                                 onChanged: (value) {
                                                   if (value.trim().isNotEmpty) {
                                                     _presence[student.id] = 'present';
+                                                  } else if (_presence[student.id] == 'present') {
+                                                    _presence[student.id] = 'not_recorded';
                                                   }
                                                 },
-                                              ),
-                                              _separatePresenceField(
-                                                student,
-                                                enabled: editable && !_saving,
                                               ),
                                             ],
                                           ),
@@ -2019,8 +2010,7 @@ class _CanonicalGradesPageState extends State<CanonicalGradesPage> {
                                 const Row(children: [
                                   Expanded(flex: 2, child: Text('Nom')),
                                   Expanded(flex: 2, child: Text('Prénom')),
-                                  SizedBox(width: 160, child: Text('Note')),
-                                  SizedBox(width: 150, child: Text('État')),
+                                  SizedBox(width: 210, child: Text('Note')),
                                 ]),
                                 const SizedBox(height: 8),
                                 ...students.map((student) => Padding(
@@ -2029,28 +2019,30 @@ class _CanonicalGradesPageState extends State<CanonicalGradesPage> {
                                         Expanded(flex: 2, child: Text(student.lastName, overflow: TextOverflow.ellipsis)),
                                         Expanded(flex: 2, child: Text(student.firstName, overflow: TextOverflow.ellipsis)),
                                         SizedBox(
-                                          width: 160,
+                                          width: 210,
                                           child: TextField(
                                             key: ValueKey('grade-value-${student.id}'),
                                             controller: _gradeControllers[student.id],
-                                            enabled: editable && !_saving,
+                                            enabled: editable && !_saving && _presence[student.id] != 'absent',
                                             keyboardType: const TextInputType.numberWithOptions(decimal: true),
                                             decoration: InputDecoration(
-                                              labelText: 'Note /${_formatNumber(selected.maxScore)}',
+                                              labelText: _presence[student.id] == 'absent'
+                                                  ? 'Absent'
+                                                  : 'Note /${_formatNumber(selected.maxScore)}',
+                                              suffixIcon: _absenceAction(
+                                                key: ValueKey('grade-absence-${student.id}'),
+                                                absent: _presence[student.id] == 'absent',
+                                                enabled: editable && !_saving,
+                                                onPressed: () => _toggleSeparateAbsence(student),
+                                              ),
                                             ),
                                             onChanged: (value) {
                                               if (value.trim().isNotEmpty) {
                                                 _presence[student.id] = 'present';
+                                              } else if (_presence[student.id] == 'present') {
+                                                _presence[student.id] = 'not_recorded';
                                               }
                                             },
-                                          ),
-                                        ),
-                                        const SizedBox(width: 10),
-                                        SizedBox(
-                                          width: 150,
-                                          child: _separatePresenceField(
-                                            student,
-                                            enabled: editable && !_saving,
                                           ),
                                         ),
                                       ]),
