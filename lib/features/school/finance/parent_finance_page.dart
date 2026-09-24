@@ -291,8 +291,13 @@ class _ParentFinancePageState extends State<ParentFinancePage> {
                 Icons.payments_outlined, AppColors.success600),
             _metric('Reste à payer', _money(summary['remaining']),
                 Icons.account_balance_wallet_outlined, AppColors.warning600),
-            _metric('Avance', _money(summary['credit']),
-                Icons.savings_outlined, AppColors.info600),
+            _metric(
+                'Avance',
+                (summary['advanceMonths'] as num? ?? 0) > 0
+                    ? '${summary['advanceMonths']} mois'
+                    : _money(summary['credit']),
+                Icons.savings_outlined,
+                AppColors.info600),
             _metric(
                 'Mois impayés',
                 '${summary['unpaidMonths'] ?? 0}',
