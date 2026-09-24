@@ -496,6 +496,7 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
     return Material(
       type: MaterialType.transparency,
       child: ExpansionTile(
+        initiallyExpanded: !includeExams,
         tilePadding: EdgeInsets.zero,
         title: Text('${period['period'] ?? 'Période'}'),
         subtitle: Text('Moyenne : ${period['average'] ?? '—'} / '
