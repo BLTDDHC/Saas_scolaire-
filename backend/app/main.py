@@ -5344,6 +5344,12 @@ def approve_student_pre_enrollment(
     item.desired_class_id = school_class.id
     item.decided_at = datetime.now(timezone.utc)
     item.updated_at = datetime.now(timezone.utc)
+    ensure_initial_regime_history(
+        session,
+        registration,
+        school_class,
+        uuid.UUID(current.id) if current.id else None,
+    )
     try:
         session.commit()
     except IntegrityError as exc:
