@@ -507,6 +507,14 @@ def monthly_situation_payload(
     total_paid = sum(int(row.get('paid') or 0) for row in rows)
     total_remaining = sum(int(row.get('remaining') or 0) for row in rows)
     total_credit = sum(int(row.get('credit') or 0) for row in rows)
+    current_month = date.today().strftime('%Y-%m')
+    advance_months = sum(
+        int(row.get('paid') or 0) > 0 and str(row.get('month') or '') > current_month
+        for row in rows
+    )
+    current_regime = effective_school_regime(
+        session, reg, school_class, current_month
+    )
     return {
         'registrationId': str(reg.id),
         'studentId': str(student.id),
@@ -521,16 +529,15 @@ def monthly_situation_payload(
             if school_class.cycle_id and session.get(m.SchoolCycle, school_class.cycle_id)
             else None
         ),
-        'currentRegime': (
-            reg.school_regime if reg.school_regime in {'part_time', 'full_time'} else None
-        ),
-        'currentRegimeLabel': regime_label(reg.school_regime),
+        'currentRegime': current_regime,
+        'currentRegimeLabel': regime_label(current_regime),
         'regimeHistory': list((reg.options or {}).get('regimeHistory', [])),
         'summary': {
             'expected': total_expected,
             'paid': total_paid,
             'remaining': total_remaining,
             'credit': total_credit,
+            'advanceMonths': advance_months,
             'unpaidMonths': sum(row['remaining'] > 0 for row in rows),
             'overdueMonths': sum(bool(row.get('isOverdue')) for row in rows),
         },
