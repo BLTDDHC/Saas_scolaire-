@@ -12,7 +12,7 @@ import '../../../shared/widgets/app_form_field.dart';
 import '../../../shared/widgets/app_toast.dart';
 import '../../../shared/widgets/workspace_header.dart';
 import 'calendar_settings_card.dart';
-import 'pedagogical_settings_card.dart';
+import '../../auth/change_password_dialog.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -155,6 +155,24 @@ class _SettingsPageState extends State<SettingsPage> {
             title: Text(user?.name ?? '',
                 style: const TextStyle(fontWeight: FontWeight.bold)),
             subtitle: Text('${user?.email ?? ''} • ${user?.roleName ?? ''}'),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.s6),
+        AppCard(
+          title: 'Sécurité du compte',
+          subtitle:
+              'Les changements sont appliqués par le serveur avant confirmation.',
+          child: Wrap(
+            spacing: AppSpacing.s3,
+            runSpacing: AppSpacing.s2,
+            children: [
+              AppButton(
+                label: 'Changer mon mot de passe',
+                icon: Icons.password_rounded,
+                variant: AppButtonVariant.secondary,
+                onPressed: () => showChangePasswordDialog(context),
+              ),
+            ],
           ),
         ),
         const SizedBox(height: AppSpacing.s6),
