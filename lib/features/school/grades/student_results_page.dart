@@ -386,9 +386,13 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
     );
     notes = notes.where((note) {
       if (_periodFilter != null &&
-          note['period']?.toString() != _periodFilter) return false;
+          note['period']?.toString() != _periodFilter) {
+        return false;
+      }
       if (_subjectFilter != null &&
-          note['subject']?.toString() != _subjectFilter) return false;
+          note['subject']?.toString() != _subjectFilter) {
+        return false;
+      }
       final type = '${note['examCode'] ?? note['evaluationType'] ?? ''}';
       if (_typeFilter != null && type != _typeFilter) return false;
       return true;
@@ -631,90 +635,27 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
               DataColumn(label: Text('Date')),
               DataColumn(label: Text('Matière')),
               DataColumn(label: Text('Évaluation')),
-              DataColumn(label: Text('État')),
               DataColumn(label: Text('Note')),
             ],
             rows: notes.map((note) {
               final presence = '${note['presence'] ?? 'not_recorded'}';
-              final state = switch (presence) {
+              final value = switch (presence) {
                 'absent' => 'Absent',
-                'present' => 'Noté',
+                'present' =>
+                  '${note['value'] ?? '—'} / ${note['maxValue'] ?? '—'}',
                 _ => 'Non noté',
               };
-              final value = presence == 'present'
-                  ? '${note['value'] ?? '—'} / ${note['maxValue'] ?? '—'}'
-                  : '—';
               return DataRow(cells: [
                 DataCell(Text('${note['period'] ?? '—'}')),
                 DataCell(Text('${note['date'] ?? '—'}')),
                 DataCell(Text('${note['subject'] ?? '—'}')),
                 DataCell(Text('${note['evaluation'] ?? '—'}')),
-                DataCell(Text(state)),
                 DataCell(Text(value)),
               ]);
             }).toList(),
           ),
         ),
       );
-
-  Widget _evolutionSection(List<Map<String, dynamic>> periods) {
-    final groups = <String, List<Map<String, dynamic>>>{};
-    for (final period in periods) {
-      if (period['average'] == null) continue;
-      final type = '${period['periodType'] ?? 'custom'}';
-      groups.putIfAbsent(type, () => []).add(period);
-    }
-    final charts = <Widget>[];
-    for (final entry in groups.entries) {
-      if (entry.value.length < 2) continue;
-      charts.add(_ResultTrendCard(
-        title: switch (entry.key) {
-          'trimester' => 'Évolution trimestrielle',
-          'month' => 'Évolution mensuelle',
-          _ => 'Évolution par période',
-        },
-        rows: entry.value,
-      ));
-    }
-
-    if (_subjectFilter != null) {
-      final subjectRows = <Map<String, dynamic>>[];
-      for (final period in periods) {
-        final matches = (period['subjects'] as List? ?? const [])
-            .map((item) => Map<String, dynamic>.from(item as Map))
-            .where((item) => item['subject']?.toString() == _subjectFilter)
-            .toList();
-        final subject = matches.isEmpty ? null : matches.first;
-        if (subject != null && subject['average'] != null) {
-          subjectRows.add({
-            'period': period['period'],
-            'average': subject['average'],
-            'averageScale': period['averageScale'],
-          });
-        }
-      }
-      if (subjectRows.length >= 2) {
-        charts.add(_ResultTrendCard(
-          title: 'Évolution — $_subjectFilter',
-          rows: subjectRows,
-        ));
-      }
-    }
-    if (charts.isEmpty) return const SizedBox.shrink();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Évolution',
-            style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: AppSpacing.s3),
-        ResponsiveGrid(
-          desktopColumns: 2,
-          tabletColumns: 1,
-          children: charts,
-        ),
-      ],
-    );
-  }
 
   bool _isLycee(Map<String, dynamic> registration) =>
       '${registration['cycleCode'] ?? registration['cycle']}'
@@ -801,96 +742,6 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
   }
 }
 
-
-class _ResultTrendCard extends StatelessWidget {
-  const _ResultTrendCard({
-    required this.title,
-    required this.rows,
-  });
-
-  final String title;
-  final List<Map<String, dynamic>> rows;
-
-  @override
-  Widget build(BuildContext context) {
-    final points = rows.map((row) {
-      final average = (row['average'] as num?)?.toDouble() ?? 0;
-      final scale = (row['averageScale'] as num?)?.toDouble() ?? 20;
-      return scale <= 0 ? 0.0 : (average / scale).clamp(0.0, 1.0);
-    }).toList();
-    final color = Theme.of(context).colorScheme.primary;
-    return AppCard(
-      title: title,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            height: 150,
-            width: double.infinity,
-            child: CustomPaint(
-              painter: _ResultTrendPainter(points: points, color: color),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.s2),
-          Wrap(
-            spacing: AppSpacing.s3,
-            runSpacing: AppSpacing.s2,
-            children: rows.map((row) => Text(
-              '${row['period'] ?? 'Période'} : ${row['average'] ?? '—'} / ${row['averageScale'] ?? 20}',
-              style: Theme.of(context).textTheme.bodySmall,
-            )).toList(),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ResultTrendPainter extends CustomPainter {
-  const _ResultTrendPainter({
-    required this.points,
-    required this.color,
-  });
-
-  final List<double> points;
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (points.isEmpty) return;
-    final gridPaint = Paint()
-      ..color = color.withValues(alpha: .12)
-      ..strokeWidth = 1;
-    for (var index = 0; index <= 4; index++) {
-      final y = size.height * index / 4;
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
-    }
-
-    final linePaint = Paint()
-      ..color = color
-      ..strokeWidth = 2.5
-      ..style = PaintingStyle.stroke;
-    final dotPaint = Paint()..color = color;
-    final path = Path();
-    for (var index = 0; index < points.length; index++) {
-      final x = points.length == 1
-          ? size.width / 2
-          : size.width * index / (points.length - 1);
-      final y = size.height - (points[index] * size.height);
-      if (index == 0) {
-        path.moveTo(x, y);
-      } else {
-        path.lineTo(x, y);
-      }
-      canvas.drawCircle(Offset(x, y), 4, dotPaint);
-    }
-    if (points.length > 1) canvas.drawPath(path, linePaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant _ResultTrendPainter oldDelegate) =>
-      oldDelegate.points != points || oldDelegate.color != color;
-}
 
 /// Consultation parent limitée aux enfants explicitement liés à son compte.
 class ParentResultsPage extends StatefulWidget {
