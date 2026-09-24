@@ -455,7 +455,8 @@ def roster(academic_year_id: uuid.UUID, kind: Literal['registration','reenrollme
         'classes': [{'id':str(cl.id),'name':cl.name,'levelId':str(cl.school_level_id) if cl.school_level_id else None,
                      'levelName': session.get(m.SchoolLevel,cl.school_level_id).name if cl.school_level_id else None,
                      'cycleId':str(cl.cycle_id) if cl.cycle_id else None,
-                     'cycleName': session.get(m.SchoolCycle,cl.cycle_id).name if cl.cycle_id else None}
+                     'cycleName': session.get(m.SchoolCycle,cl.cycle_id).name if cl.cycle_id else None,
+                     'cycleCode': session.get(m.SchoolCycle,cl.cycle_id).code if cl.cycle_id else None}
                     for cl in session.scalars(classes_stmt.order_by(m.SchoolClass.name)).all()],
         'fees': [fee.payload for fee in m.finance_rows(session,'finance-fees',school,current)
                  if str(fee.payload.get('academicYearId'))==str(year.id)],
