@@ -38,6 +38,22 @@ Future<Widget> page(MockClient client) async {
 }
 
 void main() {
+  testWidgets('les paramètres ne dupliquent plus le module Périodes',
+      (tester) async {
+    final client = MockClient((request) async {
+      if (request.method == 'GET') {
+        return http.Response(jsonEncode(establishment()), 200);
+      }
+      return http.Response('{}', 404);
+    });
+    await tester.pumpWidget(await page(client));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('Paramétrage pédagogique'), findsNothing);
+    expect(find.text('Périodes scolaires'), findsNothing);
+    expect(find.text('Sécurité du compte'), findsOneWidget);
+    expect(find.text('Modifier le mot de passe'), findsOneWidget);
+  });
+
   testWidgets('affiche le chargement initial', (tester) async {
     final pending = Completer<http.Response>();
     await tester.pumpWidget(await page(MockClient((_) => pending.future)));
