@@ -11,6 +11,7 @@ from . import main as m
 
 router = APIRouter(prefix='/api/v1/school/finance')
 guard = m.require_module_roles('finance', 'admin', 'superadmin')
+parent_guard = m.require_module_roles('finance', 'parent')
 receipt_guard = m.require_module_roles(
     'finance', 'admin', 'superadmin', 'student', 'parent'
 )
@@ -140,6 +141,32 @@ def prior_registration(session, reg, year):
     return result
 
 
+def effective_school_regime(session, reg, cl, month=None):
+    """Return the regime applicable to a billed month without rewriting history."""
+    cycle = session.get(m.SchoolCycle, cl.cycle_id) if cl.cycle_id else None
+    cycle_code = (cycle.code if cycle else '').strip().upper()
+    if cycle_code not in {'MATERNELLE', 'PRIMAIRE'}:
+        return None
+    target = date.fromisoformat(f'{month}-01') if month else date.today()
+    history = [
+        item for item in (reg.options or {}).get('regimeHistory', [])
+        if isinstance(item, dict) and item.get('regime') in {'part_time', 'full_time'}
+    ]
+    for item in reversed(sorted(history, key=lambda row: str(row.get('startDate') or ''))):
+        try:
+            start = date.fromisoformat(str(item.get('startDate')))
+            end = date.fromisoformat(str(item.get('endDate'))) if item.get('endDate') else None
+        except ValueError:
+            continue
+        if start <= target and (end is None or target <= end):
+            return item['regime']
+    return reg.school_regime if reg.school_regime in {'part_time', 'full_time'} else None
+
+
+def regime_label(value):
+    return {'part_time': 'Mi-temps', 'full_time': 'Plein temps'}.get(value)
+
+
 def fee_for(session, current, school, reg, cl, kind, month=None, fee_id=None, name=None):
     cache = session.info.get('finance_fee_cache')
     key = (str(reg.id), str(cl.id), kind, month, fee_id, name)
@@ -160,6 +187,13 @@ def fee_for(session, current, school, reg, cl, kind, month=None, fee_id=None, na
         body = m.FinanceFeeInput(**fields)
         if body.month is not None and body.month != month:
             continue
+        if kind == 'tuition':
+            applicable_regime = effective_school_regime(session, reg, cl, month)
+            if applicable_regime is not None:
+                if body.schoolRegime != applicable_regime:
+                    continue
+            elif body.schoolRegime is not None:
+                continue
         if m.finance_fee_matches_registration(body, probe, session, reg.establishment_id):
             rank = {'establishment': 0, 'cycle': 1, 'level': 2, 'class': 3}[body.scope]
             matches.append(((rank, body.month is not None), fee))
@@ -241,6 +275,7 @@ def invoice(session, current, school, reg, cl, student, kind, month, fee_id=None
             m.validate_registration_academic_options(cl, True, session)
         except HTTPException:
             eligible = False
+    applicable_regime = effective_school_regime(session, reg, cl, month) if kind == 'tuition' else None
     fee = fee_for(session, current, school, reg, cl, kind, month, fee_id) if eligible else None
     identifier = assignment_key(session, reg, kind, month, fee.id if fee else None)
     assignment = m.Resource(id=identifier, kind='finance-fee-assignments', school_id=school,
@@ -248,7 +283,8 @@ def invoice(session, current, school, reg, cl, student, kind, month, fee_id=None
         payload={'id': identifier, 'registrationId': str(reg.id), 'schoolRegistrationId': str(reg.id),
             'studentId': str(student.id), 'academicYearId': str(reg.academic_year_id),
             'feeId': fee.id if fee else None, 'amount': int(fee.payload['amount']) if fee else 0,
-            'type': kind, 'month': month, 'schoolId': school, 'status': 'assigned'})
+            'type': kind, 'month': month, 'schoolRegime': applicable_regime,
+            'schoolId': school, 'status': 'assigned'})
     balance = m.finance_assignment_balance(session, school, assignment)
     # A validated school registration is itself the proof of settlement for
     # registration/re-enrollment. It is not a second cash payment and must not
@@ -278,7 +314,10 @@ def invoice(session, current, school, reg, cl, student, kind, month, fee_id=None
         'cycle': cycle_name, 'registrationStatus': reg.status,
         'academicYearId': str(reg.academic_year_id), 'schoolId': school,
         'type': kind, 'month': month, 'label': label, 'feeId': fee.id if fee else None,
-        'eligible': eligible, 'hasTd': reg.has_td, **balance,
+        'eligible': eligible, 'hasTd': reg.has_td,
+        'schoolRegime': applicable_regime,
+        'schoolRegimeLabel': regime_label(applicable_regime),
+        **balance,
         'credit': max(0, balance['paid']-balance['expected'])}
     if not eligible:
         row['status'] = 'not_applicable'
@@ -443,6 +482,62 @@ def roster(academic_year_id: uuid.UUID, kind: Literal['registration','reenrollme
         'unconfiguredCount': sum(row['status']=='no_tariff' for row in rows)}
 
 
+def monthly_situation_payload(
+    session, current, school, year, reg, school_class, student
+):
+    rows = [
+        invoice(
+            session, current, school, reg, school_class, student,
+            'tuition', month,
+        )[0]
+        for month in billing_months(session, year)
+    ]
+    today_month = date.today().replace(day=1)
+    for row in rows:
+        due_month = date.fromisoformat(f"{row['month']}-01")
+        row['isOverdue'] = bool(
+            row['remaining'] > 0 and due_month < today_month
+            and row['status'] not in {'no_tariff', 'not_applicable'}
+        )
+        if row['isOverdue']:
+            row['displayStatus'] = 'overdue'
+        else:
+            row['displayStatus'] = row['status']
+    total_expected = sum(int(row.get('expected') or 0) for row in rows)
+    total_paid = sum(int(row.get('paid') or 0) for row in rows)
+    total_remaining = sum(int(row.get('remaining') or 0) for row in rows)
+    total_credit = sum(int(row.get('credit') or 0) for row in rows)
+    return {
+        'registrationId': str(reg.id),
+        'studentId': str(student.id),
+        'studentName': f'{student.last_name} {student.first_name}',
+        'firstName': student.first_name,
+        'lastName': student.last_name,
+        'matricule': reg.registration_number or student.registration_number,
+        'classId': str(school_class.id),
+        'className': school_class.name,
+        'cycleCode': (
+            session.get(m.SchoolCycle, school_class.cycle_id).code.upper()
+            if school_class.cycle_id and session.get(m.SchoolCycle, school_class.cycle_id)
+            else None
+        ),
+        'currentRegime': (
+            reg.school_regime if reg.school_regime in {'part_time', 'full_time'} else None
+        ),
+        'currentRegimeLabel': regime_label(reg.school_regime),
+        'regimeHistory': list((reg.options or {}).get('regimeHistory', [])),
+        'summary': {
+            'expected': total_expected,
+            'paid': total_paid,
+            'remaining': total_remaining,
+            'credit': total_credit,
+            'unpaidMonths': sum(row['remaining'] > 0 for row in rows),
+            'overdueMonths': sum(bool(row.get('isOverdue')) for row in rows),
+        },
+        'months': rows,
+    }
+
+
 @router.get('/monthly-situation/{registration_id}')
 def monthly_situation(
     registration_id: uuid.UUID,
@@ -461,24 +556,50 @@ def monthly_situation(
     )
     if reg.academic_year_id != year.id:
         raise HTTPException(422, 'L’inscription ne correspond pas à l’année scolaire')
-    rows = [
-        invoice(
-            session, current, school, reg, school_class, student,
-            'tuition', month,
-        )[0]
-        for month in billing_months(session, year)
-    ]
-    return {
-        'registrationId': str(reg.id),
-        'studentId': str(student.id),
-        'studentName': f'{student.last_name} {student.first_name}',
-        'firstName': student.first_name,
-        'lastName': student.last_name,
-        'matricule': reg.registration_number or student.registration_number,
-        'classId': str(school_class.id),
-        'className': school_class.name,
-        'months': rows,
-    }
+    return monthly_situation_payload(
+        session, current, school, year, reg, school_class, student
+    )
+
+
+@router.get('/parent-situation/{student_id}')
+def parent_situation(
+    student_id: uuid.UUID,
+    academic_year_id: uuid.UUID,
+    current: m.Principal = Depends(parent_guard),
+    session: Session = Depends(m.db),
+):
+    """Strictly scoped financial situation of one child linked to the parent."""
+    enable_read_cache(session)
+    school, tenant, year = context(
+        current, session, None, academic_year_id
+    )
+    guardian = session.scalar(select(m.Guardian).where(
+        m.Guardian.user_id == uuid.UUID(current.id),
+        m.Guardian.establishment_id == tenant,
+        m.Guardian.status == 'active',
+    ))
+    linked = bool(guardian and session.scalar(select(m.StudentGuardian.id).where(
+        m.StudentGuardian.guardian_id == guardian.id,
+        m.StudentGuardian.student_id == student_id,
+        m.StudentGuardian.establishment_id == tenant,
+    ).limit(1)))
+    if not linked:
+        raise HTTPException(404, 'Enfant introuvable')
+    reg = session.scalar(select(m.StudentAcademicRegistration).where(
+        m.StudentAcademicRegistration.student_id == student_id,
+        m.StudentAcademicRegistration.establishment_id == tenant,
+        m.StudentAcademicRegistration.academic_year_id == year.id,
+        m.StudentAcademicRegistration.status.in_(('validated', 'active')),
+    ).order_by(m.StudentAcademicRegistration.registration_date.desc()))
+    if not reg:
+        raise HTTPException(404, 'Inscription scolaire introuvable')
+    school_class = session.get(m.SchoolClass, reg.class_id)
+    student = session.get(m.Student, reg.student_id)
+    if not school_class or not student:
+        raise HTTPException(409, 'Dossier scolaire incomplet')
+    return monthly_situation_payload(
+        session, current, school, year, reg, school_class, student
+    )
 
 
 class SchoolPaymentInput(BaseModel):
