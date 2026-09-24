@@ -380,6 +380,7 @@ class StatisticsSnapshotView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => FutureBuilder<Map<String, dynamic>>(
+        key: ObjectKey(request),
         future: request,
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
