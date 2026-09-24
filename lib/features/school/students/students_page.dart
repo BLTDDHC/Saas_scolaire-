@@ -882,6 +882,19 @@ class _StudentsPageState extends State<StudentsPage> {
             '');
     String? classId = existingPreEnrollment?['desiredClassId']?.toString();
     if (!classes.any((item) => item.id == classId)) classId = classes.first.id;
+    bool regimeRequiredForClass(String? selectedClassId) {
+      final selected = classes.where((item) => item.id == selectedClassId);
+      if (selected.isEmpty) return false;
+      final cycle = store.getSchoolCycles()
+          .where((item) => item.id == selected.first.cycleId)
+          .firstOrNull;
+      return const {'MATERNELLE', 'PRIMAIRE'}
+          .contains((cycle?.code ?? '').toUpperCase());
+    }
+    String schoolRegime = const {'part_time', 'full_time'}
+            .contains(existingPreEnrollment?['schoolRegime']?.toString())
+        ? existingPreEnrollment!['schoolRegime'].toString()
+        : (regimeRequiredForClass(classId) ? 'part_time' : 'normal');
     var saving = false;
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
@@ -916,8 +929,36 @@ class _StudentsPageState extends State<StudentsPage> {
                               Text(item.name, overflow: TextOverflow.ellipsis),
                         ))
                     .toList(),
-                onChanged: saving ? null : (value) => classId = value,
+                onChanged: saving
+                    ? null
+                    : (value) => setDialogState(() {
+                          classId = value;
+                          schoolRegime = regimeRequiredForClass(value)
+                              ? (schoolRegime == 'full_time'
+                                  ? 'full_time'
+                                  : 'part_time')
+                              : 'normal';
+                        }),
               ),
+              if (regimeRequiredForClass(classId))
+                DropdownButtonFormField<String>(
+                  key: const Key('preenrollment-regime'),
+                  isExpanded: true,
+                  initialValue: schoolRegime == 'full_time'
+                      ? 'full_time'
+                      : 'part_time',
+                  decoration: const InputDecoration(labelText: 'Régime *'),
+                  items: const [
+                    DropdownMenuItem(
+                        value: 'part_time', child: Text('Mi-temps')),
+                    DropdownMenuItem(
+                        value: 'full_time', child: Text('Plein temps')),
+                  ],
+                  onChanged: saving
+                      ? null
+                      : (value) => setDialogState(
+                          () => schoolRegime = value ?? 'part_time'),
+                ),
             ]),
           ),
           actions: [
@@ -946,12 +987,14 @@ class _StudentsPageState extends State<StudentsPage> {
                                 academicYearId: yearId,
                                 desiredClassId: classId!,
                                 registrationKind: registrationKind,
+                                schoolRegime: schoolRegime,
                               )
                             : await store.updatePreEnrollmentRemote(
                                 existingPreEnrollment['id'].toString(), {
                                 'firstName': first.text.trim(),
                                 'lastName': last.text.trim(),
                                 'desiredClassId': classId,
+                                'schoolRegime': schoolRegime,
                               });
                         if (dialogContext.mounted)
                           Navigator.pop(dialogContext, response);
