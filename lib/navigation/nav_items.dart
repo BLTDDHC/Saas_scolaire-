@@ -221,8 +221,13 @@ class NavItems {
               section: 'SUIVI'),
           NavItem(
               id: 'grades',
-              label: 'Notes des enfants',
+              label: 'Notes et résultats',
               icon: Icons.grade_rounded,
+              section: 'SUIVI'),
+          NavItem(
+              id: 'parent_finance',
+              label: 'Paiements / Situation financière',
+              icon: Icons.account_balance_wallet_outlined,
               section: 'SUIVI'),
           NavItem(
               id: 'schedule',
