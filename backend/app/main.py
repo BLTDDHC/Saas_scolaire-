@@ -2417,7 +2417,7 @@ def class_json(item: SchoolClass, session: Session) -> dict[str, Any]:
         'academicYearName': year.name if year else None,
         'cycleId': str(item.cycle_id) if item.cycle_id else None,
         'cycle': cycle.name if cycle else None,
-        'cycleCode': cycle_code,
+        'cycleCode': cycle.code.upper() if cycle else None,
         'schoolLevelId': str(item.school_level_id) if item.school_level_id else None,
         'structuredLevelId': str(item.school_level_id) if item.school_level_id else None,
         'levelId': str(item.school_level_id) if item.school_level_id else None,
