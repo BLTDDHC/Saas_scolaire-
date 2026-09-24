@@ -5067,6 +5067,11 @@ def change_student_registration_regime(
         raise HTTPException(422, "La date d’effet doit appartenir à l’année scolaire.")
     if body.effective_date < registration.registration_date:
         raise HTTPException(422, "La date d’effet ne peut pas précéder l’inscription.")
+    if body.effective_date.day != 1:
+        raise HTTPException(
+            422,
+            "La date d’effet d’un régime mensuel doit être le premier jour du mois.",
+        )
 
     history = [
         dict(item) for item in (registration.options or {}).get("regimeHistory", [])
