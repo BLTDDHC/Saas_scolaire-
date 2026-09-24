@@ -656,6 +656,20 @@ class StudentAcademicRegistration(Base):
     status: Mapped[str] = mapped_column(String(50), default="validated")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+class StudentRegimeHistory(Base):
+    __tablename__ = "student_regime_history"
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    establishment_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    registration_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    student_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    academic_year_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    regime: Mapped[str] = mapped_column(String(20))
+    effective_from: Mapped[date] = mapped_column(Date)
+    effective_to: Mapped[date | None] = mapped_column(Date)
+    tariff_amount: Mapped[int | None] = mapped_column(Integer)
+    changed_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
 class GuardianPerson(Base):
     __tablename__ = 'guardian_people'
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -843,6 +857,7 @@ class FinanceFeeInput(BaseModel):
     type: Literal["registration", "reenrollment", "tuition", "td", "other"] = "tuition"
     frequency: Literal["once", "monthly", "annual"] = "monthly"
     month: str | None = Field(default=None, pattern=r"^\d{4}-\d{2}$")
+    schoolRegime: Literal["part_time", "full_time"] | None = None
     schoolId: str | None = None
 
 class FinancePaymentInput(BaseModel):
@@ -1270,6 +1285,9 @@ class StudentPreEnrollmentInput(BaseModel):
     registration_kind: Literal["registration", "reenrollment"] = Field(
         default="registration", alias="registrationKind"
     )
+    school_regime: Literal["part_time", "full_time"] | None = Field(
+        default=None, alias="schoolRegime"
+    )
     status: Literal["draft", "submitted"] = "draft"
 
     @model_validator(mode="after")
@@ -1293,6 +1311,9 @@ class StudentPreEnrollmentUpdateInput(BaseModel):
     first_name: str = Field(alias="firstName", min_length=1, max_length=100)
     last_name: str = Field(alias="lastName", min_length=1, max_length=100)
     desired_class_id: uuid.UUID = Field(alias="desiredClassId")
+    school_regime: Literal["part_time", "full_time"] | None = Field(
+        default=None, alias="schoolRegime"
+    )
 
     @field_validator("first_name", "last_name", mode="before")
     @classmethod
@@ -1300,8 +1321,8 @@ class StudentPreEnrollmentUpdateInput(BaseModel):
         return value.strip() if isinstance(value, str) else value
 
 class StudentPreEnrollmentApprovalInput(BaseModel):
-    school_regime: Literal['normal', 'part_time', 'full_time'] = Field(
-        default='normal', alias='schoolRegime'
+    school_regime: Literal['normal', 'part_time', 'full_time'] | None = Field(
+        default=None, alias='schoolRegime'
     )
     has_td: bool = Field(default=False, alias='hasTd')
     options: dict[str, Any] = Field(default_factory=dict)
@@ -1777,6 +1798,11 @@ class StudentRegistrationInput(BaseModel):
     school_regime: Literal['normal', 'part_time', 'full_time'] = Field(default='normal', alias='schoolRegime')
     has_td: bool = Field(default=False, alias='hasTd')
     options: dict[str, Any] = Field(default_factory=dict)
+
+class StudentRegimeChangeInput(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, extra='forbid')
+    school_regime: Literal['part_time', 'full_time'] = Field(alias='schoolRegime')
+    effective_date: date = Field(alias='effectiveDate')
 
 class StudentPhotoFileInput(BaseModel):
     model_config = ConfigDict(populate_by_name=True, extra="forbid")
