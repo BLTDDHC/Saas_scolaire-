@@ -264,19 +264,27 @@ def invoice(session, current, school, reg, cl, student, kind, month, fee_id=None
         payload={'id': identifier, 'registrationId': str(reg.id), 'schoolRegistrationId': str(reg.id),
             'studentId': str(student.id), 'academicYearId': str(reg.academic_year_id),
             'feeId': fee.id if fee else None, 'amount': int(fee.payload['amount']) if fee else 0,
+            'classId': str(cl.id),
             'type': kind, 'month': month, 'schoolRegime': applicable_regime,
             'schoolId': school, 'status': 'assigned'})
     persisted_assignment = session.get(
         m.Resource, {'kind': 'finance-fee-assignments', 'id': identifier}
     )
-    if persisted_assignment is not None:
+    if (
+        persisted_assignment is not None
+        and persisted_assignment.payload.get('classId') == str(cl.id)
+    ):
         assignment = persisted_assignment
         stored_fee_id = persisted_assignment.payload.get('feeId')
         if stored_fee_id:
-            stored_fee = session.get(m.Resource, {'kind': 'finance-fees', 'id': stored_fee_id})
+            stored_fee = session.get(
+                m.Resource, {'kind': 'finance-fees', 'id': stored_fee_id}
+            )
             if stored_fee is not None:
                 fee = stored_fee
-        applicable_regime = persisted_assignment.payload.get('schoolRegime', applicable_regime)
+        applicable_regime = persisted_assignment.payload.get(
+            'schoolRegime', applicable_regime
+        )
     balance = m.finance_assignment_balance(session, school, assignment)
     # A validated school registration is itself the proof of settlement for
     # registration/re-enrollment. It is not a second cash payment and must not
