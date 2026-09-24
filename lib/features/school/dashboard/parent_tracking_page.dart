@@ -9,7 +9,6 @@ import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/app_empty_state.dart';
 import '../../../shared/widgets/responsive_grid.dart';
 import '../../../shared/widgets/workspace_header.dart';
-import '../grades/student_results_page.dart';
 
 class ParentTrackingPage extends StatefulWidget {
   const ParentTrackingPage({super.key});
@@ -78,7 +77,7 @@ class _ParentTrackingPageState extends State<ParentTrackingPage> {
   Widget build(BuildContext context) => WorkspacePage(
         title: 'Suivi de mes enfants',
         subtitle:
-            'Résultats par périodes configurées, présence et comportement à partir des données officielles',
+            'Vue synthétique de la progression, de la présence et du comportement de chaque enfant.',
         actions: [
           IconButton.filledTonal(
             onPressed: _trackingRequest == null ? null : _retry,
@@ -278,16 +277,20 @@ class _ParentTrackingPageState extends State<ParentTrackingPage> {
           ),
           const SizedBox(height: AppSpacing.s4),
         ],
-        Text('Résultats détaillés',
-            style: Theme.of(context).textTheme.titleLarge),
-        const SizedBox(height: AppSpacing.s3),
-        StudentResultsPage(
-          key: ValueKey('tracking-$_childId-$_yearId'),
-          embedded: true,
-          request: Future.value({
-            'studentName': data['studentName'],
-            'years': [results],
-          }),
+        AppCard(
+          title: 'Notes et résultats',
+          subtitle: 'Le détail par matière et par évaluation reste dans le module dédié.',
+          child: const Row(
+            children: [
+              Icon(Icons.info_outline_rounded, color: AppColors.primary600),
+              SizedBox(width: AppSpacing.s3),
+              Expanded(
+                child: Text(
+                  'Utilisez « Notes des enfants » pour consulter D1, D2, compositions et examens sans dupliquer ces informations ici.',
+                ),
+              ),
+            ],
+          ),
         ),
       ],
     );
