@@ -10,6 +10,13 @@ import '../../../shared/widgets/responsive_grid.dart';
 import '../../../shared/widgets/app_toast.dart';
 import '../../../shared/widgets/workspace_header.dart';
 
+String _resultNumber(Object? raw) {
+  if (raw is! num) return '—';
+  final value = raw.toDouble();
+  final oneDecimal = (value * 10).roundToDouble() == value * 10;
+  return value.toStringAsFixed(oneDecimal ? 1 : 2);
+}
+
 Widget _planRestriction(BuildContext context, ApiException error) => AppCard(
       title: 'Résultats publiés',
       child: Column(
@@ -499,7 +506,7 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
         initiallyExpanded: !includeExams,
         tilePadding: EdgeInsets.zero,
         title: Text('${period['period'] ?? 'Période'}'),
-        subtitle: Text('Moyenne : ${period['average'] ?? '—'} / '
+        subtitle: Text('Moyenne : ${_resultNumber(period['average'])} / '
             '${period['averageScale'] ?? 20} · Rang : ${period['rank'] ?? '—'} · '
             'Mention : ${period['mention'] ?? _mention(period)}'),
         children: [
@@ -510,7 +517,7 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
               tabletColumns: 3,
               children: [
                 _resultMetric('Moyenne générale',
-                    '${period['average'] ?? '—'} / ${period['averageScale'] ?? 20}'),
+                    '${_resultNumber(period['average'])} / ${period['averageScale'] ?? 20}'),
                 _resultMetric('Rang', '${period['rank'] ?? '—'}'),
                 _resultMetric(
                     'Mention', '${period['mention'] ?? _mention(period)}'),
@@ -684,7 +691,7 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
     return AppCard(
       title: '${exam['name'] ?? 'Examen'}',
       subtitle:
-          'Moyenne : ${exam['average'] ?? '—'} · Rang : ${exam['rank'] ?? '—'}',
+          'Moyenne : ${_resultNumber(exam['average'])} · Rang : ${exam['rank'] ?? '—'}',
       child: ResponsiveDataTable(
         child: DataTable(
           columns: [
