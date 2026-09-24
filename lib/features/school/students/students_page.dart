@@ -393,7 +393,7 @@ class _StudentsPageState extends State<StudentsPage> {
         initialClass?.structuredLevelId ?? initialClass?.levelId;
     String gender = student?.sex ?? 'M';
     String schoolRegime =
-        preEnrollment['schoolRegime']?.toString() ?? 'normal';
+        preEnrollment?['schoolRegime']?.toString() ?? 'normal';
     String guardianType =
         primaryGuardian?['relationship']?.toString() ?? 'tuteur';
     bool hasTd = false;
@@ -787,7 +787,7 @@ class _StudentsPageState extends State<StudentsPage> {
                             preEnrollment['id'].toString(),
                             classId: selectedClass,
                             schoolRegime:
-                                preEnrollment?['schoolRegime']?.toString() ??
+                                preEnrollment['schoolRegime']?.toString() ??
                                     schoolRegime,
                             hasTd: hasTd,
                             options: {
@@ -1149,11 +1149,8 @@ class _StudentsPageState extends State<StudentsPage> {
                   firstDate: AppDateUtils.parse(registration.registrationDate) ??
                       DateTime(DateTime.now().year - 1),
                   lastDate: DateTime(DateTime.now().year + 2, 12, 31),
-                  onChanged: (value) {
-                    if (value != null) {
-                      setDialogState(() => effectiveDate = value);
-                    }
-                  },
+                  onChanged: (value) =>
+                      setDialogState(() => effectiveDate = value),
                 ),
                 const SizedBox(height: AppSpacing.s3),
                 const Text(
