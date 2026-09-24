@@ -482,6 +482,42 @@ class SchoolFinance(unittest.TestCase):
         with self.assertRaises(HTTPException):
             m.normalize_registration_regime(self.cl, 'full_time', self.s)
 
+    def test_primary_monthly_tariff_requires_regime_and_college_rejects_it(self):
+        _, _, school_class, _, _ = self.primary_regime_context()
+        with self.assertRaises(HTTPException) as missing:
+            m.create_finance_fee(
+                m.FinanceFeeInput(
+                    name='Primaire sans régime',
+                    amount=10000,
+                    scope='class',
+                    classId=str(school_class.id),
+                    type='tuition',
+                    frequency='monthly',
+                    academicYearId=str(self.year.id),
+                    schoolId=self.school,
+                ),
+                self.admin,
+                self.s,
+            )
+        self.assertEqual(missing.exception.status_code, 422)
+        with self.assertRaises(HTTPException) as college:
+            m.create_finance_fee(
+                m.FinanceFeeInput(
+                    name='Collège plein temps',
+                    amount=10000,
+                    scope='class',
+                    classId=str(self.cl.id),
+                    type='tuition',
+                    frequency='monthly',
+                    regime='full_time',
+                    academicYearId=str(self.year.id),
+                    schoolId=self.school,
+                ),
+                self.admin,
+                self.s,
+            )
+        self.assertEqual(college.exception.status_code, 422)
+
     def test_regime_change_preserves_old_payment_and_switches_future_tariff(self):
         _, _, school_class, student, registration = self.primary_regime_context()
         for regime, amount in [('full_time', 10000), ('part_time', 6000)]:
