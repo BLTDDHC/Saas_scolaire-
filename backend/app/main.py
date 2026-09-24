@@ -5036,6 +5036,64 @@ def change_student_registration_class(
     session.refresh(item)
     return registration_json(item, session)
 
+@app.put("/api/v1/school/student-registrations/{registration_id}/regime")
+def change_student_registration_regime(
+    registration_id: uuid.UUID,
+    body: StudentRegimeChangeInput,
+    current: Principal = Depends(require_module("students")),
+    session: Session = Depends(db),
+):
+    item = session.get(StudentAcademicRegistration, registration_id)
+    if not item:
+        raise HTTPException(404, "Inscription introuvable")
+    student = ensure_student_scope(item.student_id, current, session)
+    school_class = validate_registration_class(
+        student.establishment_id, item.class_id, session,
+        item.academic_year_id, current
+    )
+    validate_school_regime(school_class, body.school_regime, session)
+    year = session.get(AcademicYear, item.academic_year_id)
+    if not year:
+        raise HTTPException(409, "Année scolaire introuvable")
+    try:
+        effective_date = date.fromisoformat(f"{body.effective_month}-01")
+    except ValueError as exc:
+        raise HTTPException(422, "Mois d'effet invalide") from exc
+    if effective_date < year.start_date.replace(day=1) or effective_date > year.end_date.replace(day=1):
+        raise HTTPException(422, "Le mois d'effet est hors de l'année scolaire")
+    if effective_date < item.registration_date.replace(day=1):
+        raise HTTPException(422, "Le changement ne peut pas précéder l'inscription")
+    current_month = date.today().replace(day=1)
+    if effective_date > current_month:
+        raise HTTPException(422, "Le changement de régime ne peut pas être antidaté dans le futur")
+    history = registration_regime_history(item)
+    if not history:
+        history.append({
+            "regime": item.school_regime,
+            "effectiveMonth": item.registration_date.strftime("%Y-%m"),
+            "changedBy": current.id,
+            "changedAt": datetime.now(timezone.utc).isoformat(),
+        })
+    if any(str(entry.get("effectiveMonth")) == body.effective_month for entry in history):
+        raise HTTPException(409, "Un régime est déjà défini pour ce mois d'effet")
+    previous_regime = regime_for_month(item, body.effective_month)
+    if previous_regime == body.school_regime:
+        raise HTTPException(409, "Ce régime est déjà applicable pour ce mois")
+    history.append({
+        "regime": body.school_regime,
+        "previousRegime": previous_regime,
+        "effectiveMonth": body.effective_month,
+        "changedBy": current.id,
+        "changedAt": datetime.now(timezone.utc).isoformat(),
+    })
+    history.sort(key=lambda entry: str(entry.get("effectiveMonth") or ""))
+    item.school_regime = body.school_regime
+    item.options = {**(item.options or {}), "regimeHistory": history}
+    item.updated_at = datetime.now(timezone.utc)
+    session.commit()
+    session.refresh(item)
+    return registration_json(item, session)
+
 @app.get("/api/v1/school/pre-enrollments")
 def list_student_pre_enrollments(
     academic_year_id: uuid.UUID | None = None,
