@@ -156,6 +156,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('BAC test'), findsOneWidget);
     expect(find.text('BAC blanc'), findsOneWidget);
+    expect(find.text('Devoir départemental'), findsOneWidget);
     expect(find.text('BEPC test'), findsNothing);
     expect(find.text('CEPE test'), findsNothing);
     await tester.tap(find.text('Devoir 1').last);
@@ -169,6 +170,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('CEPE test'), findsOneWidget);
     expect(find.text('CEPE blanc'), findsOneWidget);
+    expect(find.text('Devoir départemental'), findsNothing);
     expect(find.text('BEPC test'), findsNothing);
     expect(find.text('BAC test'), findsNothing);
     await tester.tap(find.text('Composition').last);
@@ -183,6 +185,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('BEPC test'), findsOneWidget);
     expect(find.text('BEPC blanc'), findsOneWidget);
+    expect(find.text('Devoir départemental'), findsOneWidget);
     expect(find.text('CEPE test'), findsNothing);
     expect(find.text('BAC test'), findsNothing);
     await tester.tap(find.text('Devoir 1').last);
