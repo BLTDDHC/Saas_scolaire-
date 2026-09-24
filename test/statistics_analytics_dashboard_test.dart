@@ -52,6 +52,9 @@ Map<String, dynamic> snapshot({
         },
       ],
       'byCycle': const [],
+      'byLevel': const [
+        {'level': '3e', 'studentCount': 6, 'average20': 12},
+      ],
       'bySubject': const [
         {
           'subject': 'Mathématiques',
@@ -88,7 +91,9 @@ void main() {
 
     expect(find.byKey(const Key('statistics-kpi-grid')), findsOneWidget);
     expect(find.byKey(const Key('statistics-evolution-chart')), findsOneWidget);
+    expect(find.byKey(const Key('statistics-level-distribution')), findsOneWidget);
     expect(find.byKey(const Key('statistics-class-bars')), findsOneWidget);
+    expect(find.byKey(const Key('statistics-class-ranking')), findsOneWidget);
     expect(find.byKey(const Key('statistics-detail-table')), findsOneWidget);
     expect(find.text('Ce qu’il faut retenir'), findsOneWidget);
     expect(find.text('6'), findsWidgets);
