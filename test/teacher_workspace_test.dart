@@ -189,7 +189,8 @@ Map<String, dynamic> get _workspace => {
 
 MockClient _teacherClient(
     {List<Map<String, dynamic>> initialBehavior = const [],
-    Map<String, dynamic>? officialResults}) {
+    Map<String, dynamic>? officialResults,
+    Map<String, dynamic>? workspace}) {
   final behaviorEvents = <Map<String, dynamic>>[...initialBehavior];
   String attendanceStatus = 'draft';
   List<Map<String, dynamic>> attendanceRecords = [];
@@ -211,7 +212,7 @@ MockClient _teacherClient(
       return http.Response(jsonEncode(_teacherUser), 200);
     }
     if (request.url.path == '/api/v1/school/teacher/workspace') {
-      return http.Response(jsonEncode(_workspace), 200);
+      return http.Response(jsonEncode(workspace ?? _workspace), 200);
     }
     if (request.url.path == '/api/v1/school/evaluations') {
       return http.Response(jsonEncode(_teacherEvaluations), 200);
@@ -529,10 +530,104 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Mes élèves'), findsWidgets);
-    expect(find.text('Massamba Chris'), findsOneWidget);
+    expect(find.text('Massamba'), findsOneWidget);
+    expect(find.text('Chris'), findsOneWidget);
     expect(find.text('ECOLE-2026-001'), findsOneWidget);
-    expect(find.text('3e · 3e A'), findsOneWidget);
+    expect(find.text('Toutes mes classes'), findsOneWidget);
+    expect(find.text('3e A'), findsWidgets);
     expect(find.text('Ajouter un élève'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Mes élèves filtre uniquement les classes réellement enseignées',
+      (tester) async {
+    tester.view.physicalSize = const Size(1440, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final workspace = Map<String, dynamic>.from(_workspace);
+    workspace['classes'] = [
+      ...List<Map<String, dynamic>>.from(_workspace['classes'] as List),
+      {
+        'id': 'class-2',
+        'schoolId': 'school_003',
+        'name': '3e B',
+        'academicYearId': 'year-active',
+        'cycleId': 'cycle-college',
+        'structuredLevelId': 'level-3e',
+        'levelId': 'level-3e',
+        'level': '3e',
+        'status': 'active',
+      },
+    ];
+    workspace['affectations'] = [
+      ...List<Map<String, dynamic>>.from(_workspace['affectations'] as List),
+      {
+        'id': 'affectation-2',
+        'schoolId': 'school_003',
+        'teacherId': 'teacher-1',
+        'teacherName': 'Aline Mabiala',
+        'classId': 'class-2',
+        'className': '3e B',
+        'subjectId': 'subject-1',
+        'subject': 'Mathématiques',
+        'academicYearId': 'year-active',
+        'status': 'active',
+      },
+    ];
+    workspace['students'] = [
+      ...List<Map<String, dynamic>>.from(_workspace['students'] as List),
+      {
+        'id': 'student-2',
+        'schoolId': 'school_003',
+        'firstName': 'Alice',
+        'lastName': 'Étombo',
+        'classId': 'class-2',
+        'class': '3e B',
+        'level': '3e',
+        'matricule': 'ECOLE-2026-002',
+        'academicYearId': 'year-active',
+        'status': 'active',
+      },
+      {
+        'id': 'student-3',
+        'schoolId': 'school_003',
+        'firstName': 'Zed',
+        'lastName': 'Abolo',
+        'classId': 'class-2',
+        'class': '3e B',
+        'level': '3e',
+        'matricule': 'ECOLE-2026-003',
+        'academicYearId': 'year-active',
+        'status': 'active',
+      },
+    ];
+
+    final store = await _store(_teacherClient(workspace: workspace));
+    expect(await store.login(_email, _password), isTrue);
+    await tester.pumpWidget(ChangeNotifierProvider<StoreService>.value(
+      value: store,
+      child: const EduProApp(),
+    ));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Mes élèves'));
+    await tester.pumpAndSettle();
+
+    final filter = find.byKey(const Key('teacher-students-class-filter'));
+    expect(filter, findsOneWidget);
+    expect(find.text('Massamba'), findsOneWidget);
+    expect(find.text('Étombo'), findsOneWidget);
+    expect(find.text('Abolo'), findsOneWidget);
+
+    await tester.tap(filter);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('3e B').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Massamba'), findsNothing);
+    expect(find.text('Étombo'), findsOneWidget);
+    expect(find.text('Abolo'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
