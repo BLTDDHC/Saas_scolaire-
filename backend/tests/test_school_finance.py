@@ -80,6 +80,17 @@ class SchoolFinance(unittest.TestCase):
         self.assertEqual(self.own(month='2026-10')['expected'], 12000)
         self.assertEqual(self.pay(12000, month='2026-10')['receipt']['amount'], 12000)
 
+        with self.assertRaises(HTTPException) as invalid_effective:
+            m.change_student_registration_regime(
+                self.reg.id,
+                m.StudentRegimeChangeInput(
+                    schoolRegime='part_time', effectiveDate=date(2027, 2, 15)
+                ),
+                self.admin,
+                self.s,
+            )
+        self.assertEqual(invalid_effective.exception.status_code, 422)
+
         changed = m.change_student_registration_regime(
             self.reg.id,
             m.StudentRegimeChangeInput(
@@ -92,6 +103,19 @@ class SchoolFinance(unittest.TestCase):
         self.assertEqual(changed['scheduledRegime'], 'part_time')
         self.assertEqual(self.own(month='2027-01')['expected'], 12000)
         self.assertEqual(self.own(month='2027-02')['expected'], 8000)
+
+        boundary_payment = f.pay(f.SchoolPaymentInput(
+            registrationId=self.reg.id,
+            type='tuition',
+            months=['2027-01', '2027-02'],
+            amount=20000,
+            schoolId=self.school,
+        ), self.admin, self.s)
+        self.assertEqual(
+            [(row['month'], row['amount']) for row in boundary_payment['allocations']],
+            [('2027-01', 12000), ('2027-02', 8000)],
+        )
+
         october = self.own(month='2026-10')
         self.assertEqual(
             (october['expected'], october['paid'], october['remaining']),
