@@ -1023,7 +1023,8 @@ class SchoolRepository {
       String? levelId,
       String? classId,
       String? periodId,
-      String? subjectId}) async {
+      String? subjectId,
+      String? eventCode}) async {
     final query = <String, String>{
       if (schoolId != null) 'school_id': schoolId,
       if (academicYearId != null) 'academic_year_id': academicYearId,
@@ -1032,6 +1033,7 @@ class SchoolRepository {
       if (classId != null) 'class_id': classId,
       if (periodId != null) 'period_id': periodId,
       if (subjectId != null) 'subject_id': subjectId,
+      if (eventCode != null && eventCode.isNotEmpty) 'event_code': eventCode,
     };
     final suffix = query.isEmpty ? '' : '?${Uri(queryParameters: query).query}';
     return Map<String, dynamic>.from(
