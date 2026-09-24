@@ -11679,6 +11679,9 @@ def statistics(
     if requested_subject_id:
         monthly_statement = monthly_statement.where(
             Evaluation.subject_id == requested_subject_id)
+    if requested_event_code:
+        monthly_statement = monthly_statement.where(
+            Evaluation.exam_code == requested_event_code)
     monthly_buckets: dict[str, dict[str, Any]] = {}
     if class_ids:
         for scheduled_date, value, maximum in session.execute(monthly_statement).all():
