@@ -711,11 +711,6 @@ class _StudentsPageState extends State<StudentsPage> {
                             'Le régime Mi-temps ou Plein temps est obligatoire pour ce cycle.');
                         return;
                       }
-                      if (regimeRequired() && schoolRegime == null) {
-                        AppToast.warning(dialogContext,
-                            'Choisissez Mi-temps ou Plein temps.');
-                        return;
-                      }
                       setDialogState(() => saving = true);
                       try {
                         final payload = <String, dynamic>{
@@ -973,6 +968,11 @@ class _StudentsPageState extends State<StudentsPage> {
                           classId == null) {
                         AppToast.warning(dialogContext,
                             'Nom, prénom et classe sont obligatoires.');
+                        return;
+                      }
+                      if (regimeRequired() && schoolRegime == null) {
+                        AppToast.warning(dialogContext,
+                            'Choisissez Mi-temps ou Plein temps.');
                         return;
                       }
                       setDialogState(() => saving = true);
