@@ -49,6 +49,7 @@ void main() {
                   'students',
                   'grades',
                   'schedule',
+                  'finance',
                   'messages'
                 ],
               },
@@ -164,9 +165,8 @@ void main() {
         .map((item) => item.id)
         .toSet();
     expect(navigation,
-        containsAll({'dashboard', 'tracking', 'grades', 'schedule'}));
+        containsAll({'dashboard', 'tracking', 'grades', 'finance', 'schedule'}));
     expect(navigation, isNot(contains('messages')));
-    expect(navigation, isNot(contains('finance')));
     expect(navigation, isNot(contains('attendance')));
     expect(navigation, isNot(contains('behavior')));
     expect(navigation, isNot(contains('documents')));

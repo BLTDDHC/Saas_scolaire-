@@ -66,6 +66,8 @@ void main() {
     await tester.pumpWidget(await page(client));
     await tester.pump(const Duration(milliseconds: 100));
     expect(find.text('Lycée majorant'), findsOneWidget);
+    expect(find.text('Périodes pédagogiques'), findsNothing);
+    expect(find.text('Modifier mon mot de passe'), findsOneWidget);
 
     await tester.ensureVisible(find.text('Modifier les coordonnées'));
     await tester.tap(find.text('Modifier les coordonnées'));

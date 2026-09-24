@@ -536,7 +536,7 @@ class _StatisticsContent extends StatelessWidget {
             key: const Key('statistics-evolution-chart'),
             title: 'Évolution trimestrielle',
             subtitle:
-                'T1 → T2 → T3, uniquement à partir des résultats officiels',
+                'Périodes trimestrielles officielles, dans l’ordre configuré',
             rows: evolution,
             labelKey: 'period',
             valueKey: 'average20',
@@ -896,8 +896,11 @@ class _AverageBarsCard extends StatelessWidget {
                       Row(
                         children: [
                           Expanded(
-                            child: Text('${row[labelKey] ?? '—'}',
-                                overflow: TextOverflow.ellipsis),
+                            child: Text(
+                              '${row[labelKey] ?? '—'}',
+                              maxLines: 2,
+                              softWrap: true,
+                            ),
                           ),
                           const SizedBox(width: 12),
                           Text('${value.toStringAsFixed(2)} $suffix'),
@@ -986,8 +989,9 @@ class _LineChartCard extends StatelessWidget {
                       .map((row) => Flexible(
                             child: Text(
                               '${row[labelKey] ?? '—'}',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                              maxLines: 2,
+                              softWrap: true,
+                              textAlign: TextAlign.center,
                               style: Theme.of(context).textTheme.bodySmall,
                             ),
                           ))
@@ -1045,9 +1049,9 @@ class _VerticalBarsCard extends StatelessWidget {
                       .map((row) => Expanded(
                             child: Text(
                               '${row[labelKey] ?? '—'}',
-                              maxLines: 1,
+                              maxLines: 2,
+                              softWrap: true,
                               textAlign: TextAlign.center,
-                              overflow: TextOverflow.ellipsis,
                               style: Theme.of(context).textTheme.bodySmall,
                             ),
                           ))
@@ -1211,8 +1215,11 @@ class _FinanceBreakdown extends StatelessWidget {
                   final item = Map<String, dynamic>.from(raw as Map);
                   return ListTile(
                     contentPadding: EdgeInsets.zero,
-                    title: Text('${item['label']}',
-                        overflow: TextOverflow.ellipsis),
+                    title: Text(
+                      '${item['label']}',
+                      maxLines: 2,
+                      softWrap: true,
+                    ),
                     subtitle: Text('Attendu : ${item['expected'] ?? 0} FCFA'),
                     trailing: Text('${item['paid'] ?? 0} FCFA',
                         style: const TextStyle(fontWeight: FontWeight.w700)),

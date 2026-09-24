@@ -182,10 +182,17 @@ void openStudentRegistrationModal(
   final hasExistingRegistration = student.academicYearId == yearId &&
       student.classId != null &&
       student.classId!.isNotEmpty;
-  String schoolRegime = const {'normal', 'part_time', 'full_time'}
+  String? schoolRegime = const {'part_time', 'full_time'}
           .contains(preselectedRegistrationType)
-      ? preselectedRegistrationType!
-      : 'normal';
+      ? preselectedRegistrationType
+      : null;
+  bool regimeRequiredForClass(String? selectedClassId) {
+    final selected = classes.where((item) => item.id == selectedClassId).firstOrNull;
+    if (selected == null) return false;
+    final cycle = store.getSchoolCycles().where((item) => item.id == selected.cycleId).firstOrNull;
+    final code = (cycle?.code ?? '').toUpperCase();
+    return code == 'MATERNELLE' || code == 'PRIMAIRE';
+  }
   bool hasTd = false;
   bool tdAllowedForClass(String? selectedClassId) {
     final selected = classes.where((item) => item.id == selectedClassId);
@@ -215,24 +222,27 @@ void openStudentRegistrationModal(
                 onChanged: (value) => setState(() {
                   classId = value;
                   if (!tdAllowedForClass(value)) hasTd = false;
+                  if (!regimeRequiredForClass(value)) schoolRegime = null;
                 }),
               ),
               if (!hasExistingRegistration) ...[
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  isExpanded: true,
-                  initialValue: schoolRegime,
-                  decoration: const InputDecoration(labelText: 'Régime'),
-                  items: const [
-                    DropdownMenuItem(value: 'normal', child: Text('Normal')),
-                    DropdownMenuItem(
-                        value: 'part_time', child: Text('Mi-temps')),
-                    DropdownMenuItem(
-                        value: 'full_time', child: Text('Plein temps')),
-                  ],
-                  onChanged: (value) =>
-                      setState(() => schoolRegime = value ?? 'normal'),
-                ),
+                if (regimeRequiredForClass(classId)) ...[
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    key: const Key('student-registration-regime'),
+                    isExpanded: true,
+                    initialValue: schoolRegime,
+                    decoration: const InputDecoration(labelText: 'Régime *'),
+                    items: const [
+                      DropdownMenuItem(
+                          value: 'part_time', child: Text('Mi-temps')),
+                      DropdownMenuItem(
+                          value: 'full_time', child: Text('Plein temps')),
+                    ],
+                    onChanged: (value) =>
+                        setState(() => schoolRegime = value),
+                  ),
+                ],
                 if (tdAllowedForClass(classId))
                   CheckboxListTile(
                     contentPadding: EdgeInsets.zero,
@@ -255,6 +265,10 @@ void openStudentRegistrationModal(
             onPressed: () async {
               if (classId == null) {
                 AppToast.warning(dialogContext, 'Une classe est obligatoire.');
+                return;
+              }
+              if (regimeRequiredForClass(classId) && schoolRegime == null) {
+                AppToast.warning(dialogContext, 'Choisissez Mi-temps ou Plein temps.');
                 return;
               }
               try {
@@ -391,13 +405,21 @@ class _StudentsPageState extends State<StudentsPage> {
     String? selectedLevel =
         initialClass?.structuredLevelId ?? initialClass?.levelId;
     String gender = student?.sex ?? 'M';
-    String schoolRegime = 'normal';
+    String? schoolRegime = preEnrollment?['schoolRegime']?.toString();
     String guardianType =
         primaryGuardian?['relationship']?.toString() ?? 'tuteur';
     bool hasTd = false;
     bool orphanFather = false;
     bool orphanMother = false;
     bool medicallyFit = true;
+    bool regimeRequiredForSelectedClass() {
+      final selected = allClasses.where((item) => item.id == selectedClass).firstOrNull;
+      if (selected == null) return false;
+      final cycle = store.getSchoolCycles().where((item) => item.id == selected.cycleId).firstOrNull;
+      final code = (cycle?.code ?? '').toUpperCase();
+      return code == 'MATERNELLE' || code == 'PRIMAIRE';
+    }
+
     bool tdAllowedForSelectedClass() {
       final selected = allClasses.where((item) => item.id == selectedClass);
       if (selected.isEmpty) return false;
@@ -528,6 +550,7 @@ class _StudentsPageState extends State<StudentsPage> {
                           selectedLevel = null;
                           selectedClass = null;
                           hasTd = false;
+                          schoolRegime = null;
                         }),
                       ),
                       DropdownButtonFormField<String>(
@@ -568,26 +591,27 @@ class _StudentsPageState extends State<StudentsPage> {
                           : (value) => setDialogState(() {
                                 selectedClass = value;
                                 if (!tdAllowedForSelectedClass()) hasTd = false;
+                                if (!regimeRequiredForSelectedClass()) schoolRegime = null;
                               }),
                     ),
                     ...[
                       const SizedBox(height: AppSpacing.s3),
-                      if (student == null || preEnrollment != null)
+                      if ((student == null || preEnrollment != null) &&
+                          regimeRequiredForSelectedClass())
                         DropdownButtonFormField<String>(
+                          key: const Key('student-editor-regime'),
                           isExpanded: true,
                           initialValue: schoolRegime,
                           decoration:
                               const InputDecoration(labelText: 'Régime *'),
                           items: const [
                             DropdownMenuItem(
-                                value: 'normal', child: Text('Normal')),
-                            DropdownMenuItem(
                                 value: 'part_time', child: Text('Mi-temps')),
                             DropdownMenuItem(
                                 value: 'full_time', child: Text('Plein temps')),
                           ],
                           onChanged: (value) => setDialogState(
-                              () => schoolRegime = value ?? 'normal'),
+                              () => schoolRegime = value),
                         ),
                       if ((student == null || preEnrollment != null) &&
                           tdAllowedForSelectedClass())
@@ -678,6 +702,13 @@ class _StudentsPageState extends State<StudentsPage> {
                               guardianProfession.text.trim().isEmpty)) {
                         AppToast.warning(context,
                             'Nom complet, telephone, adresse et profession du responsable obligatoires.');
+                        return;
+                      }
+                      if ((student == null || preEnrollment != null) &&
+                          regimeRequiredForSelectedClass() &&
+                          schoolRegime == null) {
+                        AppToast.warning(context,
+                            'Le régime Mi-temps ou Plein temps est obligatoire pour ce cycle.');
                         return;
                       }
                       setDialogState(() => saving = true);
@@ -855,6 +886,14 @@ class _StudentsPageState extends State<StudentsPage> {
             '');
     String? classId = existingPreEnrollment?['desiredClassId']?.toString();
     if (!classes.any((item) => item.id == classId)) classId = classes.first.id;
+    String? schoolRegime = existingPreEnrollment?['schoolRegime']?.toString();
+    bool regimeRequired() {
+      final selected = classes.where((item) => item.id == classId).firstOrNull;
+      if (selected == null) return false;
+      final cycle = store.getSchoolCycles().where((item) => item.id == selected.cycleId).firstOrNull;
+      final code = (cycle?.code ?? '').toUpperCase();
+      return code == 'MATERNELLE' || code == 'PRIMAIRE';
+    }
     var saving = false;
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
@@ -889,8 +928,30 @@ class _StudentsPageState extends State<StudentsPage> {
                               Text(item.name, overflow: TextOverflow.ellipsis),
                         ))
                     .toList(),
-                onChanged: saving ? null : (value) => classId = value,
+                onChanged: saving
+                    ? null
+                    : (value) => setDialogState(() {
+                          classId = value;
+                          if (!regimeRequired()) schoolRegime = null;
+                        }),
               ),
+              if (regimeRequired())
+                DropdownButtonFormField<String>(
+                  key: const Key('pre-enrollment-regime'),
+                  isExpanded: true,
+                  initialValue: schoolRegime,
+                  decoration: const InputDecoration(labelText: 'Régime *'),
+                  items: const [
+                    DropdownMenuItem(
+                        value: 'part_time', child: Text('Mi-temps')),
+                    DropdownMenuItem(
+                        value: 'full_time', child: Text('Plein temps')),
+                  ],
+                  onChanged: saving
+                      ? null
+                      : (value) =>
+                          setDialogState(() => schoolRegime = value),
+                ),
             ]),
           ),
           actions: [
@@ -909,6 +970,11 @@ class _StudentsPageState extends State<StudentsPage> {
                             'Nom, prénom et classe sont obligatoires.');
                         return;
                       }
+                      if (regimeRequired() && schoolRegime == null) {
+                        AppToast.warning(dialogContext,
+                            'Choisissez Mi-temps ou Plein temps.');
+                        return;
+                      }
                       setDialogState(() => saving = true);
                       try {
                         final response = existingPreEnrollment == null
@@ -919,12 +985,15 @@ class _StudentsPageState extends State<StudentsPage> {
                                 academicYearId: yearId,
                                 desiredClassId: classId!,
                                 registrationKind: registrationKind,
+                                schoolRegime: schoolRegime,
                               )
                             : await store.updatePreEnrollmentRemote(
                                 existingPreEnrollment['id'].toString(), {
                                 'firstName': first.text.trim(),
                                 'lastName': last.text.trim(),
                                 'desiredClassId': classId,
+                                if (schoolRegime != null)
+                                  'schoolRegime': schoolRegime,
                               });
                         if (dialogContext.mounted)
                           Navigator.pop(dialogContext, response);
@@ -1196,6 +1265,103 @@ class _StudentsPageState extends State<StudentsPage> {
     }
   }
 
+  Future<void> _changeRegime(StudentModel student) async {
+    final store = context.read<StoreService>();
+    final yearId = store.getSelectedAcademicYearId();
+    if (yearId == null) {
+      AppToast.warning(context, 'Sélectionnez une année scolaire.');
+      return;
+    }
+    try {
+      final history = await store.studentRegistrationHistoryRemote(student.id);
+      final current = history.where((item) => item.academicYearId == yearId).firstOrNull;
+      if (current == null) {
+        if (mounted) AppToast.warning(context, 'Inscription active introuvable.');
+        return;
+      }
+      String regime = current.schoolRegime == 'part_time'
+          ? 'full_time'
+          : 'part_time';
+      DateTime effectiveDate = DateTime.now();
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            title: const Text('Changer le régime'),
+            content: SizedBox(
+              width: 430,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(student.fullName,
+                      style: const TextStyle(fontWeight: FontWeight.w700)),
+                  const SizedBox(height: AppSpacing.s3),
+                  DropdownButtonFormField<String>(
+                    key: const Key('change-regime-value'),
+                    isExpanded: true,
+                    initialValue: regime,
+                    decoration: const InputDecoration(labelText: 'Nouveau régime'),
+                    items: const [
+                      DropdownMenuItem(
+                          value: 'part_time', child: Text('Mi-temps')),
+                      DropdownMenuItem(
+                          value: 'full_time', child: Text('Plein temps')),
+                    ],
+                    onChanged: (value) =>
+                        setDialogState(() => regime = value ?? regime),
+                  ),
+                  const SizedBox(height: AppSpacing.s3),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Date d’effet'),
+                    subtitle: Text(
+                        '${effectiveDate.day.toString().padLeft(2, '0')}/${effectiveDate.month.toString().padLeft(2, '0')}/${effectiveDate.year}'),
+                    trailing: const Icon(Icons.calendar_month_outlined),
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: dialogContext,
+                        initialDate: effectiveDate,
+                        firstDate: DateTime(2000),
+                        lastDate: DateTime(2100),
+                      );
+                      if (picked != null) {
+                        setDialogState(() => effectiveDate = picked);
+                      }
+                    },
+                  ),
+                  const SizedBox(height: AppSpacing.s2),
+                  const Text(
+                    'Les paiements déjà validés restent inchangés. Le nouveau tarif s’appliquera uniquement aux mois concernés par cette date d’effet.',
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: const Text('Annuler')),
+              FilledButton(
+                  onPressed: () => Navigator.pop(dialogContext, true),
+                  child: const Text('Enregistrer')),
+            ],
+          ),
+        ),
+      );
+      if (confirmed != true) return;
+      await store.changeStudentRegimeRemote(
+        current.id,
+        regime,
+        '${effectiveDate.year.toString().padLeft(4, '0')}-${effectiveDate.month.toString().padLeft(2, '0')}-${effectiveDate.day.toString().padLeft(2, '0')}',
+      );
+      if (!mounted) return;
+      AppToast.success(context, 'Régime mis à jour avec historique conservé.');
+      await _load();
+    } on ApiException catch (error) {
+      if (mounted) AppToast.error(context, error.message);
+    }
+  }
+
   Future<void> _finalizePreEnrollment(Map<String, dynamic> item) async {
     try {
       final student = await context.read<StoreService>().studentDetailsRemote(
@@ -1424,6 +1590,14 @@ class _StudentsPageState extends State<StudentsPage> {
                                     tooltip: 'Historique',
                                     onPressed: () => _showHistory(student),
                                     icon: const Icon(Icons.history)),
+                                if (const {'maternelle', 'primaire'}
+                                    .contains((student.cycle ?? '').toLowerCase()))
+                                  IconButton(
+                                    key: Key('change-regime-${student.id}'),
+                                    tooltip: 'Changer le régime',
+                                    onPressed: () => _changeRegime(student),
+                                    icon: const Icon(Icons.swap_horiz_rounded),
+                                  ),
                                 IconButton(
                                     tooltip: 'Réinscrire',
                                     onPressed: () =>

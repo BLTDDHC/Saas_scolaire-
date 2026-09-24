@@ -65,19 +65,32 @@ void main() {
   });
 
   testWidgets(
-      'inscription expose régime et TD uniquement pour un niveau éligible',
+      'inscription primaire exige Mi-temps ou Plein temps sans option Normal',
       (tester) async {
     final store = await createLegacyStore(withSeedData: true);
-    final schoolClass = ClassModel(
-      id: 'class-3e',
-      name: '3e A',
-      level: '3e',
+    final cycle = await store.createSchoolCycle(code: 'PRIMAIRE');
+    final year = store.getAcademicYears().first;
+    final level = SchoolLevelModel(
+      id: 'level-cm2',
+      name: 'CM2',
+      cycle: 'Primaire',
+      cycleId: cycle.id,
       schoolId: 'school-1',
-      academicYearId: 'year-1',
+    );
+    store.addSchoolLevel(level);
+    final schoolClass = ClassModel(
+      id: 'class-cm2',
+      name: 'CM2 A',
+      cycleId: cycle.id,
+      level: 'CM2',
+      levelId: level.id,
+      structuredLevelId: level.id,
+      schoolId: 'school-1',
+      academicYearId: year.id,
     );
     store.addClass(schoolClass);
     final student = StudentModel(
-      id: 'new-student',
+      id: 'new-primary',
       firstName: 'Nouvel',
       lastName: 'Élève',
       schoolId: schoolClass.schoolId,
@@ -106,14 +119,68 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Inscription académique'), findsOneWidget);
-    expect(find.text('Régime'), findsOneWidget);
-    expect(find.text('Normal'), findsOneWidget);
-    await tester.tap(find.text('Normal'));
+    expect(find.byKey(const Key('student-registration-regime')), findsOneWidget);
+    expect(find.text('Régime *'), findsOneWidget);
+    expect(find.text('Normal'), findsNothing);
+    await tester.tap(find.byKey(const Key('student-registration-regime')));
     await tester.pumpAndSettle();
+    expect(find.text('Mi-temps'), findsOneWidget);
     expect(find.text('Plein temps'), findsOneWidget);
-    expect(find.text('Option TD'), findsOneWidget);
-    expect(
-        find.text('Option académique, sans montant financier'), findsOneWidget);
+  });
+
+  testWidgets('inscription collège ne propose aucun régime', (tester) async {
+    final store = await createLegacyStore(withSeedData: true);
+    final cycle = await store.createSchoolCycle(code: 'COLLEGE');
+    final year = store.getAcademicYears().first;
+    final level = SchoolLevelModel(
+      id: 'level-college',
+      name: '3e',
+      cycle: 'Collège',
+      cycleId: cycle.id,
+      schoolId: 'school-1',
+    );
+    store.addSchoolLevel(level);
+    final schoolClass = ClassModel(
+      id: 'class-college',
+      name: '3e A',
+      cycleId: cycle.id,
+      level: '3e',
+      levelId: level.id,
+      structuredLevelId: level.id,
+      schoolId: 'school-1',
+      academicYearId: year.id,
+    );
+    store.addClass(schoolClass);
+    final student = StudentModel(
+      id: 'new-college',
+      firstName: 'Nouvel',
+      lastName: 'Collège',
+      schoolId: schoolClass.schoolId,
+    );
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<StoreService>.value(
+        value: store,
+        child: MaterialApp(
+          home: Builder(
+            builder: (context) => FilledButton(
+              onPressed: () => openStudentRegistrationModal(
+                context,
+                student,
+                preselectedYearId: schoolClass.academicYearId,
+                preselectedClassId: schoolClass.id,
+              ),
+              child: const Text('Ouvrir collège'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Ouvrir collège'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('student-registration-regime')), findsNothing);
+    expect(find.text('Régime *'), findsNothing);
   });
 
   testWidgets("l'interface ne propose que inscription et reinscription",

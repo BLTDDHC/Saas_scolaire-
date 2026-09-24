@@ -419,6 +419,233 @@ class SchoolFinance(unittest.TestCase):
     def test_month_outside_year_rejected(self):
         with self.assertRaises(HTTPException):self.roster(month='2027-12')
 
+    def primary_regime_context(self):
+        cycle = self.add(m.SchoolCycle(
+            establishment_id=self.tenant.id,
+            code='PRIMAIRE',
+            name='Primaire',
+            sort_order=1,
+        ))
+        level = self.add(m.SchoolLevel(
+            establishment_id=self.tenant.id,
+            cycle_id=cycle.id,
+            code='CM2',
+            name='CM2',
+        ))
+        school_class = self.add(m.SchoolClass(
+            establishment_id=self.tenant.id,
+            academic_year_id=self.year.id,
+            cycle_id=cycle.id,
+            school_level_id=level.id,
+            name='CM2 A',
+            status='active',
+        ))
+        student = self.add(m.Student(
+            establishment_id=self.tenant.id,
+            first_name='Régime',
+            last_name='Primaire',
+            status='active',
+        ))
+        registration = self.add(m.StudentAcademicRegistration(
+            establishment_id=self.tenant.id,
+            student_id=student.id,
+            class_id=school_class.id,
+            academic_year_id=self.year.id,
+            registration_date=date(2026, 9, 1),
+            school_regime='full_time',
+            status='validated',
+        ))
+        self.add(m.StudentRegimeHistory(
+            establishment_id=self.tenant.id,
+            registration_id=registration.id,
+            student_id=student.id,
+            academic_year_id=self.year.id,
+            regime='full_time',
+            effective_date=date(2026, 9, 1),
+            changed_by=uuid.UUID(self.admin.id),
+        ))
+        return cycle, level, school_class, student, registration
+
+    def test_primary_regime_is_required_and_college_has_no_business_regime(self):
+        _, _, primary_class, _, _ = self.primary_regime_context()
+        with self.assertRaises(HTTPException) as missing:
+            m.normalize_registration_regime(primary_class, None, self.s)
+        self.assertEqual(missing.exception.status_code, 422)
+        self.assertEqual(
+            m.normalize_registration_regime(primary_class, 'part_time', self.s),
+            'part_time',
+        )
+        self.assertEqual(
+            m.normalize_registration_regime(self.cl, None, self.s),
+            'normal',
+        )
+        with self.assertRaises(HTTPException):
+            m.normalize_registration_regime(self.cl, 'full_time', self.s)
+
+    def test_primary_monthly_tariff_requires_regime_and_college_rejects_it(self):
+        _, _, school_class, _, _ = self.primary_regime_context()
+        with self.assertRaises(HTTPException) as missing:
+            m.create_finance_fee(
+                m.FinanceFeeInput(
+                    name='Primaire sans régime',
+                    amount=10000,
+                    scope='class',
+                    classId=str(school_class.id),
+                    type='tuition',
+                    frequency='monthly',
+                    academicYearId=str(self.year.id),
+                    schoolId=self.school,
+                ),
+                self.admin,
+                self.s,
+            )
+        self.assertEqual(missing.exception.status_code, 422)
+        with self.assertRaises(HTTPException) as college:
+            m.create_finance_fee(
+                m.FinanceFeeInput(
+                    name='Collège plein temps',
+                    amount=10000,
+                    scope='class',
+                    classId=str(self.cl.id),
+                    type='tuition',
+                    frequency='monthly',
+                    regime='full_time',
+                    academicYearId=str(self.year.id),
+                    schoolId=self.school,
+                ),
+                self.admin,
+                self.s,
+            )
+        self.assertEqual(college.exception.status_code, 422)
+
+    def test_regime_change_preserves_old_payment_and_switches_future_tariff(self):
+        _, _, school_class, student, registration = self.primary_regime_context()
+        for regime, amount in [('full_time', 10000), ('part_time', 6000)]:
+            m.create_finance_fee(
+                m.FinanceFeeInput(
+                    name=f'Tarif {regime}',
+                    amount=amount,
+                    scope='class',
+                    classId=str(school_class.id),
+                    type='tuition',
+                    frequency='monthly',
+                    regime=regime,
+                    academicYearId=str(self.year.id),
+                    schoolId=self.school,
+                ),
+                self.admin,
+                self.s,
+            )
+        before = f.monthly_situation(
+            registration.id, self.year.id, self.school, self.admin, self.s
+        )
+        october = next(row for row in before['months'] if row['month'] == '2026-10')
+        self.assertEqual((october['regime'], october['expected']),
+                         ('full_time', 10000))
+        paid = f.pay(
+            f.SchoolPaymentInput(
+                registrationId=registration.id,
+                type='tuition',
+                month='2026-10',
+                amount=10000,
+                schoolId=self.school,
+            ),
+            self.admin,
+            self.s,
+        )
+        receipt_id = paid['receipt']['id']
+        m.change_student_regime(
+            registration.id,
+            m.StudentRegimeChangeInput(
+                regime='part_time',
+                effectiveDate=date(2027, 2, 1),
+            ),
+            self.admin,
+            self.s,
+        )
+        after = f.monthly_situation(
+            registration.id, self.year.id, self.school, self.admin, self.s
+        )
+        october_after = next(
+            row for row in after['months'] if row['month'] == '2026-10'
+        )
+        february = next(
+            row for row in after['months'] if row['month'] == '2027-02'
+        )
+        self.assertEqual(
+            (october_after['regime'], october_after['expected'],
+             october_after['paid'], october_after['remaining']),
+            ('full_time', 10000, 10000, 0),
+        )
+        self.assertEqual(
+            (february['regime'], february['expected'], february['paid']),
+            ('part_time', 6000, 0),
+        )
+        receipt = f.receipt(receipt_id, self.school, self.admin, self.s)
+        self.assertEqual(receipt['amount'], 10000)
+        history = list(self.s.scalars(select(m.StudentRegimeHistory).where(
+            m.StudentRegimeHistory.registration_id == registration.id
+        ).order_by(m.StudentRegimeHistory.effective_date)).all())
+        self.assertEqual([row.regime for row in history],
+                         ['full_time', 'part_time'])
+        self.assertEqual(history[0].ended_at, date(2027, 1, 31))
+
+    def test_parent_finance_is_isolated_to_linked_child(self):
+        _, _, school_class, student, registration = self.primary_regime_context()
+        m.create_finance_fee(
+            m.FinanceFeeInput(
+                name='Tarif plein temps',
+                amount=10000,
+                scope='class',
+                classId=str(school_class.id),
+                type='tuition',
+                frequency='monthly',
+                regime='full_time',
+                academicYearId=str(self.year.id),
+                schoolId=self.school,
+            ),
+            self.admin,
+            self.s,
+        )
+        user = self.add(m.User(
+            email=f'{uuid.uuid4()}@parent.invalid',
+            password_hash='not-a-login',
+            name='Parent finance',
+            role='parent',
+            school_id=self.tenant.id,
+            status='active',
+        ))
+        guardian = self.add(m.Guardian(
+            establishment_id=self.tenant.id,
+            user_id=user.id,
+            first_name='Parent',
+            last_name='Finance',
+            status='active',
+        ))
+        self.add(m.StudentGuardian(
+            establishment_id=self.tenant.id,
+            student_id=student.id,
+            guardian_id=guardian.id,
+            relationship='parent',
+            is_primary=True,
+        ))
+        parent = m.Principal(
+            id=str(user.id),
+            role='parent',
+            school_id=self.school,
+        )
+        result = f.parent_situation(
+            student.id, self.year.id, parent, self.s
+        )
+        self.assertEqual(result['studentId'], str(student.id))
+        self.assertEqual(result['regime'], 'full_time')
+        self.assertGreater(result['summary']['remaining'], 0)
+        with self.assertRaises(HTTPException) as denied:
+            f.parent_situation(
+                self.students[0].id, self.year.id, parent, self.s
+            )
+        self.assertEqual(denied.exception.status_code, 404)
+
     def test_teacher_http_access_denied(self):
         m.app.dependency_overrides[m.principal]=lambda:self.principals[0]
         m.app.dependency_overrides[m.db]=lambda:self.s
