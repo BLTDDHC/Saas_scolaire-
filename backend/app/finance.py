@@ -255,7 +255,8 @@ def invoice(session, current, school, reg, cl, student, kind, month, fee_id=None
     projected_payload = {'id': identifier, 'registrationId': str(reg.id), 'schoolRegistrationId': str(reg.id),
             'studentId': str(student.id), 'academicYearId': str(reg.academic_year_id),
             'feeId': fee.id if fee else None, 'amount': int(fee.payload['amount']) if fee else 0,
-            'type': kind, 'month': month, 'schoolId': school, 'status': 'assigned'}
+            'type': kind, 'month': month, 'regime': applicable_regime,
+            'schoolId': school, 'status': 'assigned'}
     stored_assignment = session.get(m.Resource, {'kind': 'finance-fee-assignments', 'id': identifier})
     assignment = stored_assignment or m.Resource(
         id=identifier, kind='finance-fee-assignments', school_id=school,
@@ -294,7 +295,7 @@ def invoice(session, current, school, reg, cl, student, kind, month, fee_id=None
         'academicYearId': str(reg.academic_year_id), 'schoolId': school,
         'type': kind, 'month': month, 'label': label, 'feeId': fee.id if fee else None,
         'eligible': eligible, 'hasTd': reg.has_td,
-        'regime': applicable_regime, **balance,
+        'regime': assignment.payload.get('regime', applicable_regime), **balance,
         'credit': max(0, balance['paid']-balance['expected'])}
     if not eligible:
         row['status'] = 'not_applicable'
