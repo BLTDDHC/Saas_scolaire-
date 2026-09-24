@@ -116,6 +116,35 @@ class StudentResultsView(unittest.TestCase):
         self.assertEqual(result['notes'][0]['periodType'], 'trimester')
         self.assertEqual(result['notes'][0]['presence'], 'present')
 
+
+    def test_departmental_assignment_is_exposed_as_separate_result(self):
+        payload = self.official()
+        payload['eventResults']['devoir_departemental'] = {
+            'event': 'Devoir départemental',
+            'students': [{
+                'studentId': str(self.student.id),
+                'average': 15,
+                'rank': 1,
+                'subjects': [{
+                    'subject': 'Mathématiques',
+                    'average': 15,
+                    'grades': [{'value': 15, 'maxValue': 20}],
+                }],
+            }],
+        }
+        with patch.object(m, 'school_results', return_value=payload):
+            result = m.student_results(
+                self.student.id, self.year.id, self.admin, self.s
+            )
+        codes = {
+            exam['code']
+            for period in result['periods']
+            for exam in period['exams']
+        }
+        self.assertIn('devoir_departemental', codes)
+        self.assertIn('bepc_blanc', codes)
+
+
     def test_period_metadata_distinguishes_month_from_trimester(self):
         month = self.add(m.AcademicPeriod(
             establishment_id=self.tenant.id,
