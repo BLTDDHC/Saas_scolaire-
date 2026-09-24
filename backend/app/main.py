@@ -11326,6 +11326,7 @@ def statistics(
     class_id: str | None = None,
     period_id: str | None = None,
     subject_id: str | None = None,
+    event_code: str | None = None,
     current: Principal = Depends(require_module_roles("statistics", "admin")),
     session: Session = Depends(db),
 ):
@@ -11388,6 +11389,9 @@ def statistics(
             )
         ):
             raise HTTPException(422, "Période hors du périmètre")
+    requested_event_code = (
+        validate_evaluation_event_code(event_code) if event_code else None
+    )
     requested_subject_id = None
     if subject_id:
         try:
@@ -11457,6 +11461,13 @@ def statistics(
             period = periods.get(snap.academic_period_id)
             if not period or period.status != "active":
                 continue
+            if requested_event_code:
+                event_payload = (
+                    (payload.get("eventResults") or {})
+                    .get(requested_event_code)
+                )
+                if not event_payload or not event_payload.get("students"):
+                    continue
             valid_snapshots.append((snap, period))
             if requested_period_id:
                 if snap.academic_period_id != requested_period_id:
@@ -11501,7 +11512,15 @@ def statistics(
         cycle_name = cycle_row.name if cycle_row else "Cycle non renseigné"
         level_row = levels_by_id.get(school_class.school_level_id) if school_class.school_level_id else None
         level_name = level_row.name if level_row else "Niveau non renseigné"
-        for result in (snapshot.payload or {}).get("students") or []:
+        snapshot_payload = snapshot.payload or {}
+        result_rows = snapshot_payload.get("students") or []
+        if requested_event_code:
+            result_rows = (
+                ((snapshot_payload.get("eventResults") or {})
+                 .get(requested_event_code) or {})
+                .get("students") or []
+            )
+        for result in result_rows:
             general_average = result.get("average")
             if general_average is not None:
                 official_result_averages.append(
@@ -11626,7 +11645,15 @@ def statistics(
             continue
         scale = _statistics_class_scale(session, school_class)
         values = []
-        for result in (snapshot.payload or {}).get("students") or []:
+        snapshot_payload = snapshot.payload or {}
+        evolution_rows = snapshot_payload.get("students") or []
+        if requested_event_code:
+            evolution_rows = (
+                ((snapshot_payload.get("eventResults") or {})
+                 .get(requested_event_code) or {})
+                .get("students") or []
+            )
+        for result in evolution_rows:
             source = result
             if requested_subject_id:
                 source = next((subject for subject in result.get("subjects") or []
@@ -11671,6 +11698,9 @@ def statistics(
     if requested_subject_id:
         monthly_statement = monthly_statement.where(
             Evaluation.subject_id == requested_subject_id)
+    if requested_event_code:
+        monthly_statement = monthly_statement.where(
+            Evaluation.exam_code == requested_event_code)
     monthly_buckets: dict[str, dict[str, Any]] = {}
     if class_ids:
         for scheduled_date, value, maximum in session.execute(monthly_statement).all():
@@ -11759,7 +11789,7 @@ def statistics(
     }
     # Once annual decisions exist they are the strongest source of truth for
     # the headline success/failure rate (admitted versus not admitted).
-    if decisions["total"]:
+    if decisions["total"] and not requested_event_code:
         success_count = decisions["admitted"]
         failure_count = decisions["failed"] + decisions["excluded"]
         decided_total = success_count + failure_count
@@ -11820,7 +11850,17 @@ def statistics(
     if requested_subject_id:
         evaluation_statement = evaluation_statement.where(
             Evaluation.subject_id == requested_subject_id)
-    evaluations = [] if not class_ids else list(session.scalars(evaluation_statement).all())
+    filter_evaluations = [] if not class_ids else list(
+        session.scalars(evaluation_statement).all()
+    )
+    filter_event_codes = sorted({
+        item.exam_code for item in filter_evaluations
+        if item.exam_code in KNOWN_EVALUATION_EVENTS
+    }, key=lambda code: list(KNOWN_EVALUATION_EVENTS).index(code))
+    evaluations = (
+        [item for item in filter_evaluations
+         if not requested_event_code or item.exam_code == requested_event_code]
+    )
     evaluation_ids = [item.id for item in evaluations]
     grade_counts = dict(session.execute(
         select(Grade.evaluation_id, func.count(Grade.id))
@@ -12034,6 +12074,7 @@ def statistics(
             "classId": class_id,
             "periodId": str(requested_period_id) if requested_period_id else None,
             "subjectId": str(requested_subject_id) if requested_subject_id else None,
+            "eventCode": requested_event_code,
         },
         "studentCount": student_count,
         "teacherCount": teacher_count,
@@ -12080,6 +12121,10 @@ def statistics(
             } for item in filter_periods],
             "subjects": [{"id": str(item.id), "name": item.name}
                          for item in filter_subjects],
+            "events": [{
+                "code": code,
+                "name": KNOWN_EVALUATION_EVENTS[code],
+            } for code in filter_event_codes],
         },
         "insights": insights,
         "alerts": alerts,
