@@ -2725,6 +2725,7 @@ class StoreService extends ChangeNotifier {
     required String academicYearId,
     required String desiredClassId,
     String registrationKind = 'registration',
+    String? schoolRegime,
     bool submit = true,
   }) =>
       _repository.createPreEnrollment({
@@ -2734,6 +2735,7 @@ class StoreService extends ChangeNotifier {
         'academicYearId': academicYearId,
         'desiredClassId': desiredClassId,
         'registrationKind': registrationKind,
+        if (schoolRegime != null) 'schoolRegime': schoolRegime,
         'status': submit ? 'submitted' : 'draft',
       });
 
@@ -2743,7 +2745,7 @@ class StoreService extends ChangeNotifier {
 
   Future<Map<String, dynamic>> approvePreEnrollmentRemote(String id,
           {String? classId,
-          String schoolRegime = 'normal',
+          String? schoolRegime,
           bool hasTd = false,
           Map<String, dynamic> options = const {}}) =>
       _repository.approvePreEnrollment(
@@ -2757,6 +2759,15 @@ class StoreService extends ChangeNotifier {
   Future<Map<String, dynamic>> rejectPreEnrollmentRemote(
           String id, String note) =>
       _repository.updatePreEnrollmentStatus(id, 'rejected', decisionNote: note);
+
+  Future<Map<String, dynamic>> changeStudentRegimeRemote(
+          String registrationId,
+          {required String schoolRegime,
+          required String effectiveDate}) =>
+      _repository.changeStudentRegime(registrationId, {
+        'schoolRegime': schoolRegime,
+        'effectiveDate': effectiveDate,
+      });
 
   List<TeacherModel> getTeachers() {
     if (isSuperAdmin()) return List.unmodifiable(_teachers);
@@ -6197,6 +6208,9 @@ class StoreService extends ChangeNotifier {
   Future<Map<String, dynamic>> loadFinanceMonthlySituation(
           String registrationId, Map<String, String> query) =>
       _repository.financeMonthlySituation(registrationId, query);
+  Future<Map<String, dynamic>> parentFinanceSituationRemote(
+          String studentId, String academicYearId) =>
+      _repository.parentFinanceSituation(studentId, academicYearId);
   Future<Map<String, dynamic>> paySchoolFinance(Map<String, dynamic> body) =>
       _repository.schoolFinancePayment(body);
   Future<Map<String, dynamic>> saveFinanceTariff(Map<String, dynamic> body,
