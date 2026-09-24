@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - finalisation/**
+      - functional-ux-pass/**
   pull_request:
     branches:
       - main
