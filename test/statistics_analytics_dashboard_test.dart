@@ -116,6 +116,24 @@ void main() {
     expect(find.text('80.0 %'), findsNothing);
   });
 
+  testWidgets('reste lisible sur un écran moyen avec libellés complets',
+      (tester) async {
+    tester.view.physicalSize = const Size(1024, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(app(StatisticsSnapshotView(
+      request: Future.value(snapshot(students: 6, average: 12, success: 80)),
+    )));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Évolution trimestrielle'), findsOneWidget);
+    expect(find.text('Performance par matière'), findsOneWidget);
+    expect(find.text('Moyenne générale'), findsWidgets);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('reste lisible sur un écran étroit', (tester) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
