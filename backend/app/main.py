@@ -1482,7 +1482,7 @@ class EvaluationProgramInput(BaseModel):
     exam_code: Literal[
         'devoir_1', 'devoir_2', 'composition',
         'cepe_test', 'cepe_blanc', 'bepc_test', 'bepc_blanc',
-        'bac_test', 'bac_blanc'
+        'bac_test', 'bac_blanc', 'devoir_departemental'
     ] | None = Field(default=None, alias='examCode')
     class_ids: list[uuid.UUID] = Field(alias='classIds', min_length=1, max_length=100)
     academic_period_id: uuid.UUID = Field(alias='periodId')
@@ -1895,7 +1895,7 @@ class EvaluationInput(BaseModel):
     type: Literal['devoir', 'composition', 'test', 'exam', 'exam_blanc']
     exam_code: Literal[
         'cepe_test', 'cepe_blanc', 'bepc_test', 'bepc_blanc',
-        'bac_test', 'bac_blanc'
+        'bac_test', 'bac_blanc', 'devoir_departemental'
     ] | None = Field(default=None, alias='examCode')
     class_id: uuid.UUID = Field(alias='classId')
     subject_id: uuid.UUID = Field(alias='subjectId')
@@ -6721,6 +6721,18 @@ def validate_program_type_for_class(
                 f"Le type d'évaluation ne correspond pas à la classe {school_class.name}",
             )
         return
+    if exam_code == "devoir_departemental":
+        if evaluation_type != "exam":
+            raise HTTPException(
+                422,
+                "Le Devoir départemental doit utiliser le flux des examens spécifiques",
+            )
+        if cycle_code not in {"COLLEGE", "LYCEE"}:
+            raise HTTPException(
+                422,
+                "Le Devoir départemental est disponible uniquement au Collège et au Lycée",
+            )
+        return
     expected_type = "test" if exam_code in {
         "cepe_test", "bepc_test", "bac_test"
     } else "exam_blanc"
@@ -7793,6 +7805,7 @@ KNOWN_EVALUATION_EVENTS = {
     'bepc_blanc': 'BEPC blanc',
     'bac_test': 'BAC test',
     'bac_blanc': 'BAC blanc',
+    'devoir_departemental': 'Devoir départemental',
 }
 
 
@@ -11307,6 +11320,7 @@ def statistics(
     class_id: str | None = None,
     period_id: str | None = None,
     subject_id: str | None = None,
+    event_code: str | None = None,
     current: Principal = Depends(require_module_roles("statistics", "admin")),
     session: Session = Depends(db),
 ):
@@ -11382,6 +11396,11 @@ def statistics(
             or selected_subject.status != "active"
         ):
             raise HTTPException(422, "Matière hors du périmètre")
+    requested_event_code = (
+        validate_evaluation_event_code(event_code)
+        if event_code and event_code.strip()
+        else None
+    )
     allowed = direction_cycle_scope(current)
     if allowed is not None:
         class_stmt = class_stmt.where(SchoolClass.cycle_id.in_(allowed))
@@ -11455,6 +11474,13 @@ def statistics(
             ):
                 latest_by_class[snap.class_id] = (snap, order)
 
+    def statistics_students(snapshot: ResultCalculation) -> list[dict[str, Any]]:
+        payload = snapshot.payload or {}
+        if requested_event_code:
+            event_payload = (payload.get("eventResults") or {}).get(requested_event_code) or {}
+            return list(event_payload.get("students") or [])
+        return list(payload.get("students") or [])
+
     ranking: list[dict[str, Any]] = []
     # The result success KPI always follows the official general result. A
     # subject filter may refine subject analysis, but must never redefine a
@@ -11482,7 +11508,7 @@ def statistics(
         cycle_name = cycle_row.name if cycle_row else "Cycle non renseigné"
         level_row = levels_by_id.get(school_class.school_level_id) if school_class.school_level_id else None
         level_name = level_row.name if level_row else "Niveau non renseigné"
-        for result in (snapshot.payload or {}).get("students") or []:
+        for result in statistics_students(snapshot):
             general_average = result.get("average")
             if general_average is not None:
                 official_result_averages.append(
@@ -11607,7 +11633,7 @@ def statistics(
             continue
         scale = _statistics_class_scale(session, school_class)
         values = []
-        for result in (snapshot.payload or {}).get("students") or []:
+        for result in statistics_students(snapshot):
             source = result
             if requested_subject_id:
                 source = next((subject for subject in result.get("subjects") or []
@@ -11719,6 +11745,31 @@ def statistics(
             StudentAcademicRegistration.status.in_(("pending", "validated", "active")),
         )
     ) or 0)
+    level_distribution = []
+    for level_id_value in sorted(
+        selected_level_ids,
+        key=lambda value: (
+            levels_by_id.get(value).sort_order if levels_by_id.get(value) else 9999,
+            (levels_by_id.get(value).name if levels_by_id.get(value) else "").casefold(),
+        ),
+    ):
+        level_row = levels_by_id.get(level_id_value)
+        level_class_ids = [
+            item.id for item in school_classes
+            if item.school_level_id == level_id_value
+        ]
+        count = 0 if not level_class_ids else int(session.scalar(
+            select(func.count(func.distinct(StudentAcademicRegistration.student_id))).where(
+                StudentAcademicRegistration.class_id.in_(level_class_ids),
+                StudentAcademicRegistration.status.in_(("pending", "validated", "active")),
+            )
+        ) or 0)
+        if count:
+            level_distribution.append({
+                "levelId": str(level_id_value),
+                "level": level_row.name if level_row else "Niveau",
+                "studentCount": count,
+            })
     decision_rows = [] if not class_ids else list(session.scalars(
         select(StudentAnnualDecision).where(
             StudentAnnualDecision.student_id.in_(
@@ -12003,6 +12054,30 @@ def statistics(
             Affectation.class_id.in_(class_ids), Affectation.status == "active"
         )), Subject.status == "active"
     ).order_by(Subject.name)).all()) if class_ids else []
+    filter_event_codes = []
+    if class_ids:
+        event_statement = select(Evaluation.exam_code).where(
+            Evaluation.class_id.in_(class_ids),
+            Evaluation.exam_code.is_not(None),
+            Evaluation.status != "archived",
+        )
+        if requested_period_id:
+            event_statement = event_statement.where(
+                Evaluation.academic_period_id == requested_period_id
+            )
+        if requested_subject_id:
+            event_statement = event_statement.where(
+                Evaluation.subject_id == requested_subject_id
+            )
+        seen_codes = {
+            str(code) for code in session.scalars(event_statement).all()
+            if code in KNOWN_EVALUATION_EVENTS
+        }
+        filter_event_codes = [
+            {"code": code, "name": KNOWN_EVALUATION_EVENTS[code]}
+            for code in KNOWN_EVALUATION_EVENTS
+            if code in seen_codes
+        ]
     applied_cycle_id = None
     if requested_cycle and len(selected_cycle_ids) == 1:
         applied_cycle_id = str(next(iter(selected_cycle_ids)))
@@ -12015,6 +12090,7 @@ def statistics(
             "classId": class_id,
             "periodId": str(requested_period_id) if requested_period_id else None,
             "subjectId": str(requested_subject_id) if requested_subject_id else None,
+            "eventCode": requested_event_code,
         },
         "studentCount": student_count,
         "teacherCount": teacher_count,
@@ -12042,6 +12118,7 @@ def statistics(
         "distribution": distribution,
         "byCycle": by_cycle,
         "byLevel": by_level,
+        "levelDistribution": level_distribution,
         "byClass": by_class,
         "bySubject": by_subject,
         "evolution": evolution,
@@ -12061,6 +12138,7 @@ def statistics(
             } for item in filter_periods],
             "subjects": [{"id": str(item.id), "name": item.name}
                          for item in filter_subjects],
+            "resultEvents": filter_event_codes,
         },
         "insights": insights,
         "alerts": alerts,
