@@ -373,43 +373,85 @@ class _StatisticsPageState extends State<StatisticsPage> {
 /// retain the previous value when its future changes; checking the connection
 /// state first guarantees that stale KPI values are never shown as if they
 /// belonged to the newly selected filters.
-class StatisticsSnapshotView extends StatelessWidget {
+class StatisticsSnapshotView extends StatefulWidget {
   const StatisticsSnapshotView({super.key, required this.request});
 
   final Future<Map<String, dynamic>> request;
 
   @override
-  Widget build(BuildContext context) => FutureBuilder<Map<String, dynamic>>(
-        key: ObjectKey(request),
-        future: request,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
-            return const WorkspaceLoadingState(
-              label: 'Mise à jour des analyses…',
-            );
-          }
-          if (snapshot.hasError || !snapshot.hasData) {
-            return const WorkspaceErrorState(
-              message: 'Impossible de charger les statistiques.',
-            );
-          }
-          final data = snapshot.data!;
-          return TweenAnimationBuilder<double>(
-            key: ValueKey('${data['snapshotGeneratedAt'] ?? data.hashCode}'),
-            tween: Tween(begin: 0, end: 1),
-            duration: const Duration(milliseconds: 260),
-            curve: Curves.easeOutCubic,
-            builder: (context, value, child) => Opacity(
-              opacity: value,
-              child: Transform.translate(
-                offset: Offset(0, 8 * (1 - value)),
-                child: child,
-              ),
-            ),
-            child: _StatisticsContent(data: data),
-          );
-        },
+  State<StatisticsSnapshotView> createState() => _StatisticsSnapshotViewState();
+}
+
+class _StatisticsSnapshotViewState extends State<StatisticsSnapshotView> {
+  Map<String, dynamic>? _data;
+  Object? _error;
+  bool _loading = true;
+  int _generation = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _bind(widget.request);
+  }
+
+  @override
+  void didUpdateWidget(covariant StatisticsSnapshotView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.request, widget.request)) {
+      _data = null;
+      _error = null;
+      _loading = true;
+      _bind(widget.request);
+    }
+  }
+
+  void _bind(Future<Map<String, dynamic>> request) {
+    final generation = ++_generation;
+    request.then((data) {
+      if (!mounted || generation != _generation) return;
+      setState(() {
+        _data = data;
+        _error = null;
+        _loading = false;
+      });
+    }, onError: (Object error, StackTrace stackTrace) {
+      if (!mounted || generation != _generation) return;
+      setState(() {
+        _data = null;
+        _error = error;
+        _loading = false;
+      });
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const WorkspaceLoadingState(
+        label: 'Mise à jour des analyses…',
       );
+    }
+    if (_error != null || _data == null) {
+      return const WorkspaceErrorState(
+        message: 'Impossible de charger les statistiques.',
+      );
+    }
+    final data = _data!;
+    return TweenAnimationBuilder<double>(
+      key: ValueKey('${data['snapshotGeneratedAt'] ?? data.hashCode}'),
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOutCubic,
+      builder: (context, value, child) => Opacity(
+        opacity: value,
+        child: Transform.translate(
+          offset: Offset(0, 8 * (1 - value)),
+          child: child,
+        ),
+      ),
+      child: _StatisticsContent(data: data),
+    );
+  }
 }
 
 class _StatisticsContent extends StatelessWidget {
