@@ -141,7 +141,7 @@ class _SettingsPageState extends State<SettingsPage> {
     final user = store.currentUser;
     return WorkspacePage(
       title: 'Paramètres',
-      subtitle: 'Votre profil, l’établissement et les réglages pédagogiques',
+      subtitle: 'Votre profil, l’établissement et vos préférences d’utilisation',
       children: [
         AppCard(
           title: 'Mon Profil Utilisateur',
@@ -165,8 +165,6 @@ class _SettingsPageState extends State<SettingsPage> {
           const CalendarSettingsCard(),
           const SizedBox(height: AppSpacing.s6),
         ],
-        const PedagogicalSettingsCard(),
-        const SizedBox(height: AppSpacing.s6),
         AppCard(
           title: 'Thème & Apparence',
           child:
