@@ -534,9 +534,9 @@ class _StatisticsContent extends StatelessWidget {
           const SizedBox(height: AppSpacing.s6),
           _LineChartCard(
             key: const Key('statistics-evolution-chart'),
-            title: 'Évolution trimestrielle',
+            title: 'Évolution des résultats trimestriels',
             subtitle:
-                'T1 → T2 → T3, uniquement à partir des résultats officiels',
+                'Moyenne générale sur 20 · résultats officiels uniquement',
             rows: evolution,
             labelKey: 'period',
             valueKey: 'average20',
@@ -980,18 +980,25 @@ class _LineChartCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: AppSpacing.s3),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: rows
-                      .map((row) => Flexible(
-                            child: Text(
-                              '${row[labelKey] ?? '—'}',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          ))
-                      .toList(),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Unité : moyenne générale sur 20',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.s2),
+                Wrap(
+                  spacing: AppSpacing.s4,
+                  runSpacing: AppSpacing.s2,
+                  children: rows.map((row) {
+                    final value =
+                        (row[valueKey] as num?)?.toDouble() ?? 0;
+                    return Text(
+                      '${row[labelKey] ?? '—'} : ${value.toStringAsFixed(2)} / 20',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    );
+                  }).toList(),
                 ),
               ],
             ),
@@ -1040,18 +1047,25 @@ class _VerticalBarsCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: AppSpacing.s3),
-                Row(
-                  children: visible
-                      .map((row) => Expanded(
-                            child: Text(
-                              '${row[labelKey] ?? '—'}',
-                              maxLines: 1,
-                              textAlign: TextAlign.center,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          ))
-                      .toList(),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Unité : moyenne générale sur 20',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.s2),
+                Wrap(
+                  spacing: AppSpacing.s3,
+                  runSpacing: AppSpacing.s2,
+                  children: visible.map((row) {
+                    final value =
+                        (row[valueKey] as num?)?.toDouble() ?? 0;
+                    return Text(
+                      '${row[labelKey] ?? '—'} : ${value.toStringAsFixed(2)} / 20',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    );
+                  }).toList(),
                 ),
               ],
             ),
