@@ -2575,6 +2575,92 @@ def validate_class_series_requirement(
     if canonical_cycle_code(cycle.code) == "LYCEE" and series_id is None:
         raise HTTPException(422, "Veuillez sélectionner une série.")
 
+def school_regime_cycle_code(school_class: SchoolClass, session: Session) -> str:
+    cycle = session.get(SchoolCycle, school_class.cycle_id) if school_class.cycle_id else None
+    return canonical_cycle_code(cycle.code if cycle else "")
+
+def validate_school_regime_for_class(
+    school_class: SchoolClass,
+    regime: str | None,
+    session: Session,
+) -> str:
+    cycle_code = school_regime_cycle_code(school_class, session)
+    if cycle_code in {"MATERNELLE", "PRIMAIRE"}:
+        if regime not in {"part_time", "full_time"}:
+            raise HTTPException(422, "Le régime Mi-temps ou Plein temps est obligatoire pour la Maternelle et le Primaire")
+        return regime
+    if regime not in {None, "", "normal"}:
+        raise HTTPException(422, "Le régime ne concerne pas le Collège ou le Lycée")
+    return "normal"
+
+def regime_history_rows(
+    session: Session,
+    registration_id: uuid.UUID,
+) -> list[StudentRegimeHistory]:
+    return list(session.scalars(select(StudentRegimeHistory).where(
+        StudentRegimeHistory.registration_id == registration_id
+    ).order_by(StudentRegimeHistory.effective_from, StudentRegimeHistory.created_at)).all())
+
+def regime_for_date(
+    session: Session,
+    registration: StudentAcademicRegistration,
+    target_date: date,
+) -> str | None:
+    school_class = session.get(SchoolClass, registration.class_id)
+    if not school_class:
+        return None
+    cycle_code = school_regime_cycle_code(school_class, session)
+    if cycle_code not in {"MATERNELLE", "PRIMAIRE"}:
+        return None
+    rows = regime_history_rows(session, registration.id)
+    matching = [
+        row for row in rows
+        if row.effective_from <= target_date
+        and (row.effective_to is None or row.effective_to >= target_date)
+    ]
+    if matching:
+        return matching[-1].regime
+    if registration.school_regime in {"part_time", "full_time"}:
+        return registration.school_regime
+    return None
+
+def ensure_initial_regime_history(
+    session: Session,
+    registration: StudentAcademicRegistration,
+    changed_by: uuid.UUID | None = None,
+) -> None:
+    school_class = session.get(SchoolClass, registration.class_id)
+    if not school_class:
+        return
+    if school_regime_cycle_code(school_class, session) not in {"MATERNELLE", "PRIMAIRE"}:
+        return
+    if registration.school_regime not in {"part_time", "full_time"}:
+        return
+    if session.scalar(select(StudentRegimeHistory.id).where(
+        StudentRegimeHistory.registration_id == registration.id
+    ).limit(1)):
+        return
+    session.add(StudentRegimeHistory(
+        establishment_id=registration.establishment_id,
+        registration_id=registration.id,
+        student_id=registration.student_id,
+        academic_year_id=registration.academic_year_id,
+        regime=registration.school_regime,
+        effective_from=registration.registration_date,
+        changed_by=changed_by,
+    ))
+
+def regime_history_json(item: StudentRegimeHistory) -> dict[str, Any]:
+    return {
+        "id": str(item.id),
+        "regime": item.regime,
+        "effectiveFrom": item.effective_from.isoformat(),
+        "effectiveTo": item.effective_to.isoformat() if item.effective_to else None,
+        "tariffAmount": item.tariff_amount,
+        "changedBy": str(item.changed_by) if item.changed_by else None,
+        "createdAt": item.created_at.isoformat(),
+    }
+
 def registration_json(item: StudentAcademicRegistration, session: Session) -> dict[str, Any]:
     school_class = session.get(SchoolClass, item.class_id)
     year = session.get(AcademicYear, item.academic_year_id)
