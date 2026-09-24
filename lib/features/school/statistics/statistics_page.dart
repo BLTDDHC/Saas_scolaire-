@@ -454,6 +454,13 @@ class _StatisticsSnapshotViewState extends State<StatisticsSnapshotView> {
   }
 }
 
+String _statisticsPercent(Object? raw) {
+  if (raw is! num) return 'Non calculé';
+  final value = raw.toDouble();
+  final decimals = value == value.roundToDouble() ? 1 : 2;
+  return '${value.toStringAsFixed(decimals)} %';
+}
+
 class _StatisticsContent extends StatelessWidget {
   const _StatisticsContent({required this.data});
 
@@ -526,17 +533,13 @@ class _StatisticsContent extends StatelessWidget {
             ),
             _Metric(
               label: 'Taux de réussite',
-              value: data['successRate'] == null
-                  ? 'Non calculé'
-                  : '${data['successRate']} %',
+              value: _statisticsPercent(data['successRate']),
               icon: Icons.trending_up_rounded,
               color: AppColors.success600,
             ),
             _Metric(
               label: 'Taux de présence',
-              value: data['attendanceRate'] == null
-                  ? 'Non calculé'
-                  : '${data['attendanceRate']} %',
+              value: _statisticsPercent(data['attendanceRate']),
               icon: Icons.calendar_month_outlined,
               color: AppColors.success600,
             ),
