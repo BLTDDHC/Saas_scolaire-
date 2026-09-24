@@ -52,6 +52,8 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
   String? _periodFilter;
   String? _subjectFilter;
   String? _typeFilter;
+  bool _showResults = false;
+  String? _resultSelection;
 
   @override
   void didChangeDependencies() {
@@ -69,6 +71,8 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
       _periodFilter = null;
       _subjectFilter = null;
       _typeFilter = null;
+      _showResults = false;
+      _resultSelection = null;
     }
   }
 
@@ -152,6 +156,37 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
             final sortedPeriods = periodOptions.toList()..sort();
             final sortedSubjects = subjectOptions.toList()..sort();
             final sortedTypes = typeOptions.toList()..sort();
+            final resultOptions = <Map<String, String>>[];
+            for (final year in years) {
+              for (final rawPeriod in (year['periods'] as List? ?? const [])) {
+                final period =
+                    Map<String, dynamic>.from(rawPeriod as Map);
+                final periodId = '${period['periodId'] ?? ''}';
+                final periodName = '${period['period'] ?? ''}'.trim();
+                if (periodId.isEmpty || periodName.isEmpty) continue;
+                resultOptions.add({
+                  'value': 'period:$periodId',
+                  'label': periodName,
+                  'periodId': periodId,
+                  'eventCode': '',
+                });
+                for (final rawExam in (period['exams'] as List? ?? const [])) {
+                  final exam = Map<String, dynamic>.from(rawExam as Map);
+                  final code = '${exam['code'] ?? ''}'.trim();
+                  final name = '${exam['name'] ?? ''}'.trim();
+                  if (code.isEmpty || name.isEmpty) continue;
+                  resultOptions.add({
+                    'value': 'event:$periodId:$code',
+                    'label': '$periodName · $name',
+                    'periodId': periodId,
+                    'eventCode': code,
+                  });
+                }
+              }
+            }
+            final seenResultValues = <String>{};
+            resultOptions.retainWhere(
+                (item) => seenResultValues.add(item['value']!));
 
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -161,13 +196,62 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
                     '${data['studentName']}',
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
-                  const SizedBox(height: AppSpacing.s4),
+                  const SizedBox(height: AppSpacing.s3),
                 ],
-                if (sortedPeriods.isNotEmpty ||
-                    sortedSubjects.isNotEmpty ||
-                    sortedTypes.isNotEmpty) ...[
+                AppCard(
+                  title: _showResults ? 'Résultats' : 'Notes',
+                  subtitle: _showResults
+                      ? 'Résultats officiels : choisissez une période ou une évaluation spécifique.'
+                      : 'Notes réellement soumises ou validées par les enseignants.',
+                  headerAction: FilledButton.tonalIcon(
+                    key: Key(_showResults
+                        ? 'student-show-notes'
+                        : 'student-show-results'),
+                    onPressed: () => setState(() {
+                      _showResults = !_showResults;
+                      _resultSelection = null;
+                      _periodFilter = null;
+                      _subjectFilter = null;
+                      _typeFilter = null;
+                    }),
+                    icon: Icon(_showResults
+                        ? Icons.edit_note_outlined
+                        : Icons.insights_outlined),
+                    label:
+                        Text(_showResults ? 'Voir les notes' : 'Voir les résultats'),
+                  ),
+                  child: _showResults
+                      ? DropdownButtonFormField<String>(
+                          key: const Key('student-result-selection'),
+                          isExpanded: true,
+                          initialValue: _resultSelection,
+                          decoration: const InputDecoration(
+                            labelText: 'Période / résultat',
+                            hintText: 'Sélectionner un résultat',
+                          ),
+                          items: resultOptions
+                              .map((item) => DropdownMenuItem<String>(
+                                    value: item['value'],
+                                    child: Text(
+                                      item['label']!,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ))
+                              .toList(),
+                          onChanged: (value) =>
+                              setState(() => _resultSelection = value),
+                        )
+                      : const Text(
+                          'Utilisez les filtres ci-dessous pour retrouver une note par période, matière ou type d’évaluation.',
+                        ),
+                ),
+                const SizedBox(height: AppSpacing.s4),
+                if (!_showResults &&
+                    (sortedPeriods.isNotEmpty ||
+                        sortedSubjects.isNotEmpty ||
+                        sortedTypes.isNotEmpty)) ...[
                   AppCard(
-                    title: 'Filtres',
+                    title: 'Filtres des notes',
                     child: Wrap(
                       spacing: AppSpacing.s3,
                       runSpacing: AppSpacing.s3,
@@ -221,7 +305,8 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
                               ...sortedTypes.map((value) =>
                                   DropdownMenuItem<String?>(
                                       value: value,
-                                      child: Text(_evaluationTypeLabel(value)))),
+                                      child:
+                                          Text(_evaluationTypeLabel(value)))),
                             ],
                             onChanged: (value) =>
                                 setState(() => _typeFilter = value),
@@ -232,15 +317,28 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
                   ),
                   const SizedBox(height: AppSpacing.s4),
                 ],
-                ...years.map(_yearCard),
+                if (_showResults && _resultSelection == null)
+                  const AppEmptyState(
+                    iconData: Icons.fact_check_outlined,
+                    title: 'Sélectionnez un résultat.',
+                    message:
+                        'Seul le résultat choisi sera affiché : trimestre, mois ou évaluation spécifique.',
+                  )
+                else
+                  ...years.map((year) => _yearCard(
+                        year,
+                        resultOptions: resultOptions,
+                      )),
               ],
             );
           },
         );
     if (widget.embedded) return content;
     return WorkspacePage(
-      title: 'Notes et résultats',
-      subtitle: 'Vos notes, moyennes et classements officiellement publiés',
+      title: _showResults ? 'Résultats' : 'Notes',
+      subtitle: _showResults
+          ? 'Consultez un résultat officiel à la fois.'
+          : 'Notes soumises par vos enseignants.',
       actions: [
         IconButton.filledTonal(
           tooltip: 'Actualiser les résultats',
@@ -252,7 +350,10 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
     );
   }
 
-  Widget _yearCard(Map<String, dynamic> year) {
+  Widget _yearCard(
+    Map<String, dynamic> year, {
+    required List<Map<String, String>> resultOptions,
+  }) {
     final registration = Map<String, dynamic>.from(
       year['registration'] as Map? ?? const <String, dynamic>{},
     );
@@ -291,8 +392,24 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
         final bySubject =
             '${left['subject']}'.compareTo('${right['subject']}');
         if (bySubject != 0) return bySubject;
+        final byType =
+            '${left['examCode'] ?? left['evaluationType'] ?? ''}'
+                .compareTo('${right['examCode'] ?? right['evaluationType'] ?? ''}');
+        if (byType != 0) return byType;
         return '${left['date']}'.compareTo('${right['date']}');
       });
+    Map<String, String>? selectedResult;
+    if (_showResults && _resultSelection != null) {
+      selectedResult = resultOptions
+          .where((item) => item['value'] == _resultSelection)
+          .firstOrNull;
+      if (selectedResult != null) {
+        periods = periods
+            .where((item) =>
+                '${item['periodId']}' == selectedResult!['periodId'])
+            .toList();
+      }
+    }
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.s4),
       child: AppCard(
@@ -306,16 +423,23 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (notes.isNotEmpty) ...[
-              _submittedNotesTable(notes),
-              const SizedBox(height: AppSpacing.s4),
-            ],
-            if (periods.isNotEmpty) ...[
-              _evolutionSection(periods),
-              const SizedBox(height: AppSpacing.s4),
-              ...periods.map((period) => _periodCard(period, registration)),
-            ] else if (notes.isEmpty)
-              const Text('Aucune donnée ne correspond aux filtres sélectionnés.'),
+            if (!_showResults) ...[
+              if (notes.isNotEmpty)
+                _submittedNotesTable(notes)
+              else
+                const Text(
+                    'Aucune note ne correspond aux filtres sélectionnés.'),
+            ] else if (selectedResult != null && periods.isNotEmpty) ...[
+              ...periods.map((period) => _periodCard(
+                    period,
+                    registration,
+                    selectedEventCode: selectedResult!['eventCode']!.isEmpty
+                        ? null
+                        : selectedResult['eventCode'],
+                    eventOnly: selectedResult['eventCode']!.isNotEmpty,
+                  )),
+            ] else
+              const Text('Aucun résultat officiel pour cette sélection.'),
           ],
         ),
       ),
@@ -323,7 +447,11 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
   }
 
   Widget _periodCard(
-      Map<String, dynamic> period, Map<String, dynamic> registration) {
+    Map<String, dynamic> period,
+    Map<String, dynamic> registration, {
+    String? selectedEventCode,
+    bool eventOnly = false,
+  }) {
     var subjects = List<Map<String, dynamic>>.from(
       (period['subjects'] as List? ?? const [])
           .map((item) => Map<String, dynamic>.from(item as Map)),
@@ -359,7 +487,11 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
       (period['exams'] as List? ?? const [])
           .map((item) => Map<String, dynamic>.from(item as Map)),
     );
-    if (_typeFilter != null) {
+    if (selectedEventCode != null) {
+      exams = exams
+          .where((item) => item['code']?.toString() == selectedEventCode)
+          .toList();
+    } else if (_typeFilter != null) {
       exams = exams
           .where((item) => item['code']?.toString() == _typeFilter)
           .toList();
@@ -379,6 +511,7 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
             '${period['averageScale'] ?? 20} · Rang : ${period['rank'] ?? '—'} · '
             'Mention : ${period['mention'] ?? _mention(period)}'),
         children: [
+          if (!eventOnly) ...[
           Padding(
             padding: const EdgeInsets.only(bottom: AppSpacing.s3),
             child: ResponsiveGrid(
@@ -434,8 +567,17 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
                     .toList(),
               ),
             ),
+          ],
           ...exams.map((exam) => _examCard(exam, registration)),
-          if (rankingCount > 0)
+          if (eventOnly && exams.isEmpty)
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: Padding(
+                padding: EdgeInsets.only(bottom: AppSpacing.s3),
+                child: Text('Aucun résultat officiel pour cette évaluation.'),
+              ),
+            ),
+          if (!eventOnly && rankingCount > 0)
             Align(
               alignment: Alignment.centerLeft,
               child: Padding(
@@ -463,6 +605,7 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
         'bepc_blanc': 'BEPC Blanc',
         'bac_test': 'BAC Test',
         'bac_blanc': 'BAC Blanc',
+        'devoir_departemental': 'Devoir départemental',
         'test': 'Test',
         'exam': 'Examen',
         'exam_blanc': 'Examen blanc',
@@ -789,7 +932,8 @@ class _ParentResultsPageState extends State<ParentResultsPage> {
   @override
   Widget build(BuildContext context) => WorkspacePage(
         title: 'Notes des enfants',
-        subtitle: 'Résultats publiés des enfants rattachés à votre compte',
+        subtitle:
+            'Notes soumises et résultats officiels de l’enfant sélectionné, sans mélange.',
         children: [
           FutureBuilder<List<Map<String, dynamic>>>(
             future: _childrenRequest,
