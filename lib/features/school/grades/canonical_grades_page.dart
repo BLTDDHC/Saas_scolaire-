@@ -166,6 +166,12 @@ class _CanonicalGradesPageState extends State<CanonicalGradesPage> {
         ..add((value: 'devoir_1', label: 'Devoir 1'))
         ..add((value: 'devoir_2', label: 'Devoir 2'))
         ..add((value: 'composition', label: 'Composition'));
+      if (cycleCode == 'COLLEGE' || cycleCode == 'LYCEE') {
+        options.add((
+          value: 'devoir_departemental',
+          label: 'Devoir départemental',
+        ));
+      }
     }
     if (cycleCode == 'PRIMAIRE' && levelCode == 'CM2') {
       options
@@ -264,6 +270,7 @@ class _CanonicalGradesPageState extends State<CanonicalGradesPage> {
         'bepc_blanc': 'BEPC blanc',
         'bac_test': 'BAC test',
         'bac_blanc': 'BAC blanc',
+        'devoir_departemental': 'Devoir départemental',
       }[code] ??
       code;
 
@@ -1028,13 +1035,15 @@ class _CanonicalGradesPageState extends State<CanonicalGradesPage> {
                         try {
                           final code = evaluationKind!;
                           final examCode = code;
-                          final type = code.startsWith('devoir_')
-                              ? 'devoir'
-                              : code == 'composition'
-                                  ? 'composition'
-                                  : (code.endsWith('_test')
-                                      ? 'test'
-                                      : 'exam_blanc');
+                          final type = code == 'devoir_departemental'
+                              ? 'exam'
+                              : code.startsWith('devoir_')
+                                  ? 'devoir'
+                                  : code == 'composition'
+                                      ? 'composition'
+                                      : (code.endsWith('_test')
+                                          ? 'test'
+                                          : 'exam_blanc');
                           final label = kindOptions
                               .where((item) => item.value == code)
                               .first
@@ -1430,6 +1439,7 @@ class _CanonicalGradesPageState extends State<CanonicalGradesPage> {
           'bepc_blanc',
           'bac_test',
           'bac_blanc',
+          'devoir_departemental',
         }.contains)
         .toSet()
         .toList()
@@ -1441,6 +1451,7 @@ class _CanonicalGradesPageState extends State<CanonicalGradesPage> {
           'bepc_blanc',
           'bac_test',
           'bac_blanc',
+          'devoir_departemental',
         ];
         return order.indexOf(left).compareTo(order.indexOf(right));
       });
