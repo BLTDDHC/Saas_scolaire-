@@ -531,7 +531,9 @@ void main() {
     expect(find.text('Mes élèves'), findsWidgets);
     expect(find.text('Massamba Chris'), findsOneWidget);
     expect(find.text('ECOLE-2026-001'), findsOneWidget);
-    expect(find.text('3e · 3e A'), findsOneWidget);
+    expect(find.text('3e A'), findsWidgets);
+    expect(find.byKey(const Key('teacher-students-class-filter')), findsOneWidget);
+    expect(find.text('Toutes mes classes'), findsOneWidget);
     expect(find.text('Ajouter un élève'), findsNothing);
     expect(tester.takeException(), isNull);
   });
@@ -574,19 +576,18 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('Note /20'), findsOneWidget);
     expect(find.text('Tous ont été notés'), findsNothing);
-    final presenceFinder =
-        find.byKey(const ValueKey('grade-presence-student-1'));
-    expect(presenceFinder, findsOneWidget);
-    await tester.tap(presenceFinder);
-    await tester.pumpAndSettle();
-    expect(find.text('Absent'), findsOneWidget);
-    await tester.tap(find.text('Non noté').last);
-    await tester.pumpAndSettle();
-    final gradeField = tester.widget<TextField>(
-      find.byKey(const ValueKey('grade-value-student-1')),
-    );
+    expect(find.text('État'), findsNothing);
+    expect(find.byKey(const ValueKey('grade-presence-student-1')),
+        findsNothing);
+    final gradeFinder =
+        find.byKey(const ValueKey('grade-value-student-1'));
+    var gradeField = tester.widget<TextField>(gradeFinder);
     expect(gradeField.enabled, isTrue);
     expect(gradeField.controller?.text, isEmpty);
+    await tester.enterText(gradeFinder, 'ABS');
+    await tester.pump();
+    gradeField = tester.widget<TextField>(gradeFinder);
+    expect(gradeField.controller?.text, 'ABS');
 
     expect(find.text('Nouvelle évaluation'), findsNothing);
     expect(find.text('Préparer une évaluation'), findsNothing);
@@ -637,6 +638,8 @@ void main() {
       findsOneWidget,
     );
     expect(find.byKey(const Key('submit-combined-grades')), findsOneWidget);
+    expect(find.text('État'), findsNothing);
+    expect(find.byKey(const ValueKey('combined-presence-evaluation-1|student-1')), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
