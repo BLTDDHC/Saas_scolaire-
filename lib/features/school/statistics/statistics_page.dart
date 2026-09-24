@@ -26,6 +26,7 @@ class _StatisticsPageState extends State<StatisticsPage> {
   String? _classId;
   String? _periodId;
   String? _subjectId;
+  String? _eventCode;
   String? _loadedYearId;
   Future<Map<String, dynamic>>? _request;
   Map<String, dynamic>? _snapshot;
@@ -43,6 +44,7 @@ class _StatisticsPageState extends State<StatisticsPage> {
       classId: _classId,
       periodId: _periodId,
       subjectId: _subjectId,
+      eventCode: _eventCode,
     );
     _request = request;
     _snapshot = null;
@@ -134,6 +136,7 @@ class _StatisticsPageState extends State<StatisticsPage> {
     final yearId = store.getSelectedAcademicYearId();
     if (_request == null || yearId != _loadedYearId) {
       _periodId = null;
+      _eventCode = null;
       _load(store);
       _loadPeriods(store, yearId);
     }
@@ -160,6 +163,10 @@ class _StatisticsPageState extends State<StatisticsPage> {
         .toList();
     final subjects =
         store.getSubjects().where((item) => item.status == 'active').toList();
+    final eventOptions = List<Map<String, dynamic>>.from(
+      (((_snapshot?['filters'] as Map?)?['events'] as List?) ?? const [])
+          .map((item) => Map<String, dynamic>.from(item as Map)),
+    );
 
     return WorkspacePage(
       title: 'Statistiques & analyses',
@@ -195,6 +202,7 @@ class _StatisticsPageState extends State<StatisticsPage> {
                     _cycleId = value;
                     _levelId = null;
                     _classId = null;
+                    _eventCode = null;
                     _filtersDirty = true;
                   });
                 },
@@ -223,6 +231,7 @@ class _StatisticsPageState extends State<StatisticsPage> {
                   setState(() {
                     _levelId = value;
                     _classId = null;
+                    _eventCode = null;
                     _filtersDirty = true;
                   });
                 },
@@ -249,6 +258,7 @@ class _StatisticsPageState extends State<StatisticsPage> {
                 onChanged: (value) {
                   setState(() {
                     _classId = value;
+                    _eventCode = null;
                     _filtersDirty = true;
                   });
                 },
@@ -274,6 +284,7 @@ class _StatisticsPageState extends State<StatisticsPage> {
                 ],
                 onChanged: (value) => setState(() {
                   _periodId = value;
+                  _eventCode = null;
                   _filtersDirty = true;
                 }),
               ),
@@ -296,10 +307,39 @@ class _StatisticsPageState extends State<StatisticsPage> {
                 ],
                 onChanged: (value) => setState(() {
                   _subjectId = value;
+                  _eventCode = null;
                   _filtersDirty = true;
                 }),
               ),
             ),
+            if (eventOptions.isNotEmpty)
+              SizedBox(
+                width: 230,
+                child: DropdownButtonFormField<String?>(
+                  key: ValueKey(
+                      'statistics-event-${_eventCode ?? 'all'}-${eventOptions.length}'),
+                  initialValue: eventOptions
+                          .any((item) => item['code'] == _eventCode)
+                      ? _eventCode
+                      : null,
+                  isExpanded: true,
+                  decoration:
+                      const InputDecoration(labelText: 'Type / examen'),
+                  items: [
+                    const DropdownMenuItem<String?>(
+                        value: null, child: Text('Tous les résultats')),
+                    ...eventOptions.map((item) => DropdownMenuItem<String?>(
+                          value: '${item['code']}',
+                          child: Text('${item['name']}',
+                              overflow: TextOverflow.ellipsis),
+                        )),
+                  ],
+                  onChanged: (value) => setState(() {
+                    _eventCode = value;
+                    _filtersDirty = true;
+                  }),
+                ),
+              ),
             FilledButton.icon(
               onPressed: _filtersDirty ? () => _applyFilters(store) : null,
               icon: const Icon(Icons.filter_alt_outlined),
