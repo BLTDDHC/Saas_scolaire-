@@ -109,7 +109,15 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
             final years = List<Map<String, dynamic>>.from(
               (data['years'] as List? ?? const [])
                   .map((item) => Map<String, dynamic>.from(item as Map)),
-            );
+            )..sort((left, right) {
+                final leftRegistration = Map<String, dynamic>.from(
+                    left['registration'] as Map? ?? const {});
+                final rightRegistration = Map<String, dynamic>.from(
+                    right['registration'] as Map? ?? const {});
+                return '${leftRegistration['academicYearName'] ?? left['academicYearId'] ?? ''}'
+                    .compareTo(
+                        '${rightRegistration['academicYearName'] ?? right['academicYearId'] ?? ''}');
+              });
             if (years.isEmpty) {
               return const AppEmptyState(
                 iconData: Icons.school_outlined,
@@ -568,7 +576,7 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
               ),
             ),
           ],
-          ...exams.map((exam) => _examCard(exam, registration)),
+          if (eventOnly) ...exams.map((exam) => _examCard(exam, registration)),
           if (eventOnly && exams.isEmpty)
             const Align(
               alignment: Alignment.centerLeft,
