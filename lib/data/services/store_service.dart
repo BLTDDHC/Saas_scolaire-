@@ -2760,7 +2760,7 @@ class StoreService extends ChangeNotifier {
 
   Future<Map<String, dynamic>> approvePreEnrollmentRemote(String id,
           {String? classId,
-          String schoolRegime = 'normal',
+          String? schoolRegime,
           bool hasTd = false,
           Map<String, dynamic> options = const {}}) =>
       _repository.approvePreEnrollment(
