@@ -515,16 +515,29 @@ class _StatisticsContent extends StatelessWidget {
               ),
           ],
         ),
-        if (evolution.isNotEmpty) ...[
+        if (evolution.isNotEmpty || byLevel.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.s6),
-          _LineChartCard(
-            key: const Key('statistics-evolution-chart'),
-            title: 'Évolution trimestrielle',
-            subtitle:
-                'Périodes trimestrielles officielles, dans l’ordre configuré',
-            rows: evolution,
-            labelKey: 'period',
-            valueKey: 'average20',
+          ResponsiveGrid(
+            desktopColumns: 2,
+            tabletColumns: 1,
+            mobileColumns: 1,
+            children: [
+              if (evolution.isNotEmpty)
+                _LineChartCard(
+                  key: const Key('statistics-evolution-chart'),
+                  title: 'Évolution des résultats',
+                  subtitle:
+                      'Série officielle compatible avec les filtres actuellement appliqués',
+                  rows: evolution,
+                  labelKey: 'period',
+                  valueKey: 'average20',
+                ),
+              if (byLevel.isNotEmpty)
+                _LevelDistributionCard(
+                  key: const Key('statistics-level-distribution'),
+                  rows: byLevel,
+                ),
+            ],
           ),
         ],
         if (monthlyEvolution.isNotEmpty) ...[
@@ -567,49 +580,21 @@ class _StatisticsContent extends StatelessWidget {
             ],
           ),
         ],
-        if (insights.isNotEmpty || alerts.isNotEmpty) ...[
+        if (insights.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.s6),
-          ResponsiveGrid(
-            desktopColumns: 2,
-            tabletColumns: 1,
-            mobileColumns: 1,
-            children: [
-              AppCard(
-                title: 'Ce qu’il faut retenir',
-                child: insights.isEmpty
-                    ? const Text('Aucun insight disponible pour ce périmètre.')
-                    : Column(
-                        children: insights
-                            .map((item) => ListTile(
-                                  contentPadding: EdgeInsets.zero,
-                                  leading: const Icon(
-                                      Icons.auto_awesome_outlined,
-                                      color: AppColors.primary600),
-                                  title: Text('${item['title'] ?? 'Analyse'}'),
-                                  subtitle: Text('${item['message'] ?? ''}'),
-                                ))
-                            .toList(),
-                      ),
-              ),
-              AppCard(
-                title: 'Alertes et notifications',
-                child: alerts.isEmpty
-                    ? const Text(
-                        'Aucune alerte calculée sur les données officielles.')
-                    : Column(
-                        children: alerts
-                            .map((item) => ListTile(
-                                  contentPadding: EdgeInsets.zero,
-                                  leading: const Icon(
-                                      Icons.warning_amber_rounded,
-                                      color: AppColors.warning600),
-                                  title: Text('${item['title'] ?? 'Alerte'}'),
-                                  subtitle: Text('${item['message'] ?? ''}'),
-                                ))
-                            .toList(),
-                      ),
-              ),
-            ],
+          AppCard(
+            title: 'Ce qu’il faut retenir',
+            child: Column(
+              children: insights
+                  .map((item) => ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.auto_awesome_outlined,
+                            color: AppColors.primary600),
+                        title: Text('${item['title'] ?? 'Analyse'}'),
+                        subtitle: Text('${item['message'] ?? ''}'),
+                      ))
+                  .toList(),
+            ),
           ),
         ],
         const SizedBox(height: AppSpacing.s6),
@@ -625,10 +610,6 @@ class _StatisticsContent extends StatelessWidget {
           tabletColumns: 1,
           mobileColumns: 1,
           children: [
-            _LevelDistributionCard(
-              key: const Key('statistics-level-distribution'),
-              rows: byLevel,
-            ),
             _VerticalBarsCard(
               key: const Key('statistics-class-bars'),
               title: 'Résultats moyens par classe',
@@ -643,6 +624,24 @@ class _StatisticsContent extends StatelessWidget {
             _ClassRankingCard(
               key: const Key('statistics-class-ranking'),
               rows: byClass,
+            ),
+            AppCard(
+              title: 'Alertes et notifications',
+              child: alerts.isEmpty
+                  ? const Text(
+                      'Aucune alerte calculée sur les données officielles.')
+                  : Column(
+                      children: alerts
+                          .map((item) => ListTile(
+                                contentPadding: EdgeInsets.zero,
+                                leading: const Icon(
+                                    Icons.notifications_active_outlined,
+                                    color: AppColors.warning600),
+                                title: Text('${item['title'] ?? 'Alerte'}'),
+                                subtitle: Text('${item['message'] ?? ''}'),
+                              ))
+                          .toList(),
+                    ),
             ),
           ],
         ),
