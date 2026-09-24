@@ -5267,6 +5267,9 @@ def approve_student_pre_enrollment(
         student.establishment_id, class_id, session,
         item.academic_year_id, current
     )
+    school_regime = normalize_registration_regime(
+        school_class, body.school_regime, session
+    )
     validate_registration_academic_options(school_class, body.has_td, session)
     matricule = ensure_student_permanent_matricule(
         session, student, item.academic_year_id
