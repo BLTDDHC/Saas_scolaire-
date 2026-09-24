@@ -417,6 +417,7 @@ class _FinancePageState extends State<FinancePage> {
     String? target = existing?['classId']?.toString() ?? classes.first['id'];
     String? levelId = existing?['levelId']?.toString();
     String? cycleId = existing?['cycle']?.toString();
+    String? schoolRegime = existing?['schoolRegime']?.toString();
     var sending = false;
     String? error;
     final levels = <String, String>{
@@ -432,6 +433,45 @@ class _FinancePageState extends State<FinancePage> {
               cl['cycleName']?.toString() ?? 'Cycle scolaire'
     };
     final store = context.read<StoreService>();
+
+    String targetCycleCode() {
+      String? selectedCycleId;
+      if (scope == 'cycle') {
+        selectedCycleId = cycleId;
+      } else if (scope == 'class') {
+        final selected = classes.where((item) => item['id'] == target);
+        if (selected.isNotEmpty) {
+          selectedCycleId = selected.first['cycleId']?.toString();
+        }
+      } else if (scope == 'level') {
+        final selected =
+            classes.where((item) => item['levelId']?.toString() == levelId);
+        if (selected.isNotEmpty) {
+          selectedCycleId = selected.first['cycleId']?.toString();
+        }
+      }
+      final cycle = store
+          .getSchoolCycles()
+          .where((item) => item.id == selectedCycleId)
+          .firstOrNull;
+      return (cycle?.code ?? '').trim().toUpperCase();
+    }
+
+    bool regimeTariffRequired() =>
+        kind == 'tuition' &&
+        const {'MATERNELLE', 'PRIMAIRE'}.contains(targetCycleCode());
+
+    void normalizeRegime() {
+      if (regimeTariffRequired()) {
+        if (!const {'part_time', 'full_time'}.contains(schoolRegime)) {
+          schoolRegime = 'full_time';
+        }
+      } else {
+        schoolRegime = null;
+      }
+    }
+
+    normalizeRegime();
     final route = DialogRoute<void>(
         context: context,
         barrierDismissible: false,
@@ -457,7 +497,10 @@ class _FinancePageState extends State<FinancePage> {
                                       .toList(),
                                   onChanged: existing != null || sending
                                       ? null
-                                      : (v) => refresh(() => kind = v!)),
+                                      : (v) => refresh(() {
+                                            kind = v!;
+                                            normalizeRegime();
+                                          })),
                               if (existing == null)
                                 DropdownButtonFormField<String>(
                                     isExpanded: true,
@@ -475,7 +518,10 @@ class _FinancePageState extends State<FinancePage> {
                                     ],
                                     onChanged: sending
                                         ? null
-                                        : (v) => refresh(() => scope = v!)),
+                                        : (v) => refresh(() {
+                                              scope = v!;
+                                              normalizeRegime();
+                                            })),
                               if (existing == null && scope == 'class')
                                 DropdownButtonFormField<String>(
                                     isExpanded: true,
@@ -488,8 +534,12 @@ class _FinancePageState extends State<FinancePage> {
                                             value: cl['id'],
                                             child: Text(cl['name'])))
                                         .toList(),
-                                    onChanged:
-                                        sending ? null : (v) => target = v),
+                                    onChanged: sending
+                                        ? null
+                                        : (v) => refresh(() {
+                                              target = v;
+                                              normalizeRegime();
+                                            })),
                               if (existing == null && scope == 'level')
                                 DropdownButtonFormField<String>(
                                     isExpanded: true,
@@ -501,8 +551,12 @@ class _FinancePageState extends State<FinancePage> {
                                         .map((e) => DropdownMenuItem(
                                             value: e.key, child: Text(e.value)))
                                         .toList(),
-                                    onChanged:
-                                        sending ? null : (v) => levelId = v),
+                                    onChanged: sending
+                                        ? null
+                                        : (v) => refresh(() {
+                                              levelId = v;
+                                              normalizeRegime();
+                                            })),
                               if (existing == null && scope == 'cycle')
                                 DropdownButtonFormField<String>(
                                     isExpanded: true,
@@ -514,12 +568,46 @@ class _FinancePageState extends State<FinancePage> {
                                         .map((e) => DropdownMenuItem(
                                             value: e.key, child: Text(e.value)))
                                         .toList(),
-                                    onChanged:
-                                        sending ? null : (v) => cycleId = v),
+                                    onChanged: sending
+                                        ? null
+                                        : (v) => refresh(() {
+                                              cycleId = v;
+                                              normalizeRegime();
+                                            })),
                               TextField(
                                   controller: name,
                                   decoration: const InputDecoration(
                                       labelText: 'Libellé du tarif')),
+                              if (regimeTariffRequired())
+                                DropdownButtonFormField<String>(
+                                  key: const Key('tariff-school-regime'),
+                                  isExpanded: true,
+                                  initialValue: schoolRegime,
+                                  decoration: const InputDecoration(
+                                      labelText: 'Régime *'),
+                                  items: const [
+                                    DropdownMenuItem(
+                                        value: 'part_time',
+                                        child: Text('Mi-temps')),
+                                    DropdownMenuItem(
+                                        value: 'full_time',
+                                        child: Text('Plein temps')),
+                                  ],
+                                  onChanged: existing != null || sending
+                                      ? null
+                                      : (value) => refresh(() =>
+                                          schoolRegime = value),
+                                ),
+                              if (regimeTariffRequired())
+                                const Padding(
+                                  padding: EdgeInsets.only(top: 6),
+                                  child: Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      'Ce tarif sera utilisé uniquement pour les élèves ayant ce régime au mois concerné.',
+                                    ),
+                                  ),
+                                ),
                               if (kind == 'tuition')
                                 DropdownButtonFormField<String>(
                                     isExpanded: true,
@@ -564,7 +652,9 @@ class _FinancePageState extends State<FinancePage> {
                                       value <= 0 ||
                                       name.text.trim().length < 2 ||
                                       (scope == 'level' && levelId == null) ||
-                                      (scope == 'cycle' && cycleId == null)) {
+                                      (scope == 'cycle' && cycleId == null) ||
+                                      (regimeTariffRequired() &&
+                                          schoolRegime == null)) {
                                     refresh(() => error =
                                         'Renseignez le contexte, un libellé et un montant positif.');
                                     return;
@@ -585,6 +675,9 @@ class _FinancePageState extends State<FinancePage> {
                                       'academicYearId': _year,
                                       'schoolId': _school,
                                       'type': kind,
+                                      'schoolRegime': regimeTariffRequired()
+                                          ? schoolRegime
+                                          : null,
                                       'month': kind == 'tuition'
                                           ? tariffMonth
                                           : null,
