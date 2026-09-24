@@ -1971,7 +1971,6 @@ class _CanonicalGradesPageState extends State<CanonicalGradesPage> {
                                               TextField(
                                                 key: ValueKey('grade-value-${student.id}'),
                                                 controller: _gradeControllers[student.id],
-                                                enabled: editable && !_saving,
                                                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                                                 enabled: editable && !_saving && _presence[student.id] != 'absent',
                                                 decoration: InputDecoration(
