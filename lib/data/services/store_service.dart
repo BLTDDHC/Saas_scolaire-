@@ -6157,6 +6157,7 @@ class StoreService extends ChangeNotifier {
       'cycle': draft.cycle,
       'levelId': draft.levelId,
       'classId': draft.classId,
+      'schoolRegime': draft.schoolRegime,
       'academicYearId': academicYearId,
       'description': draft.description ?? '',
       'type': draft.type ?? 'tuition',
