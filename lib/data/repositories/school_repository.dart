@@ -412,13 +412,13 @@ class SchoolRepository {
 
   Future<Map<String, dynamic>> createStudentRegistration(
           String studentId, String classId,
-          {String schoolRegime = 'normal',
+          {String? schoolRegime,
           bool hasTd = false,
           Map<String, dynamic> options = const {}}) async =>
       Map<String, dynamic>.from(
           await _api.post('/api/v1/school/students/$studentId/registrations', {
         'classId': classId,
-        'schoolRegime': schoolRegime,
+        if (schoolRegime != null) 'schoolRegime': schoolRegime,
         'hasTd': hasTd,
         'options': options,
       }));
