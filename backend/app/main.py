@@ -5064,9 +5064,6 @@ def change_student_registration_regime(
         raise HTTPException(422, "Le mois d'effet est hors de l'année scolaire")
     if effective_date < item.registration_date.replace(day=1):
         raise HTTPException(422, "Le changement ne peut pas précéder l'inscription")
-    current_month = date.today().replace(day=1)
-    if effective_date > current_month:
-        raise HTTPException(422, "La date d’effet du régime ne peut pas être future")
     history = registration_regime_history(item)
     if not history:
         history.append({
