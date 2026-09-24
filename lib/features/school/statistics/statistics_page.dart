@@ -467,6 +467,10 @@ class _StatisticsContent extends StatelessWidget {
       (data['bySubject'] as List? ?? const [])
           .map((item) => Map<String, dynamic>.from(item as Map)),
     );
+    final levelDistribution = List<Map<String, dynamic>>.from(
+      (data['levelDistribution'] as List? ?? const [])
+          .map((item) => Map<String, dynamic>.from(item as Map)),
+    );
     final distribution = Map<String, dynamic>.from(
       data['distribution'] as Map? ?? const {},
     );
@@ -502,7 +506,18 @@ class _StatisticsContent extends StatelessWidget {
     final teacherStatistics = Map<String, dynamic>.from(
         data['teacherStatistics'] as Map? ?? const <String, dynamic>{});
 
-    return Column(
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 320),
+      curve: Curves.easeOutCubic,
+      builder: (context, value, child) => Opacity(
+        opacity: value,
+        child: Transform.translate(
+          offset: Offset(0, 10 * (1 - value)),
+          child: child,
+        ),
+      ),
+      child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         ResponsiveGrid(
@@ -512,125 +527,93 @@ class _StatisticsContent extends StatelessWidget {
           mobileColumns: 1,
           children: [
             _Metric(
-              label: 'Élèves',
+              label: 'Total élèves',
               value: '${data['studentCount'] ?? 0}',
-              icon: Icons.school_outlined,
+              icon: Icons.groups_2_outlined,
               color: AppColors.info600,
-            ),
-            _Metric(
-              label: 'Résultats officiels analysés',
-              value: '${data['officialStudentCount'] ?? 0}',
-              icon: Icons.verified_outlined,
-              color: AppColors.success600,
-            ),
-            _Metric(
-              label: 'Moyenne générale',
-              value: data['overallAverage'] == null
-                  ? 'Non calculée'
-                  : '${data['overallAverage']} / 20',
-              icon: Icons.analytics_outlined,
-              color: AppColors.primary600,
-            ),
-            _Metric(
-              label: 'Taux de présence',
-              value: data['attendanceRate'] == null
-                  ? 'Non calculé'
-                  : '${data['attendanceRate']} %',
-              icon: Icons.how_to_reg_outlined,
-              color: AppColors.success600,
-            ),
-            _Metric(
-              label: 'Enseignants actifs du périmètre',
-              value: '${data['teacherCount'] ?? 0}',
-              icon: Icons.co_present_outlined,
-              color: AppColors.info600,
-            ),
-            _Metric(
-              label: 'Classes actives',
-              value: '${data['classCount'] ?? 0}',
-              icon: Icons.meeting_room_outlined,
-              color: AppColors.primary600,
-            ),
-            _Metric(
-              label: 'Créneaux de cours planifiés',
-              value: '${teacherStatistics['plannedCourses'] ?? 0}',
-              icon: Icons.calendar_month_outlined,
-              color: AppColors.info600,
-            ),
-            _Metric(
-              label: 'Appels de cours verrouillés',
-              value: '${teacherStatistics['completedCourses'] ?? 0}',
-              icon: Icons.fact_check_outlined,
-              color: AppColors.success600,
             ),
             _Metric(
               label: 'Taux de réussite',
               value: data['successRate'] == null
                   ? 'Non calculé'
                   : '${data['successRate']} %',
-              icon: Icons.trending_up_outlined,
+              icon: Icons.school_outlined,
               color: AppColors.success600,
             ),
             _Metric(
-              label: 'Taux d’échec',
-              value: data['failureRate'] == null
+              label: 'Taux de présence',
+              value: data['attendanceRate'] == null
                   ? 'Non calculé'
-                  : '${data['failureRate']} %',
-              icon: Icons.trending_down_outlined,
-              color: AppColors.danger600,
+                  : '${data['attendanceRate']} %',
+              icon: Icons.event_available_outlined,
+              color: AppColors.primary600,
             ),
-            _Metric(
-              label: 'Moyenne maximale',
-              value: data['highestAverage'] == null
-                  ? 'Non calculée'
-                  : '${data['highestAverage']} / 20',
-              icon: Icons.arrow_upward_rounded,
-              color: AppColors.success600,
-            ),
-            _Metric(
-              label: 'Moyenne minimale',
-              value: data['lowestAverage'] == null
-                  ? 'Non calculée'
-                  : '${data['lowestAverage']} / 20',
-              icon: Icons.arrow_downward_rounded,
-              color: AppColors.warning600,
-            ),
-            _Metric(
-              label: 'Médiane',
-              value: data['medianAverage'] == null
-                  ? 'Non calculée'
-                  : '${data['medianAverage']} / 20',
-              icon: Icons.horizontal_rule_rounded,
-              color: AppColors.info600,
-            ),
-            _Metric(
-              label: 'Écart-type',
-              value: data['standardDeviation'] == null
-                  ? 'Non calculé'
-                  : '${data['standardDeviation']}',
-              icon: Icons.scatter_plot_outlined,
-              color: AppColors.secondary600,
-            ),
+            if (finance != null)
+              _Metric(
+                label: 'Recettes encaissées',
+                value: '${finance['paid'] ?? 0} FCFA',
+                icon: Icons.payments_outlined,
+                color: AppColors.success600,
+              )
+            else
+              _Metric(
+                label: 'Moyenne générale',
+                value: data['overallAverage'] == null
+                    ? 'Non calculée'
+                    : '${data['overallAverage']} / 20',
+                icon: Icons.analytics_outlined,
+                color: AppColors.secondary600,
+              ),
           ],
         ),
-        if (evolution.isNotEmpty) ...[
-          const SizedBox(height: AppSpacing.s6),
-          _LineChartCard(
-            key: const Key('statistics-evolution-chart'),
-            title: 'Évolution trimestrielle',
-            subtitle:
-                'Périodes trimestrielles officielles, dans l’ordre configuré',
-            rows: evolution,
-            labelKey: 'period',
-            valueKey: 'average20',
-          ),
-        ],
+        const SizedBox(height: AppSpacing.s6),
+        ResponsiveGrid(
+          desktopColumns: 2,
+          tabletColumns: 1,
+          mobileColumns: 1,
+          children: [
+            _LineChartCard(
+              key: const Key('statistics-evolution-chart'),
+              title: evolution.isNotEmpty
+                  ? 'Évolution des résultats'
+                  : 'Évolution des résultats',
+              subtitle: evolution.isEmpty
+                  ? 'Aucune série officielle disponible sur ce périmètre.'
+                  : 'Série officielle, dans l’ordre des périodes configurées',
+              rows: evolution,
+              labelKey: 'period',
+              valueKey: 'average20',
+            ),
+            _LevelDistributionCard(rows: levelDistribution),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.s6),
+        ResponsiveGrid(
+          desktopColumns: 3,
+          tabletColumns: 1,
+          mobileColumns: 1,
+          children: [
+            _VerticalBarsCard(
+              key: const Key('statistics-class-bars'),
+              title: 'Résultats moyens par classe',
+              subtitle:
+                  ((data['appliedFilters'] as Map?)?['eventCode'] == null)
+                      ? 'Résultat officiel de la période sélectionnée'
+                      : 'Évaluation spécifique sélectionnée',
+              rows: byClass,
+              labelKey: 'className',
+              valueKey: 'average20',
+            ),
+            _ClassRankingCard(rows: byClass),
+            _AlertsCard(rows: alerts),
+          ],
+        ),
         if (monthlyEvolution.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.s6),
           _AverageBarsCard(
             title: 'Évolution mensuelle des notes',
             subtitle:
-                'Série mensuelle distincte de l’évolution trimestrielle officielle',
+                'Série mensuelle distincte des résultats officiels par période',
             rows: monthlyEvolution,
             labelKey: 'month',
             valueKey: 'average20',
@@ -665,49 +648,23 @@ class _StatisticsContent extends StatelessWidget {
             ],
           ),
         ],
-        if (insights.isNotEmpty || alerts.isNotEmpty) ...[
+        if (insights.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.s6),
-          ResponsiveGrid(
-            desktopColumns: 2,
-            tabletColumns: 1,
-            mobileColumns: 1,
-            children: [
-              AppCard(
-                title: 'Ce qu’il faut retenir',
-                child: insights.isEmpty
-                    ? const Text('Aucun insight disponible pour ce périmètre.')
-                    : Column(
-                        children: insights
-                            .map((item) => ListTile(
-                                  contentPadding: EdgeInsets.zero,
-                                  leading: const Icon(
-                                      Icons.auto_awesome_outlined,
-                                      color: AppColors.primary600),
-                                  title: Text('${item['title'] ?? 'Analyse'}'),
-                                  subtitle: Text('${item['message'] ?? ''}'),
-                                ))
-                            .toList(),
-                      ),
-              ),
-              AppCard(
-                title: 'Points d’attention',
-                child: alerts.isEmpty
-                    ? const Text(
-                        'Aucune alerte calculée sur les données officielles.')
-                    : Column(
-                        children: alerts
-                            .map((item) => ListTile(
-                                  contentPadding: EdgeInsets.zero,
-                                  leading: const Icon(
-                                      Icons.warning_amber_rounded,
-                                      color: AppColors.warning600),
-                                  title: Text('${item['title'] ?? 'Alerte'}'),
-                                  subtitle: Text('${item['message'] ?? ''}'),
-                                ))
-                            .toList(),
-                      ),
-              ),
-            ],
+          AppCard(
+            title: 'Ce qu’il faut retenir',
+            child: Column(
+              children: insights
+                  .map((item) => ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(
+                          Icons.auto_awesome_outlined,
+                          color: AppColors.primary600,
+                        ),
+                        title: Text('${item['title'] ?? 'Analyse'}'),
+                        subtitle: Text('${item['message'] ?? ''}'),
+                      ))
+                  .toList(),
+            ),
           ),
         ],
         const SizedBox(height: AppSpacing.s6),
@@ -718,37 +675,12 @@ class _StatisticsContent extends StatelessWidget {
         ),
         _DistributionCard(distribution: distribution),
         const SizedBox(height: AppSpacing.s6),
-        ResponsiveGrid(
-          desktopColumns: 3,
-          tabletColumns: 1,
-          mobileColumns: 1,
-          children: [
-            _AverageBarsCard(
-              title: 'Moyenne par cycle',
-              subtitle: 'Comparaison normalisée sur 20',
-              rows: byCycle,
-              labelKey: 'cycle',
-              valueKey: 'average20',
-            ),
-            _AverageBarsCard(
-              title: 'Moyenne par niveau',
-              subtitle: 'Comparaison des niveaux du périmètre sélectionné',
-              rows: byLevel,
-              labelKey: 'level',
-              valueKey: 'average20',
-            ),
-            _VerticalBarsCard(
-              key: const Key('statistics-class-bars'),
-              title: 'Moyenne par classe',
-              subtitle:
-                  ((data['appliedFilters'] as Map?)?['periodId'] == null)
-                      ? 'Dernier trimestre officiel disponible'
-                      : 'Période officielle sélectionnée',
-              rows: byClass,
-              labelKey: 'className',
-              valueKey: 'average20',
-            ),
-          ],
+        _AverageBarsCard(
+          title: 'Performance par niveau',
+          subtitle: 'Niveaux du cycle et du périmètre autorisés',
+          rows: byLevel,
+          labelKey: 'level',
+          valueKey: 'average20',
         ),
         const SizedBox(height: AppSpacing.s6),
         _AverageBarsCard(
@@ -882,8 +814,164 @@ class _StatisticsContent extends StatelessWidget {
             ),
           ),
       ],
+    ),
     );
   }
+}
+
+
+class _LevelDistributionCard extends StatelessWidget {
+  const _LevelDistributionCard({required this.rows});
+
+  final List<Map<String, dynamic>> rows;
+
+  @override
+  Widget build(BuildContext context) {
+    final total = rows.fold<int>(
+      0,
+      (sum, row) => sum + ((row['studentCount'] as num?)?.toInt() ?? 0),
+    );
+    return AppCard(
+      title: 'Répartition des élèves par niveau',
+      subtitle: 'Uniquement les niveaux du cycle et du périmètre autorisés',
+      child: rows.isEmpty
+          ? const Text('Aucun effectif disponible pour ce périmètre.')
+          : Column(
+              children: [
+                SizedBox(
+                  height: 18,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(999),
+                    child: Row(
+                      children: [
+                        for (var index = 0; index < rows.length; index++)
+                          Expanded(
+                            flex: ((rows[index]['studentCount'] as num?)
+                                        ?.toInt() ??
+                                    0)
+                                .clamp(1, 1000000),
+                            child: Container(
+                              color: AppColors.avatarColors[
+                                  index % AppColors.avatarColors.length],
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.s4),
+                for (var index = 0; index < rows.length; index++)
+                  Padding(
+                    padding:
+                        const EdgeInsets.only(bottom: AppSpacing.s2),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 10,
+                          height: 10,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: AppColors.avatarColors[
+                                index % AppColors.avatarColors.length],
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.s2),
+                        Expanded(
+                          child: Text('${rows[index]['level'] ?? 'Niveau'}'),
+                        ),
+                        Text(
+                          '${rows[index]['studentCount'] ?? 0}',
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        if (total > 0) ...[
+                          const SizedBox(width: AppSpacing.s2),
+                          Text(
+                            '(${(100 * ((rows[index]['studentCount'] as num?)?.toInt() ?? 0) / total).toStringAsFixed(1)} %)',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+    );
+  }
+}
+
+class _ClassRankingCard extends StatelessWidget {
+  const _ClassRankingCard({required this.rows});
+
+  final List<Map<String, dynamic>> rows;
+
+  @override
+  Widget build(BuildContext context) {
+    final ranked = [...rows]
+      ..sort((a, b) {
+        final byAverage = ((b['average20'] as num?)?.toDouble() ?? -1)
+            .compareTo((a['average20'] as num?)?.toDouble() ?? -1);
+        if (byAverage != 0) return byAverage;
+        return '${a['className']}'.compareTo('${b['className']}');
+      });
+    final visible = ranked.take(5).toList();
+    return AppCard(
+      title: 'Classement des classes',
+      subtitle: 'Données officielles du périmètre filtré',
+      child: visible.isEmpty
+          ? const Text('Aucun classement officiel disponible.')
+          : Column(
+              children: [
+                for (var index = 0; index < visible.length; index++)
+                  ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    leading: CircleAvatar(
+                      radius: 15,
+                      child: Text('${index + 1}'),
+                    ),
+                    title: Text('${visible[index]['className'] ?? 'Classe'}'),
+                    subtitle: Text(
+                      'Réussite : ${visible[index]['successRate'] ?? '—'} %',
+                    ),
+                    trailing: Text(
+                      '${visible[index]['average20'] ?? '—'} / 20',
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+              ],
+            ),
+    );
+  }
+}
+
+class _AlertsCard extends StatelessWidget {
+  const _AlertsCard({required this.rows});
+
+  final List<Map<String, dynamic>> rows;
+
+  @override
+  Widget build(BuildContext context) => AppCard(
+        title: 'Alertes et notifications',
+        subtitle: 'Uniquement les alertes déduites de données réelles',
+        child: rows.isEmpty
+            ? const Text('Aucune alerte calculée sur ce périmètre.')
+            : Column(
+                children: rows
+                    .take(6)
+                    .map((item) => ListTile(
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          leading: const Icon(
+                            Icons.notifications_active_outlined,
+                            color: AppColors.warning600,
+                          ),
+                          title: Text('${item['title'] ?? 'Alerte'}'),
+                          subtitle: Text('${item['message'] ?? ''}'),
+                        ))
+                    .toList(),
+              ),
+      );
+
 }
 
 class _DistributionCard extends StatelessWidget {
