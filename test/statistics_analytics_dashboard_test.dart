@@ -91,6 +91,8 @@ void main() {
     expect(find.byKey(const Key('statistics-class-bars')), findsOneWidget);
     expect(find.byKey(const Key('statistics-detail-table')), findsOneWidget);
     expect(find.text('Ce qu’il faut retenir'), findsOneWidget);
+    expect(find.text('Unité : moyenne générale sur 20'), findsOneWidget);
+    expect(find.textContaining('Mathématiques'), findsWidgets);
     expect(find.text('6'), findsWidgets);
     expect(tester.takeException(), isNull);
   });
@@ -114,6 +116,22 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('40.0 %'), findsOneWidget);
     expect(find.text('80.0 %'), findsNothing);
+  });
+
+  testWidgets('reste lisible sur un écran moyen', (tester) async {
+    tester.view.physicalSize = const Size(900, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(app(StatisticsSnapshotView(
+      request: Future.value(snapshot(students: 6, average: 12, success: 80)),
+    )));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Moyenne générale'), findsWidgets);
+    expect(find.textContaining('3e A · 14.00 / 20'), findsWidgets);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('reste lisible sur un écran étroit', (tester) async {
