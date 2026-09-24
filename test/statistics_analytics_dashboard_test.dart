@@ -133,7 +133,7 @@ void main() {
     )));
     await tester.pumpAndSettle();
 
-    expect(find.text('Évolution trimestrielle'), findsOneWidget);
+    expect(find.text('Évolution des résultats'), findsOneWidget);
     expect(find.text('Performance par matière'), findsOneWidget);
     expect(find.text('Moyenne générale'), findsWidgets);
     expect(tester.takeException(), isNull);
