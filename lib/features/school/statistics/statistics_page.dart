@@ -536,7 +536,7 @@ class _StatisticsContent extends StatelessWidget {
             key: const Key('statistics-evolution-chart'),
             title: 'Évolution trimestrielle',
             subtitle:
-                'T1 → T2 → T3, uniquement à partir des résultats officiels',
+                'Moyenne générale sur 20 · évolution des résultats trimestriels officiels',
             rows: evolution,
             labelKey: 'period',
             valueKey: 'average20',
@@ -659,8 +659,8 @@ class _StatisticsContent extends StatelessWidget {
               title: 'Moyenne par classe',
               subtitle:
                   ((data['appliedFilters'] as Map?)?['periodId'] == null)
-                      ? 'Dernier trimestre officiel disponible'
-                      : 'Période officielle sélectionnée',
+                      ? 'Moyenne générale sur 20 · dernier trimestre officiel disponible'
+                      : 'Moyenne générale sur 20 · période officielle sélectionnée',
               rows: byClass,
               labelKey: 'className',
               valueKey: 'average20',
@@ -980,18 +980,18 @@ class _LineChartCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: AppSpacing.s3),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: rows
-                      .map((row) => Flexible(
-                            child: Text(
-                              '${row[labelKey] ?? '—'}',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Wrap(
+                    spacing: AppSpacing.s3,
+                    runSpacing: AppSpacing.s2,
+                    children: rows
+                        .map((row) => Text(
+                              '${row[labelKey] ?? '—'} · ${(row[valueKey] as num?)?.toStringAsFixed(2) ?? '—'} / 20',
                               style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          ))
-                      .toList(),
+                            ))
+                        .toList(),
+                  ),
                 ),
               ],
             ),
@@ -1040,18 +1040,18 @@ class _VerticalBarsCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: AppSpacing.s3),
-                Row(
-                  children: visible
-                      .map((row) => Expanded(
-                            child: Text(
-                              '${row[labelKey] ?? '—'}',
-                              maxLines: 1,
-                              textAlign: TextAlign.center,
-                              overflow: TextOverflow.ellipsis,
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Wrap(
+                    spacing: AppSpacing.s3,
+                    runSpacing: AppSpacing.s2,
+                    children: visible
+                        .map((row) => Text(
+                              '${row[labelKey] ?? '—'} · ${(row[valueKey] as num?)?.toStringAsFixed(2) ?? '—'} / 20',
                               style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          ))
-                      .toList(),
+                            ))
+                        .toList(),
+                  ),
                 ),
               ],
             ),
