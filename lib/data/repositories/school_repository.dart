@@ -466,7 +466,7 @@ class SchoolRepository {
 
   Future<Map<String, dynamic>> approvePreEnrollment(String id,
           {String? classId,
-          String schoolRegime = 'normal',
+          String? schoolRegime,
           bool hasTd = false,
           Map<String, dynamic> options = const {}}) async =>
       Map<String, dynamic>.from(
