@@ -260,17 +260,20 @@ def invoice(session, current, school, reg, cl, student, kind, month, fee_id=None
     identifier = assignment_key(session, reg, kind, month, fee.id if fee else None)
     projected_payload = {'id': identifier, 'registrationId': str(reg.id), 'schoolRegistrationId': str(reg.id),
             'studentId': str(student.id), 'academicYearId': str(reg.academic_year_id),
+            'classId': str(cl.id),
             'feeId': fee.id if fee else None, 'amount': int(fee.payload['amount']) if fee else 0,
             'type': kind, 'month': month, 'regime': applicable_regime,
             'schoolId': school, 'status': 'assigned'}
     stored_assignment = session.get(m.Resource, {'kind': 'finance-fee-assignments', 'id': identifier})
-    assignment = stored_assignment or m.Resource(
+    preserve_historical_assignment = bool(
+        stored_assignment
+        and stored_assignment.payload.get('classId') == str(cl.id)
+    )
+    assignment = stored_assignment if preserve_historical_assignment else m.Resource(
         id=identifier, kind='finance-fee-assignments', school_id=school,
         establishment_id=reg.establishment_id, academic_year_id=reg.academic_year_id,
         payload=projected_payload,
     )
-    if stored_assignment is None:
-        assignment.payload = projected_payload
     balance = m.finance_assignment_balance(session, school, assignment)
     # A validated school registration is itself the proof of settlement for
     # registration/re-enrollment. It is not a second cash payment and must not
