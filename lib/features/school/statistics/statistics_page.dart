@@ -816,7 +816,8 @@ class _LevelDistributionCard extends StatelessWidget {
                             flex: ((rows[index]['studentCount'] as num?)
                                         ?.toInt() ??
                                     0)
-                                .clamp(1, 1000000),
+                                .clamp(1, 1000000)
+                                .toInt(),
                             child: Container(
                               color: AppColors.avatarColors[
                                   index % AppColors.avatarColors.length],
