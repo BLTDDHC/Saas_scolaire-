@@ -121,6 +121,12 @@ jobs:
       - name: Flutter Web photo regression test
         run: flutter test --platform chrome test/student_photo_picker_web_test.dart
 
+      - name: Flutter Web analytics and results regression tests
+        run: |
+          flutter test --platform chrome test/statistics_analytics_dashboard_test.dart
+          flutter test --platform chrome test/parent_results_separation_test.dart
+          flutter test --platform chrome test/admin_school_core_finalization_test.dart --plain-name "un eleve consulte ses resultats sans ecran de saisie"
+
       - name: Build Web release
         run: flutter build web --release
 
