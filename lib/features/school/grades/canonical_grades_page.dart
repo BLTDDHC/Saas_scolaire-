@@ -1433,6 +1433,7 @@ class _CanonicalGradesPageState extends State<CanonicalGradesPage> {
         .map(_eventCode)
         .whereType<String>()
         .where(const {
+          'composition',
           'cepe_test',
           'cepe_blanc',
           'bepc_test',
@@ -1445,6 +1446,7 @@ class _CanonicalGradesPageState extends State<CanonicalGradesPage> {
         .toList()
       ..sort((left, right) {
         const order = [
+          'composition',
           'cepe_test',
           'cepe_blanc',
           'bepc_test',
