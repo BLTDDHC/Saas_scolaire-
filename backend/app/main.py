@@ -729,6 +729,7 @@ class StudentPreEnrollment(Base):
     student_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
     academic_year_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
     desired_class_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), index=True)
+    desired_school_regime: Mapped[str | None] = mapped_column(String(20))
     status: Mapped[str] = mapped_column(String(20), default="draft")
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime)
     decided_at: Mapped[datetime | None] = mapped_column(DateTime)
@@ -1289,6 +1290,9 @@ class StudentPreEnrollmentInput(BaseModel):
     registration_kind: Literal["registration", "reenrollment"] = Field(
         default="registration", alias="registrationKind"
     )
+    school_regime: Literal['part_time', 'full_time'] | None = Field(
+        default=None, alias='schoolRegime'
+    )
     status: Literal["draft", "submitted"] = "draft"
 
     @model_validator(mode="after")
@@ -1312,6 +1316,9 @@ class StudentPreEnrollmentUpdateInput(BaseModel):
     first_name: str = Field(alias="firstName", min_length=1, max_length=100)
     last_name: str = Field(alias="lastName", min_length=1, max_length=100)
     desired_class_id: uuid.UUID = Field(alias="desiredClassId")
+    school_regime: Literal['part_time', 'full_time'] | None = Field(
+        default=None, alias='schoolRegime'
+    )
 
     @field_validator("first_name", "last_name", mode="before")
     @classmethod
@@ -1319,8 +1326,8 @@ class StudentPreEnrollmentUpdateInput(BaseModel):
         return value.strip() if isinstance(value, str) else value
 
 class StudentPreEnrollmentApprovalInput(BaseModel):
-    school_regime: Literal['normal', 'part_time', 'full_time'] = Field(
-        default='normal', alias='schoolRegime'
+    school_regime: Literal['normal', 'part_time', 'full_time'] | None = Field(
+        default=None, alias='schoolRegime'
     )
     has_td: bool = Field(default=False, alias='hasTd')
     options: dict[str, Any] = Field(default_factory=dict)
@@ -2797,6 +2804,7 @@ def pre_enrollment_json(item: StudentPreEnrollment, session: Session) -> dict[st
         "academicYearName": year.name if year else None,
         "desiredClassId": str(item.desired_class_id) if item.desired_class_id else None,
         "desiredClassName": school_class.name if school_class else None,
+        "schoolRegime": item.desired_school_regime,
         "provisionalRegistrationId": str(provisional.id) if provisional else None,
         "registrationKind": (provisional.options or {}).get("registrationKind") if provisional else None,
         "status": item.status,
@@ -4979,7 +4987,8 @@ def create_student_registration(
         student.establishment_id, body.class_id, session, current=current
     )
     validate_registration_academic_options(school_class, body.has_td, session)
-    validate_school_regime(school_class, body.school_regime, session)
+    approval_regime = body.school_regime or item.desired_school_regime or 'normal'
+    validate_school_regime(school_class, approval_regime, session)
     matricule = ensure_student_permanent_matricule(
         session, student, school_class.academic_year_id
     )
@@ -5176,10 +5185,12 @@ def create_student_pre_enrollment(
         session.flush()
     if year.establishment_id != student.establishment_id:
         raise HTTPException(403, "Année scolaire inter-établissement interdite")
-    validate_registration_class(
+    desired_class = validate_registration_class(
         student.establishment_id, body.desired_class_id, session,
         year.id, current
     )
+    effective_regime = body.school_regime or 'normal'
+    validate_school_regime(desired_class, effective_regime, session)
     prior_registration_exists = bool(session.scalar(
         select(StudentAcademicRegistration.id).join(
             AcademicYear,
@@ -5202,6 +5213,11 @@ def create_student_pre_enrollment(
         student_id=student.id,
         academic_year_id=year.id,
         desired_class_id=body.desired_class_id,
+        desired_school_regime=(
+            body.school_regime
+            if school_regime_supported(desired_class, session)
+            else None
+        ),
         status=body.status,
         submitted_at=datetime.now(timezone.utc) if body.status == "submitted" else None,
     )
@@ -5217,6 +5233,7 @@ def create_student_pre_enrollment(
         academic_year_id=year.id,
         registration_date=date.today(),
         registration_number=student.registration_number,
+        school_regime=effective_regime,
         options={
             "preEnrollmentId": str(item.id),
             "registrationKind": expected_kind,
@@ -5308,6 +5325,8 @@ def update_student_pre_enrollment(
         item.establishment_id, body.desired_class_id, session,
         item.academic_year_id, current,
     )
+    effective_regime = body.school_regime or 'normal'
+    validate_school_regime(school_class, effective_regime, session)
     provisional = session.scalar(select(StudentAcademicRegistration).where(
         StudentAcademicRegistration.student_id == student.id,
         StudentAcademicRegistration.academic_year_id == item.academic_year_id,
@@ -5326,8 +5345,12 @@ def update_student_pre_enrollment(
     student.last_name = body.last_name
     student.updated_at = datetime.now(timezone.utc)
     item.desired_class_id = school_class.id
+    item.desired_school_regime = (
+        body.school_regime if school_regime_supported(school_class, session) else None
+    )
     item.updated_at = datetime.now(timezone.utc)
     provisional.class_id = school_class.id
+    provisional.school_regime = effective_regime
     provisional.updated_at = datetime.now(timezone.utc)
     session.commit()
     return pre_enrollment_json(item, session)
@@ -5367,7 +5390,7 @@ def approve_student_pre_enrollment(
     registration.class_id = school_class.id
     registration.registration_date = body.registration_date
     registration.registration_number = matricule
-    registration.school_regime = body.school_regime
+    registration.school_regime = approval_regime
     registration.has_td = body.has_td
     registration.options = {**(registration.options or {}), **body.options}
     registration.status = "validated"
