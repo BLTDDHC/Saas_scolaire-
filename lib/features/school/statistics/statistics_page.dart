@@ -913,7 +913,7 @@ class _AverageBarsCard extends StatelessWidget {
                             if (row['successRate'] != null)
                               'Réussite ${row['successRate']} %',
                             if (row['standardDeviation'] != null)
-                              'Dispersion ${row['standardDeviation']}',
+                              'Écart-type ${row['standardDeviation']}',
                             if (row['attendanceRate'] != null)
                               'Présence ${row['attendanceRate']} %',
                             if (row['progression'] != null)
@@ -980,16 +980,22 @@ class _LineChartCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: AppSpacing.s3),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Unité : moyenne générale sur 20',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.s2),
+                Wrap(
+                  spacing: AppSpacing.s3,
+                  runSpacing: AppSpacing.s2,
                   children: rows
-                      .map((row) => Flexible(
-                            child: Text(
-                              '${row[labelKey] ?? '—'}',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
+                      .map((row) => Text(
+                            '${row[labelKey] ?? '—'} · '
+                            '${((row[valueKey] as num?)?.toDouble() ?? 0).toStringAsFixed(2)} / 20',
+                            style: Theme.of(context).textTheme.bodySmall,
                           ))
                       .toList(),
                 ),
@@ -1040,13 +1046,25 @@ class _VerticalBarsCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: AppSpacing.s3),
-                Row(
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Unité : moyenne sur 20',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.s2),
+                Wrap(
+                  spacing: AppSpacing.s3,
+                  runSpacing: AppSpacing.s2,
                   children: visible
-                      .map((row) => Expanded(
+                      .map((row) => ConstrainedBox(
+                            constraints:
+                                const BoxConstraints(minWidth: 120, maxWidth: 220),
                             child: Text(
-                              '${row[labelKey] ?? '—'}',
-                              maxLines: 1,
-                              textAlign: TextAlign.center,
+                              '${row[labelKey] ?? '—'} · '
+                              '${((row[valueKey] as num?)?.toDouble() ?? 0).toStringAsFixed(2)} / 20',
+                              maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                               style: Theme.of(context).textTheme.bodySmall,
                             ),
