@@ -841,6 +841,7 @@ class FinanceFeeInput(BaseModel):
     academicYearId: str
     description: str = Field(default="", max_length=1000)
     type: Literal["registration", "reenrollment", "tuition", "td", "other"] = "tuition"
+    regime: Literal["part_time", "full_time"] | None = None
     frequency: Literal["once", "monthly", "annual"] = "monthly"
     month: str | None = Field(default=None, pattern=r"^\d{4}-\d{2}$")
     schoolId: str | None = None
@@ -12418,18 +12419,21 @@ def create_finance_fee(
             "Un administrateur de direction doit choisir un perimetre cycle, niveau ou classe",
         )
     finance_lock(session, f"tariffs:{school_id}:{body.academicYearId}")
+    if body.regime is not None and body.type != "tuition":
+        raise HTTPException(422, "Le régime ne peut être lié qu'aux frais mensuels")
     if body.month is not None:
         from .finance import month_key
         if body.type != 'tuition':
             raise HTTPException(422, 'Un mois ne concerne que les frais mensuels')
         month_key(body.month, academic_year)
-    finance_lock(session, f"fee:{school_id}:{body.academicYearId}:{body.scope}:{body.name.strip().casefold()}:{body.classId}:{body.levelId}:{body.cycle}")
+    finance_lock(session, f"fee:{school_id}:{body.academicYearId}:{body.scope}:{body.name.strip().casefold()}:{body.classId}:{body.levelId}:{body.cycle}:{body.regime}")
     duplicate = next((
         row for row in finance_rows(session, "finance-fees", school_id, current)
         if row.payload.get("status", "active") == "active"
         and str(row.payload.get("academicYearId")) == body.academicYearId
         and row.payload.get('type', 'tuition') == body.type
         and row.payload.get('month') == body.month
+        and row.payload.get('regime') == body.regime
         and (body.type != 'other' or row.payload.get('name', '').strip().casefold() == body.name.strip().casefold())
         and row.payload.get("scope", "establishment") == body.scope
         and str(row.payload.get("classId")) == str(body.classId)
