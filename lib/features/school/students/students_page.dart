@@ -1579,17 +1579,41 @@ class _StudentsPageState extends State<StudentsPage> {
               child: SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: DataTable(
+                    columnSpacing: 28,
+                    dataRowMinHeight: 58,
+                    dataRowMaxHeight: 68,
                     columns: const [
+                      DataColumn(label: Text('Photo')),
                       DataColumn(label: Text('Matricule')),
-                      DataColumn(label: Text('Élève')),
+                      DataColumn(label: Text('Nom')),
+                      DataColumn(label: Text('Prénom')),
                       DataColumn(label: Text('Classe')),
                       DataColumn(label: Text('Responsable')),
                       DataColumn(label: Text('Actions'))
                     ],
                     rows: students
                         .map((student) => DataRow(cells: [
+                              DataCell(StudentPhotoAvatar(
+                                studentId: student.id,
+                                initials: student.initials,
+                                radius: 18,
+                              )),
                               DataCell(Text(student.matricule ?? '—')),
-                              DataCell(Text(student.fullName)),
+                              DataCell(SizedBox(
+                                width: 150,
+                                child: Text(
+                                  student.lastName,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(fontWeight: FontWeight.w600),
+                                ),
+                              )),
+                              DataCell(SizedBox(
+                                width: 150,
+                                child: Text(
+                                  student.firstName,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              )),
                               DataCell(AppBadge(
                                   label: student.className ?? 'Non inscrit',
                                   variant: AppBadgeVariant.primary)),
