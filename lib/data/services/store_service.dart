@@ -2000,7 +2000,7 @@ class StoreService extends ChangeNotifier {
           .toList();
 
   Future<void> changeStudentClassRemote(String studentId, String classId,
-      {String schoolRegime = 'normal',
+      {String? schoolRegime,
       bool hasTd = false,
       Map<String, dynamic> registrationOptions = const {}}) async {
     final history = await _repository.studentRegistrations(studentId);
@@ -2745,7 +2745,7 @@ class StoreService extends ChangeNotifier {
 
   Future<Map<String, dynamic>> approvePreEnrollmentRemote(String id,
           {String? classId,
-          String schoolRegime = 'normal',
+          String? schoolRegime,
           bool hasTd = false,
           Map<String, dynamic> options = const {}}) =>
       _repository.approvePreEnrollment(
