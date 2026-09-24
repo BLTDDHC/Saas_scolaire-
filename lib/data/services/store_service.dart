@@ -2733,6 +2733,7 @@ class StoreService extends ChangeNotifier {
     required String academicYearId,
     required String desiredClassId,
     String registrationKind = 'registration',
+    String? schoolRegime,
     bool submit = true,
   }) =>
       _repository.createPreEnrollment({
@@ -2742,6 +2743,7 @@ class StoreService extends ChangeNotifier {
         'academicYearId': academicYearId,
         'desiredClassId': desiredClassId,
         'registrationKind': registrationKind,
+        if (schoolRegime != null) 'schoolRegime': schoolRegime,
         'status': submit ? 'submitted' : 'draft',
       });
 
