@@ -534,6 +534,30 @@ class SchoolRepository {
       Map<String, dynamic>.from(
           await _api.get('/api/v1/school/parent/workspace'));
 
+  Future<List<Map<String, dynamic>>> studentRegimeHistory(
+          String studentId, String academicYearId) async =>
+      List<Map<String, dynamic>>.from(
+        (await _api.get(
+          '/api/v1/school/students/$studentId/regime-history?'
+          '${Uri(queryParameters: {'academic_year_id': academicYearId}).query}',
+        ) as List).map((item) => Map<String, dynamic>.from(item as Map)),
+      );
+
+  Future<Map<String, dynamic>> changeStudentRegime(
+          String studentId, Map<String, dynamic> body) async =>
+      Map<String, dynamic>.from(
+        await _api.put('/api/v1/school/students/$studentId/regime', body),
+      );
+
+  Future<Map<String, dynamic>> parentFinancialSituation(
+          String studentId, String academicYearId) async =>
+      Map<String, dynamic>.from(
+        await _api.get(
+          '/api/v1/school/finance/parent/children/$studentId/financial-situation?'
+          '${Uri(queryParameters: {'academic_year_id': academicYearId}).query}',
+        ),
+      );
+
   Future<void> archiveTeacher(String teacherId) =>
       _api.delete('/api/v1/school/teachers/$teacherId');
 
