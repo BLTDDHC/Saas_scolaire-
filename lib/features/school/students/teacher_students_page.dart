@@ -9,32 +9,70 @@ import '../../../shared/widgets/app_empty_state.dart';
 import '../../../shared/widgets/app_page_header.dart';
 import 'student_photo_avatar.dart';
 
-class TeacherStudentsPage extends StatelessWidget {
+class TeacherStudentsPage extends StatefulWidget {
   const TeacherStudentsPage({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    String normalized(String value) => value
-        .toLowerCase()
-        .replaceAll(RegExp(r'[àáâäãå]'), 'a')
-        .replaceAll(RegExp(r'[ç]'), 'c')
-        .replaceAll(RegExp(r'[èéêë]'), 'e')
-        .replaceAll(RegExp(r'[ìíîï]'), 'i')
-        .replaceAll(RegExp(r'[ñ]'), 'n')
-        .replaceAll(RegExp(r'[òóôöõ]'), 'o')
-        .replaceAll(RegExp(r'[ùúûü]'), 'u')
-        .replaceAll(RegExp(r'[ýÿ]'), 'y');
+  State<TeacherStudentsPage> createState() => _TeacherStudentsPageState();
+}
 
-    final students = context.watch<StoreService>().getStudents().toList()
+class _TeacherStudentsPageState extends State<TeacherStudentsPage> {
+  String? _classId;
+
+  String _normalized(String value) => value
+      .toLowerCase()
+      .replaceAll(RegExp(r'[àáâäãå]'), 'a')
+      .replaceAll(RegExp(r'[ç]'), 'c')
+      .replaceAll(RegExp(r'[èéêë]'), 'e')
+      .replaceAll(RegExp(r'[ìíîï]'), 'i')
+      .replaceAll(RegExp(r'[ñ]'), 'n')
+      .replaceAll(RegExp(r'[òóôöõ]'), 'o')
+      .replaceAll(RegExp(r'[ùúûü]'), 'u')
+      .replaceAll(RegExp(r'[ýÿ]'), 'y');
+
+  @override
+  Widget build(BuildContext context) {
+    final store = context.watch<StoreService>();
+    final teacherId = store.getCurrentTeacherId();
+    final taughtClassIds = store
+        .getAffectations()
+        .where((item) => teacherId != null && item.teacherId == teacherId)
+        .map((item) => item.classId)
+        .toSet();
+    final classById = {
+      for (final item in store.getClasses())
+        if (taughtClassIds.contains(item.id)) item.id: item,
+    };
+    final classes = classById.values.toList()
+      ..sort((a, b) => _normalized(a.name).compareTo(_normalized(b.name)));
+
+    if (_classId != null && !taughtClassIds.contains(_classId)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _classId = null);
+      });
+    }
+
+    final students = store
+        .getStudents()
+        .where((student) =>
+            student.classId != null &&
+            taughtClassIds.contains(student.classId) &&
+            (_classId == null || student.classId == _classId))
+        .toList()
       ..sort((a, b) {
+        final classA = classById[a.classId]?.name ?? a.className ?? '';
+        final classB = classById[b.classId]?.name ?? b.className ?? '';
+        final byClass = _normalized(classA).compareTo(_normalized(classB));
+        if (byClass != 0) return byClass;
         final byLastName =
-            normalized(a.lastName).compareTo(normalized(b.lastName));
+            _normalized(a.lastName).compareTo(_normalized(b.lastName));
         if (byLastName != 0) return byLastName;
         final byFirstName =
-            normalized(a.firstName).compareTo(normalized(b.firstName));
+            _normalized(a.firstName).compareTo(_normalized(b.firstName));
         if (byFirstName != 0) return byFirstName;
         return a.id.compareTo(b.id);
       });
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(AppSpacing.s5),
       child: Column(
@@ -43,8 +81,32 @@ class TeacherStudentsPage extends StatelessWidget {
           const AppPageHeader(
             title: 'Mes élèves',
             subtitle:
-                'Uniquement les élèves des classes qui vous sont affectées.',
+                'Uniquement les élèves des classes dans lesquelles vous enseignez.',
           ),
+          const SizedBox(height: AppSpacing.s4),
+          if (classes.isNotEmpty)
+            SizedBox(
+              width: 340,
+              child: DropdownButtonFormField<String?>(
+                key: const Key('teacher-students-class-filter'),
+                initialValue: _classId,
+                isExpanded: true,
+                decoration: const InputDecoration(labelText: 'Classe'),
+                items: [
+                  const DropdownMenuItem<String?>(
+                    value: null,
+                    child: Text('Toutes mes classes'),
+                  ),
+                  ...classes.map(
+                    (item) => DropdownMenuItem<String?>(
+                      value: item.id,
+                      child: Text(item.name, overflow: TextOverflow.ellipsis),
+                    ),
+                  ),
+                ],
+                onChanged: (value) => setState(() => _classId = value),
+              ),
+            ),
           const SizedBox(height: AppSpacing.s5),
           if (students.isEmpty)
             const AppEmptyState(
@@ -106,16 +168,10 @@ class _StudentCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontWeight: FontWeight.w700)),
                   const SizedBox(height: 2),
+                  Text(student.className ?? 'Classe non renseignée',
+                      maxLines: 1, overflow: TextOverflow.ellipsis),
                   Text(student.matricule ?? 'Matricule non renseigné',
                       maxLines: 1, overflow: TextOverflow.ellipsis),
-                  Text(
-                    [student.level, student.className]
-                        .whereType<String>()
-                        .where((value) => value.trim().isNotEmpty)
-                        .join(' · '),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
                 ],
               ),
             ),
