@@ -13,6 +13,7 @@ import '../../../core/utils/student_photo_picker.dart';
 import '../../../core/utils/pdf_download.dart';
 import '../../../data/datasources/api_client.dart';
 import '../../../data/models/student_model.dart';
+import '../../../data/models/registration_model.dart';
 import '../../../data/services/store_service.dart';
 import '../../../shared/widgets/app_badge.dart';
 import '../../../shared/widgets/app_button.dart';
@@ -1097,36 +1098,149 @@ class _StudentsPageState extends State<StudentsPage> {
     );
   }
 
+  String _regimeLabel(String? value) => switch (value) {
+        'part_time' => 'Mi-temps',
+        'full_time' => 'Plein temps',
+        _ => 'Non applicable',
+      };
+
+  Future<void> _changeRegime(
+      StudentModel student, StudentRegistrationModel registration) async {
+    var regime = registration.schoolRegime == 'part_time'
+        ? 'full_time'
+        : 'part_time';
+    var effectiveDate = DateTime.now();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text('Changer le régime — ${student.fullName}'),
+          content: SizedBox(
+            width: 460,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                DropdownButtonFormField<String>(
+                  key: const Key('change-student-regime'),
+                  initialValue: regime,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: 'Nouveau régime'),
+                  items: const [
+                    DropdownMenuItem(
+                        value: 'part_time', child: Text('Mi-temps')),
+                    DropdownMenuItem(
+                        value: 'full_time', child: Text('Plein temps')),
+                  ],
+                  onChanged: (value) =>
+                      setDialogState(() => regime = value ?? regime),
+                ),
+                const SizedBox(height: AppSpacing.s3),
+                AppDateField(
+                  label: 'Date d’effet',
+                  value: effectiveDate,
+                  firstDate: AppDateUtils.parse(registration.registrationDate) ??
+                      DateTime(DateTime.now().year - 1),
+                  lastDate: DateTime(DateTime.now().year + 2, 12, 31),
+                  onChanged: (value) {
+                    if (value != null) {
+                      setDialogState(() => effectiveDate = value);
+                    }
+                  },
+                ),
+                const SizedBox(height: AppSpacing.s3),
+                const Text(
+                  'Les paiements déjà validés restent inchangés. Le nouveau tarif s’appliquera aux échéances concernées à partir de cette date.',
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Annuler'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Confirmer'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await context.read<StoreService>().changeStudentRegimeRemote(
+            registration.id,
+            regime,
+            effectiveDate,
+          );
+      if (!mounted) return;
+      AppToast.success(context, 'Le nouveau régime a été enregistré.');
+    } on ApiException catch (error) {
+      if (mounted) AppToast.error(context, error.message);
+    }
+  }
+
   Future<void> _showHistory(StudentModel student) async {
     final history = await context
         .read<StoreService>()
         .studentRegistrationHistoryRemote(student.id);
     if (!mounted) return;
     await showDialog<void>(
-        context: context,
-        builder: (context) => AlertDialog(
-              title: Text('Historique — ${student.fullName}'),
-              content: SizedBox(
-                  width: 520,
-                  child: history.isEmpty
-                      ? const Text('Aucune inscription annuelle.')
-                      : Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: history
-                              .map((item) => ListTile(
-                                    leading: const Icon(Icons.history_edu),
-                                    title: Text(
-                                        item.className ?? 'Classe inconnue'),
-                                    subtitle: Text(
-                                        '${item.academicYearId ?? 'Année inconnue'} • ${item.status}'),
-                                  ))
-                              .toList())),
-              actions: [
-                TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Fermer'))
-              ],
-            ));
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Historique — ${student.fullName}'),
+        content: SizedBox(
+          width: 620,
+          child: history.isEmpty
+              ? const Text('Aucune inscription annuelle.')
+              : ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 480),
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: history.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final item = history[index];
+                      final hasRegime = const {'part_time', 'full_time'}
+                          .contains(item.schoolRegime);
+                      final regimeHistory =
+                          (item.options['regimeHistory'] as List? ?? const []);
+                      return ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.history_edu),
+                        title: Text(item.className ?? 'Classe inconnue'),
+                        subtitle: Text([
+                          item.academicYearId ?? 'Année inconnue',
+                          item.status,
+                          if (hasRegime)
+                            'Régime : ${_regimeLabel(item.schoolRegime)}',
+                          if (hasRegime && regimeHistory.isNotEmpty)
+                            '${regimeHistory.length} période(s) de régime',
+                        ].join(' · ')),
+                        trailing: hasRegime
+                            ? TextButton(
+                                onPressed: () async {
+                                  Navigator.pop(dialogContext);
+                                  await _changeRegime(student, item);
+                                  if (mounted) await _showHistory(student);
+                                },
+                                child: const Text('Changer le régime'),
+                              )
+                            : null,
+                      );
+                    },
+                  ),
+                ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Fermer'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _provisionStudentAccess(StudentModel student) async {
