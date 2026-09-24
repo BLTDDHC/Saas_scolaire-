@@ -2683,7 +2683,7 @@ def registration_json(item: StudentAcademicRegistration, session: Session) -> di
         'series': series.name if series else None,
         'matricule': item.registration_number,
         'schoolRegime': (
-            item.school_regime
+            school_regime_on_date(item, date.today(), session)
             if school_class and school_regime_supported(school_class, session)
             else None
         ),
@@ -5082,9 +5082,6 @@ def change_student_registration_regime(
         raise HTTPException(422, "Le changement de régime doit prendre effet au premier jour d'un mois")
     if body.effective_date < registration.registration_date or body.effective_date > year.end_date:
         raise HTTPException(422, "La date d'effet est hors de la période d'inscription")
-    if body.effective_date > date.today():
-        raise HTTPException(422, "La date d'effet ne peut pas être future")
-
     effective_month = body.effective_date.strftime('%Y-%m')
     paid_rows = finance_rows(session, "finance-payments", current.school_id, current)
     for payment in paid_rows:
