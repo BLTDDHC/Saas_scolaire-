@@ -1119,12 +1119,42 @@ class _StudentsPageState extends State<StudentsPage> {
                       : Column(
                           mainAxisSize: MainAxisSize.min,
                           children: history
-                              .map((item) => ListTile(
-                                    leading: const Icon(Icons.history_edu),
+                              .map((item) => ExpansionTile(
+                                    leading:
+                                        const Icon(Icons.history_edu),
                                     title: Text(
                                         item.className ?? 'Classe inconnue'),
                                     subtitle: Text(
-                                        '${item.academicYearId ?? 'Année inconnue'} • ${item.status}'),
+                                      [
+                                        item.academicYearId ??
+                                            'Année inconnue',
+                                        item.status,
+                                        if (item.schoolRegime != null)
+                                          item.schoolRegime == 'part_time'
+                                              ? 'Mi-temps'
+                                              : 'Plein temps',
+                                      ].join(' • '),
+                                    ),
+                                    children: item.regimeHistory.isEmpty
+                                        ? const []
+                                        : item.regimeHistory
+                                            .map((change) => ListTile(
+                                                  dense: true,
+                                                  leading: const Icon(
+                                                      Icons.schedule_outlined),
+                                                  title: Text(
+                                                    change['regime'] ==
+                                                            'part_time'
+                                                        ? 'Mi-temps'
+                                                        : 'Plein temps',
+                                                  ),
+                                                  subtitle: Text(
+                                                    'Du ${change['effectiveFrom'] ?? '—'}'
+                                                    '${change['effectiveTo'] == null ? '' : ' au ${change['effectiveTo']}'}'
+                                                    '${change['tariffAmount'] == null ? '' : ' • Tarif : ${change['tariffAmount']} FCFA'}',
+                                                  ),
+                                                ))
+                                            .toList(),
                                   ))
                               .toList())),
               actions: [
