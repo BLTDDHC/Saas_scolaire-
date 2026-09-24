@@ -529,9 +529,13 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Mes élèves'), findsWidgets);
-    expect(find.text('Massamba Chris'), findsOneWidget);
-    expect(find.text('ECOLE-2026-001'), findsOneWidget);
-    expect(find.text('3e · 3e A'), findsOneWidget);
+    expect(find.text('Massamba'), findsOneWidget);
+    expect(find.text('Chris'), findsOneWidget);
+    expect(find.text('Matricule : ECOLE-2026-001'), findsOneWidget);
+    expect(find.text('3e A'), findsWidgets);
+    expect(find.byKey(const Key('teacher-students-class-filter')),
+        findsOneWidget);
+    expect(find.text('Toutes mes classes'), findsOneWidget);
     expect(find.text('Ajouter un élève'), findsNothing);
     expect(tester.takeException(), isNull);
   });
@@ -574,14 +578,11 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('Note /20'), findsOneWidget);
     expect(find.text('Tous ont été notés'), findsNothing);
-    final presenceFinder =
-        find.byKey(const ValueKey('grade-presence-student-1'));
-    expect(presenceFinder, findsOneWidget);
-    await tester.tap(presenceFinder);
-    await tester.pumpAndSettle();
-    expect(find.text('Absent'), findsOneWidget);
-    await tester.tap(find.text('Non noté').last);
-    await tester.pumpAndSettle();
+    expect(find.text('État'), findsNothing);
+    expect(find.byKey(const ValueKey('grade-presence-student-1')),
+        findsNothing);
+    expect(find.text('Absent'), findsNothing);
+    expect(find.text('Non noté'), findsNothing);
     final gradeField = tester.widget<TextField>(
       find.byKey(const ValueKey('grade-value-student-1')),
     );
@@ -637,6 +638,10 @@ void main() {
       findsOneWidget,
     );
     expect(find.byKey(const Key('submit-combined-grades')), findsOneWidget);
+    expect(find.text('Enregistrer le brouillon'), findsNothing);
+    expect(find.text('État'), findsNothing);
+    expect(find.byKey(const ValueKey(
+        'combined-presence-evaluation-1|student-1')), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
