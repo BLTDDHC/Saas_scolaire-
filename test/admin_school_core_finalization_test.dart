@@ -269,7 +269,9 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('BEPC Blanc').last);
     await tester.pumpAndSettle();
-    expect(find.text('BEPC Blanc'), findsOneWidget);
+    expect(find.text('BEPC Blanc'), findsWidgets);
+    expect(find.textContaining('Moyenne : 13'), findsOneWidget);
+    expect(find.text('13 / 20'), findsOneWidget);
     expect(find.text('Devoir 1'), findsNothing);
     expect(find.text('Coefficient'), findsNothing);
     expect(find.text('Nouvelle évaluation'), findsNothing);
