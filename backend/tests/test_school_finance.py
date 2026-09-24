@@ -88,7 +88,8 @@ class SchoolFinance(unittest.TestCase):
             self.admin,
             self.s,
         )
-        self.assertEqual(changed['schoolRegime'], 'part_time')
+        self.assertEqual(changed['schoolRegime'], 'full_time')
+        self.assertEqual(changed['scheduledRegime'], 'part_time')
         self.assertEqual(self.own(month='2027-01')['expected'], 12000)
         self.assertEqual(self.own(month='2027-02')['expected'], 8000)
         october = self.own(month='2026-10')
