@@ -135,7 +135,7 @@ void main() {
       if (request.url.path ==
           '/api/v1/school/finance/parent-situation/student-b') {
         return http.Response(
-            jsonEncode(situation('student-b', 'Brice Collège', 2000)),
+            jsonEncode(situation('student-b', 'Brice Collège', 2500)),
             200);
       }
       return http.Response(jsonEncode({'detail': 'Not Found'}), 404);
@@ -161,7 +161,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Brice Collège'), findsWidgets);
-    expect(find.text('2 000 FCFA'), findsWidgets);
+    expect(find.text('2 500 FCFA'), findsWidgets);
     expect(find.text('Régime actuel : Plein temps'), findsNothing);
     expect(tester.takeException(), isNull);
   });
