@@ -2932,9 +2932,11 @@ def ensure_initial_regime_history(
     school_class: SchoolClass,
     changed_by: uuid.UUID | None,
 ) -> None:
-    regime = school_regime_for_class(school_class, registration.school_regime, session)
-    if regime == "normal":
+    if registration.school_regime not in {"part_time", "full_time"}:
+        # Legacy rows may predate the regime requirement. Do not invent a
+        # historical regime that was never recorded.
         return
+    regime = school_regime_for_class(school_class, registration.school_regime, session)
     existing = session.scalar(select(StudentRegimeHistory.id).where(
         StudentRegimeHistory.registration_id == registration.id
     ).limit(1))
