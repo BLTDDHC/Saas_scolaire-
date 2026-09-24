@@ -6700,6 +6700,7 @@ def validate_program_type_for_class(
     session: Session,
 ) -> None:
     cycle = session.get(SchoolCycle, school_class.cycle_id)
+    level = session.get(SchoolLevel, school_class.school_level_id)
     cycle_code = (cycle.code if cycle else "").upper()
     level_code = (level.code if level else "").upper()
     if exam_code in {None, 'devoir_1', 'devoir_2', 'composition'}:
@@ -7187,7 +7188,6 @@ def create_evaluation(
     if period.academic_year_id != school_class.academic_year_id:
         raise HTTPException(422, "La periode et la classe ne sont pas dans la meme annee")
     cycle = session.get(SchoolCycle, school_class.cycle_id)
-    level = session.get(SchoolLevel, school_class.school_level_id)
     cycle_code = (cycle.code if cycle else "").upper()
     if body.exam_code is None:
         allowed_types = (
