@@ -205,22 +205,6 @@ class _FinancePageState extends State<FinancePage> {
   }
 
   Future<void> _pay(Map<String, dynamic> row) async {
-    bool regimeTargetSelected() {
-      if (kind != 'tuition') return false;
-      Iterable<Map<String, dynamic>> targets;
-      if (scope == 'class') {
-        targets = classes.where((item) => item['id']?.toString() == target);
-      } else if (scope == 'level') {
-        targets = classes.where((item) => item['levelId']?.toString() == levelId);
-      } else if (scope == 'cycle') {
-        targets = classes.where((item) => item['cycleId']?.toString() == cycleId);
-      } else {
-        return false;
-      }
-      return targets.any((item) => const {'MATERNELLE', 'PRIMAIRE'}
-          .contains(item['cycleCode']?.toString().toUpperCase()));
-    }
-
     final store = context.read<StoreService>();
     Map<String, dynamic> situation = row;
     var monthRows = <Map<String, dynamic>>[];
@@ -448,6 +432,22 @@ class _FinancePageState extends State<FinancePage> {
           cl['cycleId'].toString():
               cl['cycleName']?.toString() ?? 'Cycle scolaire'
     };
+    bool regimeTargetSelected() {
+      if (kind != 'tuition') return false;
+      Iterable<Map<String, dynamic>> targets;
+      if (scope == 'class') {
+        targets = classes.where((item) => item['id']?.toString() == target);
+      } else if (scope == 'level') {
+        targets = classes.where((item) => item['levelId']?.toString() == levelId);
+      } else if (scope == 'cycle') {
+        targets = classes.where((item) => item['cycleId']?.toString() == cycleId);
+      } else {
+        return false;
+      }
+      return targets.any((item) => const {'MATERNELLE', 'PRIMAIRE'}
+          .contains(item['cycleCode']?.toString().toUpperCase()));
+    }
+
     final store = context.read<StoreService>();
     final route = DialogRoute<void>(
         context: context,
