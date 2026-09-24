@@ -230,6 +230,11 @@ class NavItems {
               icon: Icons.calendar_today_rounded,
               section: 'SUIVI'),
           NavItem(
+              id: 'finance',
+              label: 'Paiements',
+              icon: Icons.account_balance_wallet_outlined,
+              section: 'SUIVI'),
+          NavItem(
               id: 'notifications',
               label: 'Notifications',
               icon: Icons.notifications_rounded,
