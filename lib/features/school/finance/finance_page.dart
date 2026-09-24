@@ -205,6 +205,22 @@ class _FinancePageState extends State<FinancePage> {
   }
 
   Future<void> _pay(Map<String, dynamic> row) async {
+    bool regimeTargetSelected() {
+      if (kind != 'tuition') return false;
+      Iterable<Map<String, dynamic>> targets;
+      if (scope == 'class') {
+        targets = classes.where((item) => item['id']?.toString() == target);
+      } else if (scope == 'level') {
+        targets = classes.where((item) => item['levelId']?.toString() == levelId);
+      } else if (scope == 'cycle') {
+        targets = classes.where((item) => item['cycleId']?.toString() == cycleId);
+      } else {
+        return false;
+      }
+      return targets.any((item) => const {'MATERNELLE', 'PRIMAIRE'}
+          .contains(item['cycleCode']?.toString().toUpperCase()));
+    }
+
     final store = context.read<StoreService>();
     Map<String, dynamic> situation = row;
     var monthRows = <Map<String, dynamic>>[];
@@ -417,6 +433,7 @@ class _FinancePageState extends State<FinancePage> {
     String? target = existing?['classId']?.toString() ?? classes.first['id'];
     String? levelId = existing?['levelId']?.toString();
     String? cycleId = existing?['cycle']?.toString();
+    String? tariffRegime = existing?['schoolRegime']?.toString();
     var sending = false;
     String? error;
     final levels = <String, String>{
@@ -457,7 +474,12 @@ class _FinancePageState extends State<FinancePage> {
                                       .toList(),
                                   onChanged: existing != null || sending
                                       ? null
-                                      : (v) => refresh(() => kind = v!)),
+                                      : (v) => refresh(() {
+                                            kind = v!;
+                                            if (kind != 'tuition') {
+                                              tariffRegime = null;
+                                            }
+                                          })),
                               if (existing == null)
                                 DropdownButtonFormField<String>(
                                     isExpanded: true,
@@ -475,7 +497,10 @@ class _FinancePageState extends State<FinancePage> {
                                     ],
                                     onChanged: sending
                                         ? null
-                                        : (v) => refresh(() => scope = v!)),
+                                        : (v) => refresh(() {
+                                              scope = v!;
+                                              tariffRegime = null;
+                                            })),
                               if (existing == null && scope == 'class')
                                 DropdownButtonFormField<String>(
                                     isExpanded: true,
@@ -488,8 +513,12 @@ class _FinancePageState extends State<FinancePage> {
                                             value: cl['id'],
                                             child: Text(cl['name'])))
                                         .toList(),
-                                    onChanged:
-                                        sending ? null : (v) => target = v),
+                                    onChanged: sending
+                                        ? null
+                                        : (v) => refresh(() {
+                                              target = v;
+                                              tariffRegime = null;
+                                            })),
                               if (existing == null && scope == 'level')
                                 DropdownButtonFormField<String>(
                                     isExpanded: true,
@@ -501,8 +530,12 @@ class _FinancePageState extends State<FinancePage> {
                                         .map((e) => DropdownMenuItem(
                                             value: e.key, child: Text(e.value)))
                                         .toList(),
-                                    onChanged:
-                                        sending ? null : (v) => levelId = v),
+                                    onChanged: sending
+                                        ? null
+                                        : (v) => refresh(() {
+                                              levelId = v;
+                                              tariffRegime = null;
+                                            })),
                               if (existing == null && scope == 'cycle')
                                 DropdownButtonFormField<String>(
                                     isExpanded: true,
@@ -514,12 +547,35 @@ class _FinancePageState extends State<FinancePage> {
                                         .map((e) => DropdownMenuItem(
                                             value: e.key, child: Text(e.value)))
                                         .toList(),
-                                    onChanged:
-                                        sending ? null : (v) => cycleId = v),
+                                    onChanged: sending
+                                        ? null
+                                        : (v) => refresh(() {
+                                              cycleId = v;
+                                              tariffRegime = null;
+                                            })),
                               TextField(
                                   controller: name,
                                   decoration: const InputDecoration(
                                       labelText: 'Libellé du tarif')),
+                              if (regimeTargetSelected())
+                                DropdownButtonFormField<String>(
+                                    key: const ValueKey('tariff-regime'),
+                                    isExpanded: true,
+                                    initialValue: tariffRegime,
+                                    decoration: const InputDecoration(
+                                        labelText: 'Régime *'),
+                                    items: const [
+                                      DropdownMenuItem(
+                                          value: 'part_time',
+                                          child: Text('Mi-temps')),
+                                      DropdownMenuItem(
+                                          value: 'full_time',
+                                          child: Text('Plein temps')),
+                                    ],
+                                    onChanged: existing != null || sending
+                                        ? null
+                                        : (v) => refresh(
+                                            () => tariffRegime = v)),
                               if (kind == 'tuition')
                                 DropdownButtonFormField<String>(
                                     isExpanded: true,
@@ -564,7 +620,9 @@ class _FinancePageState extends State<FinancePage> {
                                       value <= 0 ||
                                       name.text.trim().length < 2 ||
                                       (scope == 'level' && levelId == null) ||
-                                      (scope == 'cycle' && cycleId == null)) {
+                                      (scope == 'cycle' && cycleId == null) ||
+                                      (regimeTargetSelected() &&
+                                          tariffRegime == null)) {
                                     refresh(() => error =
                                         'Renseignez le contexte, un libellé et un montant positif.');
                                     return;
@@ -591,6 +649,10 @@ class _FinancePageState extends State<FinancePage> {
                                       'frequency': kind == 'tuition'
                                           ? 'monthly'
                                           : 'once',
+                                      'schoolRegime':
+                                          regimeTargetSelected()
+                                              ? tariffRegime
+                                              : null,
                                       'description':
                                           existing?['description'] ?? ''
                                     }, id: existing?['id']);
@@ -1105,7 +1167,7 @@ class _FinancePageState extends State<FinancePage> {
                   message:
                       'Aucun tarif trouvé. Ajoutez vos tarifs pour alimenter le budget automatiquement.'),
             table(
-                ['Libellé', 'Nature', 'Contexte', 'Montant', 'Action'],
+                ['Libellé', 'Nature', 'Contexte', 'Régime', 'Montant', 'Action'],
                 feeRows
                     .map((f) => DataRow(cells: [
                           DataCell(Text(f['name'] ?? '')),
