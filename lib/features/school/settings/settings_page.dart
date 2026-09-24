@@ -11,6 +11,7 @@ import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/app_form_field.dart';
 import '../../../shared/widgets/app_toast.dart';
 import '../../../shared/widgets/workspace_header.dart';
+import '../../auth/change_password_dialog.dart';
 import 'calendar_settings_card.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -140,7 +141,7 @@ class _SettingsPageState extends State<SettingsPage> {
     final user = store.currentUser;
     return WorkspacePage(
       title: 'Paramètres',
-      subtitle: 'Votre profil, l’établissement et les réglages pédagogiques',
+      subtitle: 'Votre compte, l’établissement et les préférences de l’espace scolaire',
       children: [
         AppCard(
           title: 'Mon Profil Utilisateur',
@@ -154,6 +155,21 @@ class _SettingsPageState extends State<SettingsPage> {
             title: Text(user?.name ?? '',
                 style: const TextStyle(fontWeight: FontWeight.bold)),
             subtitle: Text('${user?.email ?? ''} • ${user?.roleName ?? ''}'),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.s6),
+        AppCard(
+          title: 'Sécurité du compte',
+          subtitle:
+              'Les changements sont appliqués par le serveur et restent valides après reconnexion.',
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: AppButton(
+              label: 'Modifier mon mot de passe',
+              icon: Icons.password_rounded,
+              variant: AppButtonVariant.secondary,
+              onPressed: () => showChangePasswordDialog(context),
+            ),
           ),
         ),
         const SizedBox(height: AppSpacing.s6),
