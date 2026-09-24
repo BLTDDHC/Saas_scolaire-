@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - finalisation/**
+      - ux-finance-*
   pull_request:
     branches:
       - main
