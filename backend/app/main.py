@@ -855,6 +855,7 @@ class FinanceFeeInput(BaseModel):
     type: Literal["registration", "reenrollment", "tuition", "td", "other"] = "tuition"
     frequency: Literal["once", "monthly", "annual"] = "monthly"
     month: str | None = Field(default=None, pattern=r"^\d{4}-\d{2}$")
+    schoolRegime: Literal["part_time", "full_time"] | None = None
     schoolId: str | None = None
 
 class FinancePaymentInput(BaseModel):
@@ -12499,6 +12500,7 @@ def create_finance_fee(
         and str(row.payload.get("classId")) == str(body.classId)
         and str(row.payload.get("levelId")) == str(body.levelId)
         and str(row.payload.get("cycle")) == str(body.cycle)
+        and row.payload.get("schoolRegime") == body.schoolRegime
     ), None)
     if duplicate:
         raise HTTPException(409, "Ce frais existe déjà pour ce périmètre")
@@ -12508,6 +12510,7 @@ def create_finance_fee(
         "scope": body.scope, "cycle": body.cycle, "levelId": body.levelId,
         "classId": body.classId, "description": body.description.strip(),
         "type": body.type, "frequency": body.frequency, "month": body.month,
+        "schoolRegime": body.schoolRegime,
         "schoolId": school_id, "institutionId": school_id,
         "academicYearId": body.academicYearId, "schoolYearId": body.academicYearId,
         "status": "active", "createdAt": datetime.now(timezone.utc).isoformat(),
