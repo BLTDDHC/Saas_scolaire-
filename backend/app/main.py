@@ -6700,7 +6700,6 @@ def validate_program_type_for_class(
     session: Session,
 ) -> None:
     cycle = session.get(SchoolCycle, school_class.cycle_id)
-    level = session.get(SchoolLevel, school_class.school_level_id)
     cycle_code = (cycle.code if cycle else "").upper()
     level_code = (level.code if level else "").upper()
     if exam_code in {None, 'devoir_1', 'devoir_2', 'composition'}:
@@ -7217,31 +7216,11 @@ def create_evaluation(
             "Un element pedagogique portant ce libelle existe deja pour cette matiere",
         )
     if body.exam_code:
-        expected_type = 'test' if body.exam_code in {
-            'cepe_test', 'bepc_test', 'bac_test'
-        } else 'exam_blanc'
-        if body.type != expected_type:
-            raise HTTPException(422, 'Le type ne correspond pas a l examen officiel selectionne')
-        expected_level = {
-            'cepe_test': 'CM2',
-            'cepe_blanc': 'CM2',
-            'bepc_test': '3E',
-            'bepc_blanc': '3E',
-            'bac_test': 'TERMINALE',
-            'bac_blanc': 'TERMINALE',
-        }[body.exam_code]
-        expected_cycle = (
-            'PRIMAIRE' if body.exam_code.startswith('cepe_')
-            else 'COLLEGE' if body.exam_code.startswith('bepc_')
-            else 'LYCEE'
+        # One canonical validation path for both direct and programmed
+        # evaluations. This prevents special-event rules from diverging.
+        validate_program_type_for_class(
+            school_class, body.type, body.exam_code, session
         )
-        if not cycle or cycle.code.upper() != expected_cycle:
-            raise HTTPException(
-                422,
-                'Cet examen officiel ne correspond pas au cycle de la classe',
-            )
-        if not level or level.code.upper() != expected_level:
-            raise HTTPException(422, 'Cet examen officiel ne correspond pas au niveau de la classe')
         if body.exam_code == 'bac_blanc' and session.scalar(select(Evaluation.id).where(
             Evaluation.establishment_id == database_id,
             Evaluation.academic_year_id == school_class.academic_year_id,
