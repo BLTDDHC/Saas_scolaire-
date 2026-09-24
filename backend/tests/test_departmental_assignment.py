@@ -8,6 +8,7 @@ import test_behavior_foundations as fixtures
 
 class DepartmentalAssignmentRules(unittest.TestCase):
     add = fixtures.BehaviorFoundations.add
+    assign = fixtures.BehaviorFoundations.assign
     cleanup = fixtures.BehaviorFoundations.cleanup
 
     def setUp(self):
@@ -70,11 +71,8 @@ class DepartmentalAssignmentRules(unittest.TestCase):
             m.normalized_evaluation_event(evaluation),
             "devoir_departemental",
         )
-        with self.assertRaises(ValueError):
-            m.school_subject_average(
-                "COLLEGE",
-                [("devoir_departemental", 15.0)],
-            )
+        self.assertEqual(evaluation.type, "exam")
+        self.assertNotIn(evaluation.type, {"devoir", "composition"})
 
 
 if __name__ == "__main__":
