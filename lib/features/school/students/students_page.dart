@@ -391,13 +391,23 @@ class _StudentsPageState extends State<StudentsPage> {
     String? selectedLevel =
         initialClass?.structuredLevelId ?? initialClass?.levelId;
     String gender = student?.sex ?? 'M';
-    String schoolRegime = 'normal';
+    String? schoolRegime;
     String guardianType =
         primaryGuardian?['relationship']?.toString() ?? 'tuteur';
     bool hasTd = false;
     bool orphanFather = false;
     bool orphanMother = false;
     bool medicallyFit = true;
+    bool regimeAllowedForSelectedClass() {
+      final selected = allClasses.where((item) => item.id == selectedClass);
+      if (selected.isEmpty) return false;
+      final cycle = cycles
+          .where((item) => item.id == selected.first.cycleId)
+          .firstOrNull;
+      final code = (cycle?.code ?? '').trim().toUpperCase();
+      return const {'MATERNELLE', 'PRIMAIRE'}.contains(code);
+    }
+
     bool tdAllowedForSelectedClass() {
       final selected = allClasses.where((item) => item.id == selectedClass);
       if (selected.isEmpty) return false;
@@ -527,6 +537,7 @@ class _StudentsPageState extends State<StudentsPage> {
                           selectedCycle = value;
                           selectedLevel = null;
                           selectedClass = null;
+                          schoolRegime = null;
                           hasTd = false;
                         }),
                       ),
@@ -547,6 +558,7 @@ class _StudentsPageState extends State<StudentsPage> {
                             : (value) => setDialogState(() {
                                   selectedLevel = value;
                                   selectedClass = null;
+                                  schoolRegime = null;
                                   hasTd = false;
                                 }),
                       ),
@@ -568,26 +580,31 @@ class _StudentsPageState extends State<StudentsPage> {
                           : (value) => setDialogState(() {
                                 selectedClass = value;
                                 if (!tdAllowedForSelectedClass()) hasTd = false;
+                                if (!regimeAllowedForSelectedClass()) {
+                                  schoolRegime = 'normal';
+                                } else if (schoolRegime == 'normal') {
+                                  schoolRegime = null;
+                                }
                               }),
                     ),
                     ...[
                       const SizedBox(height: AppSpacing.s3),
-                      if (student == null || preEnrollment != null)
+                      if ((student == null || preEnrollment != null) &&
+                          regimeAllowedForSelectedClass())
                         DropdownButtonFormField<String>(
+                          key: const ValueKey('student-school-regime'),
                           isExpanded: true,
                           initialValue: schoolRegime,
                           decoration:
                               const InputDecoration(labelText: 'Régime *'),
                           items: const [
                             DropdownMenuItem(
-                                value: 'normal', child: Text('Normal')),
-                            DropdownMenuItem(
                                 value: 'part_time', child: Text('Mi-temps')),
                             DropdownMenuItem(
                                 value: 'full_time', child: Text('Plein temps')),
                           ],
-                          onChanged: (value) => setDialogState(
-                              () => schoolRegime = value ?? 'normal'),
+                          onChanged: (value) =>
+                              setDialogState(() => schoolRegime = value),
                         ),
                       if ((student == null || preEnrollment != null) &&
                           tdAllowedForSelectedClass())
@@ -667,6 +684,13 @@ class _StudentsPageState extends State<StudentsPage> {
                             'Prénom, nom et classe sont obligatoires.');
                         return;
                       }
+                      if ((student == null || preEnrollment != null) &&
+                          regimeAllowedForSelectedClass() &&
+                          schoolRegime == null) {
+                        AppToast.warning(context,
+                            'Choisissez le régime Mi-temps ou Plein temps.');
+                        return;
+                      }
                       final guardianParts =
                           guardianName.text.trim().split(RegExp(r'\s+'));
                       if ((student == null ||
@@ -698,7 +722,10 @@ class _StudentsPageState extends State<StudentsPage> {
                         final saved = student == null
                             ? await store.createStudentRemote(payload,
                                 classId: selectedClass,
-                                schoolRegime: schoolRegime,
+                                schoolRegime: schoolRegime ??
+                                    (regimeAllowedForSelectedClass()
+                                        ? 'full_time'
+                                        : 'normal'),
                                 hasTd: hasTd,
                                 registrationOptions: {
                                     'orphanFather': orphanFather,
@@ -748,7 +775,10 @@ class _StudentsPageState extends State<StudentsPage> {
                           await store.approvePreEnrollmentRemote(
                             preEnrollment['id'].toString(),
                             classId: selectedClass,
-                            schoolRegime: schoolRegime,
+                            schoolRegime: schoolRegime ??
+                                (regimeAllowedForSelectedClass()
+                                    ? 'full_time'
+                                    : 'normal'),
                             hasTd: hasTd,
                             options: {
                               'orphanFather': orphanFather,
