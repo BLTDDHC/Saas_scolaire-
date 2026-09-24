@@ -5376,7 +5376,8 @@ def approve_student_pre_enrollment(
         item.academic_year_id, current
     )
     validate_registration_academic_options(school_class, body.has_td, session)
-    validate_school_regime(school_class, body.school_regime, session)
+    approval_regime = body.school_regime or item.desired_school_regime or 'normal'
+    validate_school_regime(school_class, approval_regime, session)
     matricule = ensure_student_permanent_matricule(
         session, student, item.academic_year_id
     )
@@ -5411,6 +5412,9 @@ def approve_student_pre_enrollment(
     student.updated_at = datetime.now(timezone.utc)
     item.status = "approved"
     item.desired_class_id = school_class.id
+    item.desired_school_regime = (
+        approval_regime if school_regime_supported(school_class, session) else None
+    )
     item.decided_at = datetime.now(timezone.utc)
     item.updated_at = datetime.now(timezone.utc)
     try:
