@@ -221,6 +221,53 @@ class SchoolFinance(unittest.TestCase):
                 schoolId=self.school,
             ), self.admin, self.s)
 
+    def test_primary_pre_enrollment_requires_and_persists_regime(self):
+        self.cycle.code = 'PRIMAIRE'
+        self.level.code = 'CM2'
+        self.s.flush()
+        self.fee('registration', 25000)
+        with self.assertRaises(HTTPException):
+            m.create_student_pre_enrollment(
+                m.StudentPreEnrollmentInput(
+                    firstName='Sans',
+                    lastName='Regime',
+                    academicYearId=self.year.id,
+                    desiredClassId=self.cl.id,
+                    registrationKind='registration',
+                    status='submitted',
+                ),
+                self.admin,
+                self.s,
+            )
+        created = m.create_student_pre_enrollment(
+            m.StudentPreEnrollmentInput(
+                firstName='Avec',
+                lastName='Regime',
+                academicYearId=self.year.id,
+                desiredClassId=self.cl.id,
+                registrationKind='registration',
+                schoolRegime='full_time',
+                status='submitted',
+            ),
+            self.admin,
+            self.s,
+        )
+        self.assertEqual(created['schoolRegime'], 'full_time')
+        provisional = self.s.get(
+            m.StudentAcademicRegistration,
+            uuid.UUID(created['provisionalRegistrationId']),
+        )
+        self.assertEqual(provisional.school_regime, 'full_time')
+        approved = m.approve_student_pre_enrollment(
+            uuid.UUID(created['id']),
+            m.StudentPreEnrollmentApprovalInput(classId=self.cl.id),
+            self.admin,
+            self.s,
+        )
+        self.assertEqual(approved['registration']['schoolRegime'], 'full_time')
+        history = m.student_regime_history_json(provisional, self.s)
+        self.assertEqual(history[0]['schoolRegime'], 'full_time')
+
     def test_regime_change_preserves_old_payments_and_changes_future_tariff(self):
         self._prepare_primary_regime_finance()
         self.assertEqual(self.own(month='2026-10')['expected'], 10000)
