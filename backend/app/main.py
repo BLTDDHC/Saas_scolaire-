@@ -1482,7 +1482,7 @@ class EvaluationProgramInput(BaseModel):
     exam_code: Literal[
         'devoir_1', 'devoir_2', 'composition',
         'cepe_test', 'cepe_blanc', 'bepc_test', 'bepc_blanc',
-        'bac_test', 'bac_blanc'
+        'bac_test', 'bac_blanc', 'devoir_departemental'
     ] | None = Field(default=None, alias='examCode')
     class_ids: list[uuid.UUID] = Field(alias='classIds', min_length=1, max_length=100)
     academic_period_id: uuid.UUID = Field(alias='periodId')
@@ -1895,7 +1895,7 @@ class EvaluationInput(BaseModel):
     type: Literal['devoir', 'composition', 'test', 'exam', 'exam_blanc']
     exam_code: Literal[
         'cepe_test', 'cepe_blanc', 'bepc_test', 'bepc_blanc',
-        'bac_test', 'bac_blanc'
+        'bac_test', 'bac_blanc', 'devoir_departemental'
     ] | None = Field(default=None, alias='examCode')
     class_id: uuid.UUID = Field(alias='classId')
     subject_id: uuid.UUID = Field(alias='subjectId')
@@ -6721,6 +6721,15 @@ def validate_program_type_for_class(
                 f"Le type d'évaluation ne correspond pas à la classe {school_class.name}",
             )
         return
+    if exam_code == "devoir_departemental":
+        if evaluation_type != "exam":
+            raise HTTPException(422, "Le type ne correspond pas au devoir départemental")
+        if cycle_code not in {"COLLEGE", "LYCEE"}:
+            raise HTTPException(
+                422,
+                f"Le devoir départemental n'est pas applicable à la classe {school_class.name}",
+            )
+        return
     expected_type = "test" if exam_code in {
         "cepe_test", "bepc_test", "bac_test"
     } else "exam_blanc"
@@ -7205,31 +7214,40 @@ def create_evaluation(
             "Un element pedagogique portant ce libelle existe deja pour cette matiere",
         )
     if body.exam_code:
-        expected_type = 'test' if body.exam_code in {
-            'cepe_test', 'bepc_test', 'bac_test'
-        } else 'exam_blanc'
-        if body.type != expected_type:
-            raise HTTPException(422, 'Le type ne correspond pas a l examen officiel selectionne')
-        expected_level = {
-            'cepe_test': 'CM2',
-            'cepe_blanc': 'CM2',
-            'bepc_test': '3E',
-            'bepc_blanc': '3E',
-            'bac_test': 'TERMINALE',
-            'bac_blanc': 'TERMINALE',
-        }[body.exam_code]
-        expected_cycle = (
-            'PRIMAIRE' if body.exam_code.startswith('cepe_')
-            else 'COLLEGE' if body.exam_code.startswith('bepc_')
-            else 'LYCEE'
-        )
-        if not cycle or cycle.code.upper() != expected_cycle:
-            raise HTTPException(
-                422,
-                'Cet examen officiel ne correspond pas au cycle de la classe',
+        if body.exam_code == 'devoir_departemental':
+            if body.type != 'exam':
+                raise HTTPException(422, 'Le type ne correspond pas au devoir departemental')
+            if cycle_code not in {'COLLEGE', 'LYCEE'}:
+                raise HTTPException(
+                    422,
+                    'Le devoir departemental est disponible uniquement a partir du college',
+                )
+        else:
+            expected_type = 'test' if body.exam_code in {
+                'cepe_test', 'bepc_test', 'bac_test'
+            } else 'exam_blanc'
+            if body.type != expected_type:
+                raise HTTPException(422, 'Le type ne correspond pas a l examen officiel selectionne')
+            expected_level = {
+                'cepe_test': 'CM2',
+                'cepe_blanc': 'CM2',
+                'bepc_test': '3E',
+                'bepc_blanc': '3E',
+                'bac_test': 'TERMINALE',
+                'bac_blanc': 'TERMINALE',
+            }[body.exam_code]
+            expected_cycle = (
+                'PRIMAIRE' if body.exam_code.startswith('cepe_')
+                else 'COLLEGE' if body.exam_code.startswith('bepc_')
+                else 'LYCEE'
             )
-        if not level or level.code.upper() != expected_level:
-            raise HTTPException(422, 'Cet examen officiel ne correspond pas au niveau de la classe')
+            if not cycle or cycle.code.upper() != expected_cycle:
+                raise HTTPException(
+                    422,
+                    'Cet examen officiel ne correspond pas au cycle de la classe',
+                )
+            if not level or level.code.upper() != expected_level:
+                raise HTTPException(422, 'Cet examen officiel ne correspond pas au niveau de la classe')
         if body.exam_code == 'bac_blanc' and session.scalar(select(Evaluation.id).where(
             Evaluation.establishment_id == database_id,
             Evaluation.academic_year_id == school_class.academic_year_id,
@@ -7793,6 +7811,7 @@ KNOWN_EVALUATION_EVENTS = {
     'bepc_blanc': 'BEPC blanc',
     'bac_test': 'BAC test',
     'bac_blanc': 'BAC blanc',
+    'devoir_departemental': 'Devoir départemental',
 }
 
 
