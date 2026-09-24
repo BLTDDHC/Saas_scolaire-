@@ -104,6 +104,23 @@ void main() {
     expect(putCalls, 0);
   });
 
+  testWidgets('Paramètres ne duplique plus le module Périodes et expose la sécurité',
+      (tester) async {
+    final client = MockClient((request) async {
+      if (request.method == 'GET') {
+        return http.Response(jsonEncode(establishment()), 200);
+      }
+      return http.Response('{}', 404);
+    });
+    await tester.pumpWidget(await page(client));
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(find.text('Modifier mon mot de passe'), findsOneWidget);
+    expect(find.text('Paramètres pédagogiques'), findsNothing);
+    expect(find.text('Périodes pédagogiques'), findsNothing);
+    expect(find.text('Compte & sécurité'), findsOneWidget);
+  });
+
   testWidgets('une erreur backend ne produit aucun faux succès',
       (tester) async {
     final client = MockClient((request) async {
