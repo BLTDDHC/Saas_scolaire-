@@ -2,12 +2,12 @@
 class EvaluationModel {
   final String id;
   final String title; // 'Devoir 1', 'Composition'
-  final String type; // 'devoir' | 'composition'
+  final String type; // devoir | composition | test | exam | exam_blanc
   final String? examCode;
   final String? programId;
   final int? number; // for devoirs (1,2,3...)
   final String academicYearId;
-  final String? periodId; // trimester or semester
+  final String? periodId; // canonical academic period (trimester/month/custom)
   final String classId;
   final String subjectId;
   final String? date;
