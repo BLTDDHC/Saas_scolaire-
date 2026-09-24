@@ -582,7 +582,12 @@ class _StatisticsContent extends StatelessWidget {
               labelKey: 'period',
               valueKey: 'average20',
             ),
-            _LevelDistributionCard(rows: levelDistribution),
+            _LevelDistributionCard(
+              rows: levelDistribution,
+              requireCycleSelection:
+                  ((data['scopeCycleCount'] as num?)?.toInt() ?? 0) > 1 &&
+                      ((data['appliedFilters'] as Map?)?['cycleId'] == null),
+            ),
           ],
         ),
         const SizedBox(height: AppSpacing.s6),
@@ -788,9 +793,13 @@ class _StatisticsContent extends StatelessWidget {
 
 
 class _LevelDistributionCard extends StatelessWidget {
-  const _LevelDistributionCard({required this.rows});
+  const _LevelDistributionCard({
+    required this.rows,
+    required this.requireCycleSelection,
+  });
 
   final List<Map<String, dynamic>> rows;
+  final bool requireCycleSelection;
 
   @override
   Widget build(BuildContext context) {
@@ -801,9 +810,12 @@ class _LevelDistributionCard extends StatelessWidget {
     return AppCard(
       title: 'Répartition des élèves par niveau',
       subtitle: 'Uniquement les niveaux du cycle et du périmètre autorisés',
-      child: rows.isEmpty
-          ? const Text('Aucun effectif disponible pour ce périmètre.')
-          : Column(
+      child: requireCycleSelection
+          ? const Text(
+              'Sélectionnez un cycle pour afficher uniquement ses niveaux.')
+          : rows.isEmpty
+              ? const Text('Aucun effectif disponible pour ce périmètre.')
+              : Column(
               children: [
                 SizedBox(
                   height: 18,
