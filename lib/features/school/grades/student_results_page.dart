@@ -52,6 +52,8 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
   String? _periodFilter;
   String? _subjectFilter;
   String? _typeFilter;
+  bool _showResults = false;
+  String? _resultSelection;
 
   @override
   void didChangeDependencies() {
@@ -69,6 +71,8 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
       _periodFilter = null;
       _subjectFilter = null;
       _typeFilter = null;
+      _showResults = false;
+      _resultSelection = null;
     }
   }
 
@@ -152,22 +156,102 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
             final sortedPeriods = periodOptions.toList()..sort();
             final sortedSubjects = subjectOptions.toList()..sort();
             final sortedTypes = typeOptions.toList()..sort();
+            final resultOptions = <({String value, String label})>[];
+            for (final year in years) {
+              for (final rawPeriod in (year['periods'] as List? ?? const [])) {
+                final period = Map<String, dynamic>.from(rawPeriod as Map);
+                final periodName = '${period['period'] ?? ''}'.trim();
+                if (periodName.isNotEmpty) {
+                  resultOptions.add((value: 'period|$periodName', label: periodName));
+                }
+                for (final rawExam in (period['exams'] as List? ?? const [])) {
+                  final exam = Map<String, dynamic>.from(rawExam as Map);
+                  final code = '${exam['code'] ?? ''}'.trim();
+                  if (code.isEmpty || periodName.isEmpty) continue;
+                  resultOptions.add((
+                    value: 'exam|$periodName|$code',
+                    label: '${exam['name'] ?? _evaluationTypeLabel(code)}',
+                  ));
+                }
+              }
+            }
+            final uniqueResultOptions = <String, ({String value, String label})>{};
+            for (final option in resultOptions) {
+              uniqueResultOptions.putIfAbsent(option.value, () => option);
+            }
+            final selectableResults = uniqueResultOptions.values.toList();
 
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if ('${data['studentName'] ?? ''}'.isNotEmpty) ...[
-                  Text(
-                    '${data['studentName']}',
-                    style: Theme.of(context).textTheme.titleMedium,
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(_showResults ? 'Résultats' : 'Notes',
+                              style: Theme.of(context).textTheme.headlineSmall),
+                          const SizedBox(height: AppSpacing.s1),
+                          Text(
+                            _showResults
+                                ? 'Résultats officiels : choisissez une période ou une évaluation spécifique.'
+                                : 'Notes réellement soumises par les enseignants.',
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                          if ('${data['studentName'] ?? ''}'.isNotEmpty) ...[
+                            const SizedBox(height: AppSpacing.s2),
+                            Text('${data['studentName']}',
+                                style: Theme.of(context).textTheme.titleMedium),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.s3),
+                    FilledButton.tonalIcon(
+                      key: const Key('student-results-toggle'),
+                      onPressed: () => setState(() {
+                        _showResults = !_showResults;
+                        if (!_showResults) _resultSelection = null;
+                      }),
+                      icon: Icon(_showResults
+                          ? Icons.note_alt_outlined
+                          : Icons.analytics_outlined),
+                      label: Text(_showResults ? 'Voir les notes' : 'Voir les résultats'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.s4),
+                if (_showResults) ...[
+                  AppCard(
+                    title: 'Période / résultat',
+                    subtitle: 'Une sélection affiche uniquement le résultat correspondant.',
+                    child: DropdownButtonFormField<String>(
+                      key: const Key('student-result-selector'),
+                      isExpanded: true,
+                      initialValue: selectableResults.any((item) => item.value == _resultSelection)
+                          ? _resultSelection
+                          : null,
+                      decoration: const InputDecoration(
+                          labelText: 'Sélectionner une période / résultat'),
+                      items: selectableResults
+                          .map((item) => DropdownMenuItem(
+                                value: item.value,
+                                child: Text(item.label, overflow: TextOverflow.ellipsis),
+                              ))
+                          .toList(),
+                      onChanged: (value) => setState(() => _resultSelection = value),
+                    ),
                   ),
                   const SizedBox(height: AppSpacing.s4),
                 ],
-                if (sortedPeriods.isNotEmpty ||
-                    sortedSubjects.isNotEmpty ||
-                    sortedTypes.isNotEmpty) ...[
+                if (!_showResults &&
+                    (sortedPeriods.isNotEmpty ||
+                        sortedSubjects.isNotEmpty ||
+                        sortedTypes.isNotEmpty)) ...[
                   AppCard(
-                    title: 'Filtres',
+                    title: 'Filtres des notes',
                     child: Wrap(
                       spacing: AppSpacing.s3,
                       runSpacing: AppSpacing.s3,
@@ -232,15 +316,15 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
                   ),
                   const SizedBox(height: AppSpacing.s4),
                 ],
-                ...years.map(_yearCard),
+                ...years.map((year) => _yearCard(year, showResults: _showResults)),
               ],
             );
           },
         );
     if (widget.embedded) return content;
     return WorkspacePage(
-      title: 'Notes et résultats',
-      subtitle: 'Vos notes, moyennes et classements officiellement publiés',
+      title: 'Notes',
+      subtitle: 'Notes soumises par les enseignants, avec accès séparé aux résultats officiels',
       actions: [
         IconButton.filledTonal(
           tooltip: 'Actualiser les résultats',
@@ -252,7 +336,7 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
     );
   }
 
-  Widget _yearCard(Map<String, dynamic> year) {
+  Widget _yearCard(Map<String, dynamic> year, {required bool showResults}) {
     final registration = Map<String, dynamic>.from(
       year['registration'] as Map? ?? const <String, dynamic>{},
     );
@@ -306,24 +390,64 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (notes.isNotEmpty) ...[
-              _submittedNotesTable(notes),
-              const SizedBox(height: AppSpacing.s4),
+            if (!showResults) ...[
+              if (notes.isNotEmpty)
+                _submittedNotesTable(notes)
+              else
+                const Text('Aucune note soumise ne correspond aux filtres sélectionnés.'),
+            ] else ...[
+              if (_resultSelection == null)
+                const AppEmptyState(
+                  iconData: Icons.analytics_outlined,
+                  title: 'Choisissez un résultat.',
+                  message: 'Sélectionnez une période ou une évaluation spécifique pour afficher uniquement le résultat correspondant.',
+                )
+              else
+                _selectedResultCard(periods, registration),
             ],
-            if (periods.isNotEmpty) ...[
-              _evolutionSection(periods),
-              const SizedBox(height: AppSpacing.s4),
-              ...periods.map((period) => _periodCard(period, registration)),
-            ] else if (notes.isEmpty)
-              const Text('Aucune donnée ne correspond aux filtres sélectionnés.'),
           ],
         ),
       ),
     );
   }
 
+  Widget _selectedResultCard(
+      List<Map<String, dynamic>> periods, Map<String, dynamic> registration) {
+    final selected = _resultSelection;
+    if (selected == null) return const SizedBox.shrink();
+    final parts = selected.split('|');
+    if (parts.length < 2) return const SizedBox.shrink();
+    final periodName = parts[1];
+    final matches = periods.where((item) => '${item['period']}' == periodName).toList();
+    if (matches.isEmpty) {
+      return const Text('Le résultat sélectionné n’est plus disponible.');
+    }
+    final period = matches.first;
+    if (parts.first == 'exam' && parts.length >= 3) {
+      final code = parts[2];
+      final exams = List<Map<String, dynamic>>.from(
+        (period['exams'] as List? ?? const [])
+            .map((item) => Map<String, dynamic>.from(item as Map)),
+      );
+      final selectedExams = exams.where((item) => '${item['code']}' == code).toList();
+      if (selectedExams.isEmpty) {
+        return const Text('Aucun résultat officiel disponible pour cette évaluation.');
+      }
+      return _examCard(selectedExams.first, registration);
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _evolutionSection(periods),
+        const SizedBox(height: AppSpacing.s4),
+        _periodCard(period, registration, includeExams: false),
+      ],
+    );
+  }
+
   Widget _periodCard(
-      Map<String, dynamic> period, Map<String, dynamic> registration) {
+      Map<String, dynamic> period, Map<String, dynamic> registration,
+      {bool includeExams = true}) {
     var subjects = List<Map<String, dynamic>>.from(
       (period['subjects'] as List? ?? const [])
           .map((item) => Map<String, dynamic>.from(item as Map)),
@@ -434,7 +558,8 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
                     .toList(),
               ),
             ),
-          ...exams.map((exam) => _examCard(exam, registration)),
+          if (includeExams)
+            ...exams.map((exam) => _examCard(exam, registration)),
           if (rankingCount > 0)
             Align(
               alignment: Alignment.centerLeft,
@@ -463,6 +588,7 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
         'bepc_blanc': 'BEPC Blanc',
         'bac_test': 'BAC Test',
         'bac_blanc': 'BAC Blanc',
+        'devoir_departemental': 'Devoir départemental',
         'test': 'Test',
         'exam': 'Examen',
         'exam_blanc': 'Examen blanc',
@@ -788,8 +914,8 @@ class _ParentResultsPageState extends State<ParentResultsPage> {
 
   @override
   Widget build(BuildContext context) => WorkspacePage(
-        title: 'Notes des enfants',
-        subtitle: 'Résultats publiés des enfants rattachés à votre compte',
+        title: 'Notes et résultats des enfants',
+        subtitle: 'Notes soumises et résultats officiels séparés pour l’enfant sélectionné',
         children: [
           FutureBuilder<List<Map<String, dynamic>>>(
             future: _childrenRequest,
