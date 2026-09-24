@@ -5043,6 +5043,79 @@ def create_student_registration(
     session.refresh(item)
     return registration_json(item, session)
 
+@app.put("/api/v1/school/student-registrations/{registration_id}/regime")
+def change_student_registration_regime(
+    registration_id: uuid.UUID,
+    body: StudentRegimeChangeInput,
+    current: Principal = Depends(require_module("students")),
+    session: Session = Depends(db),
+):
+    item = session.get(StudentAcademicRegistration, registration_id)
+    if not item:
+        raise HTTPException(404, "Inscription introuvable")
+    student = ensure_student_scope(item.student_id, current, session)
+    school_class = validate_registration_class(
+        student.establishment_id, item.class_id, session,
+        item.academic_year_id, current,
+    )
+    normalized_regime = validate_school_regime_for_class(
+        school_class, body.school_regime, session
+    )
+    year = session.get(AcademicYear, item.academic_year_id)
+    if not year:
+        raise HTTPException(409, "Année scolaire introuvable")
+    if body.effective_date.day != 1:
+        raise HTTPException(422, "La date d’effet d’un régime mensuel doit être le premier jour du mois")
+    if body.effective_date < max(item.registration_date, year.start_date) or body.effective_date > year.end_date:
+        raise HTTPException(422, "La date d’effet est hors de la période d’inscription")
+    current_regime = regime_for_date(session, item, body.effective_date)
+    if current_regime == normalized_regime:
+        raise HTTPException(409, "Ce régime est déjà applicable à cette date")
+
+    history = regime_history_rows(session, item.id)
+    for row in history:
+        if row.effective_from >= body.effective_date:
+            raise HTTPException(
+                409,
+                "Un changement de régime existe déjà à cette date ou après. Ajustez d’abord l’historique existant.",
+            )
+    previous = history[-1] if history else None
+    if previous and previous.effective_to is None:
+        previous.effective_to = body.effective_date - timedelta(days=1)
+
+    entry = StudentRegimeHistory(
+        establishment_id=item.establishment_id,
+        registration_id=item.id,
+        student_id=item.student_id,
+        academic_year_id=item.academic_year_id,
+        regime=normalized_regime,
+        effective_from=body.effective_date,
+        changed_by=uuid.UUID(current.id),
+    )
+    session.add(entry)
+    item.school_regime = normalized_regime
+    item.updated_at = datetime.now(timezone.utc)
+    session.flush()
+
+    try:
+        from . import finance as finance_module
+        school_id = public_school_id(session, item.establishment_id)
+        fee = finance_module.fee_for(
+            session, current, school_id, item, school_class, "tuition",
+            body.effective_date.strftime("%Y-%m"),
+        )
+        if fee:
+            entry.tariff_amount = int(fee.payload.get("amount") or 0)
+    except HTTPException:
+        entry.tariff_amount = None
+
+    session.commit()
+    session.refresh(entry)
+    return {
+        "registration": registration_json(item, session),
+        "change": regime_history_json(entry),
+    }
+
 @app.put("/api/v1/school/student-registrations/{registration_id}")
 def change_student_registration_class(
     registration_id: uuid.UUID,
