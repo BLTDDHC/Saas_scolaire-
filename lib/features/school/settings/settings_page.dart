@@ -12,7 +12,6 @@ import '../../../shared/widgets/app_form_field.dart';
 import '../../../shared/widgets/app_toast.dart';
 import '../../../shared/widgets/workspace_header.dart';
 import 'calendar_settings_card.dart';
-import 'pedagogical_settings_card.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -165,8 +164,6 @@ class _SettingsPageState extends State<SettingsPage> {
           const CalendarSettingsCard(),
           const SizedBox(height: AppSpacing.s6),
         ],
-        const PedagogicalSettingsCard(),
-        const SizedBox(height: AppSpacing.s6),
         AppCard(
           title: 'Thème & Apparence',
           child:
