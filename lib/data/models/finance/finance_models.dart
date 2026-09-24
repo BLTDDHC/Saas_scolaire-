@@ -14,6 +14,7 @@ class FeeModel {
   final String? cycle; // cycle name (e.g., 'Lycée') or id if available
   final String? levelId; // reference to SchoolLevelModel.id
   final String? classId; // reference to ClassModel.id
+  final String? schoolRegime; // part_time|full_time for Maternelle/Primaire tuition
 
   String? get schoolYearId => academicYearId;
   set schoolYearId(String? value) => academicYearId = value;
@@ -39,6 +40,7 @@ class FeeModel {
     this.cycle,
     this.levelId,
     this.classId,
+    this.schoolRegime,
     this.description,
     this.schoolId,
     this.institutionId,
@@ -69,6 +71,7 @@ class FeeModel {
       cycle: json['cycle'] ?? json['cycleId'],
       levelId: json['levelId'] ?? json['schoolLevelId'] ?? json['levelId'],
       classId: json['classId'] ?? json['class_id'],
+      schoolRegime: json['schoolRegime'],
       description: json['description'],
       schoolId: json['schoolId'] ?? json['institutionId'],
       institutionId: json['institutionId'] ?? json['schoolId'],
@@ -92,6 +95,7 @@ class FeeModel {
     'cycle': cycle,
     'levelId': levelId,
     'classId': classId,
+    'schoolRegime': schoolRegime,
     'description': description,
     'type': type,
     'isMandatoryAtRegistration': isMandatoryAtRegistration,
