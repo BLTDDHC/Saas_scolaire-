@@ -152,6 +152,20 @@ void main() {
                     'cycleCode': 'COLLEGE',
                     'level': '6e',
                   },
+                  'notes': [
+                    {
+                      'period': 'Trimestre 1',
+                      'periodOrder': 1,
+                      'date': '2026-10-01',
+                      'subject': 'Mathematiques',
+                      'evaluation': 'Devoir 1',
+                      'evaluationType': 'devoir',
+                      'examCode': 'devoir_1',
+                      'presence': 'present',
+                      'value': 15,
+                      'maxValue': 20,
+                    }
+                  ],
                   'periods': [
                     {
                       'period': 'Trimestre 1',
@@ -226,11 +240,22 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Notes et résultats'), findsOneWidget);
+    expect(find.text('Notes'), findsWidgets);
+    expect(find.text('Voir les résultats'), findsOneWidget);
     expect(find.text('Jean Test'), findsOneWidget);
     expect(find.text('2026-2027'), findsOneWidget);
-    expect(find.textContaining('Moyenne : 14.5'), findsOneWidget);
-    await tester.tap(find.text('Trimestre 1'));
+    expect(find.text('Notes récemment soumises'), findsOneWidget);
+    expect(find.text('15 / 20'), findsOneWidget);
+    expect(find.textContaining('Moyenne : 14.5'), findsNothing);
+
+    await tester.tap(find.byKey(const Key('student-results-toggle')));
+    await tester.pumpAndSettle();
+    expect(find.text('Résultats'), findsWidgets);
+    expect(find.byKey(const Key('student-result-selector')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('student-result-selector')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Trimestre 1').last);
     await tester.pumpAndSettle();
     expect(find.text('Moyenne générale'), findsOneWidget);
     expect(find.text('Mention'), findsOneWidget);
@@ -238,7 +263,14 @@ void main() {
     expect(find.text('Devoir 1'), findsOneWidget);
     expect(find.text('Devoir 2'), findsOneWidget);
     expect(find.text('Composition'), findsOneWidget);
+    expect(find.text('BEPC Blanc'), findsNothing);
+
+    await tester.tap(find.byKey(const Key('student-result-selector')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('BEPC Blanc').last);
+    await tester.pumpAndSettle();
     expect(find.text('BEPC Blanc'), findsOneWidget);
+    expect(find.text('Devoir 1'), findsNothing);
     expect(find.text('Coefficient'), findsNothing);
     expect(find.text('Nouvelle évaluation'), findsNothing);
   });
