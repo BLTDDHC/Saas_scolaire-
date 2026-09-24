@@ -17,6 +17,7 @@ const Map<String, String> schoolPageModules = {
   'behavior': 'behavior',
   'schedule': 'schedule',
   'finance': 'finance',
+  'parent_finance': 'finance',
   'documents': 'documents',
   'statistics': 'statistics',
 };
