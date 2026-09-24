@@ -82,6 +82,18 @@ void main() {
     expect(find.text('Modifier les coordonnées'), findsOneWidget);
   });
 
+
+  testWidgets('Paramètres ne duplique pas le module Périodes', (tester) async {
+    final client = MockClient((request) async =>
+        http.Response(jsonEncode(establishment()), 200));
+    await tester.pumpWidget(await page(client));
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(find.text('Paramètres pédagogiques'), findsNothing);
+    expect(find.text('Périodes pédagogiques'), findsNothing);
+    expect(find.textContaining('trimestres, mois'), findsNothing);
+  });
+
   testWidgets('bloque un formulaire invalide sans appel API', (tester) async {
     var putCalls = 0;
     final client = MockClient((request) async {
