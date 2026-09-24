@@ -2669,7 +2669,14 @@ def registration_json(item: StudentAcademicRegistration, session: Session) -> di
         'seriesId': str(school_class.series_id) if school_class and school_class.series_id else None,
         'series': series.name if series else None,
         'matricule': item.registration_number,
-        'schoolRegime': item.school_regime,
+        'schoolRegime': (
+            regime_for_month(item, date.today().strftime("%Y-%m"))
+            if class_cycle_code(school_class, session) in {"MATERNELLE", "PRIMAIRE"}
+            else None
+        ),
+        'regimeHistory': registration_regime_history(item)
+            if class_cycle_code(school_class, session) in {"MATERNELLE", "PRIMAIRE"}
+            else [],
         'hasTd': item.has_td,
         'options': item.options or {},
         'registrationDate': item.registration_date.isoformat(),
@@ -2781,6 +2788,12 @@ def pre_enrollment_json(item: StudentPreEnrollment, session: Session) -> dict[st
         "desiredClassName": school_class.name if school_class else None,
         "provisionalRegistrationId": str(provisional.id) if provisional else None,
         "registrationKind": (provisional.options or {}).get("registrationKind") if provisional else None,
+        "schoolRegime": (
+            provisional.school_regime
+            if provisional and school_class
+            and class_cycle_code(school_class, session) in {"MATERNELLE", "PRIMAIRE"}
+            else None
+        ),
         "status": item.status,
         "submittedAt": item.submitted_at.isoformat() if item.submitted_at else None,
         "decidedAt": item.decided_at.isoformat() if item.decided_at else None,
@@ -4944,6 +4957,7 @@ def create_student_registration(
         student.establishment_id, body.class_id, session, current=current
     )
     validate_registration_academic_options(school_class, body.has_td, session)
+    validate_school_regime(school_class, body.school_regime, session)
     matricule = ensure_student_permanent_matricule(
         session, student, school_class.academic_year_id
     )
@@ -4956,7 +4970,19 @@ def create_student_registration(
         registration_number=matricule,
         school_regime=body.school_regime,
         has_td=body.has_td,
-        options=body.options,
+        options={
+            **body.options,
+            "regimeHistory": (
+                [{
+                    "regime": body.school_regime,
+                    "effectiveMonth": body.registration_date.strftime("%Y-%m"),
+                    "changedBy": current.id,
+                    "changedAt": datetime.now(timezone.utc).isoformat(),
+                }]
+                if class_cycle_code(school_class, session) in {"MATERNELLE", "PRIMAIRE"}
+                else []
+            ),
+        },
         status="validated",
     )
     session.add(item)
@@ -5059,10 +5085,11 @@ def create_student_pre_enrollment(
         session.flush()
     if year.establishment_id != student.establishment_id:
         raise HTTPException(403, "Année scolaire inter-établissement interdite")
-    validate_registration_class(
+    desired_class = validate_registration_class(
         student.establishment_id, body.desired_class_id, session,
         year.id, current
     )
+    validate_school_regime(desired_class, body.school_regime, session)
     prior_registration_exists = bool(session.scalar(
         select(StudentAcademicRegistration.id).join(
             AcademicYear,
@@ -5100,9 +5127,20 @@ def create_student_pre_enrollment(
         academic_year_id=year.id,
         registration_date=date.today(),
         registration_number=student.registration_number,
+        school_regime=body.school_regime,
         options={
             "preEnrollmentId": str(item.id),
             "registrationKind": expected_kind,
+            "regimeHistory": (
+                [{
+                    "regime": body.school_regime,
+                    "effectiveMonth": year.start_date.strftime("%Y-%m"),
+                    "changedBy": current.id,
+                    "changedAt": datetime.now(timezone.utc).isoformat(),
+                }]
+                if class_cycle_code(desired_class, session) in {"MATERNELLE", "PRIMAIRE"}
+                else []
+            ),
         },
         status="pre_enrolled",
     )
@@ -5246,12 +5284,27 @@ def approve_student_pre_enrollment(
     ))
     if registration is None:
         raise HTTPException(409, "L'inscription provisoire associée est introuvable")
+    selected_regime = body.school_regime or registration.school_regime
+    validate_school_regime(school_class, selected_regime, session)
     registration.class_id = school_class.id
     registration.registration_date = body.registration_date
     registration.registration_number = matricule
-    registration.school_regime = body.school_regime
+    registration.school_regime = selected_regime
     registration.has_td = body.has_td
-    registration.options = {**(registration.options or {}), **body.options}
+    existing_options = dict(registration.options or {})
+    if class_cycle_code(school_class, session) in {"MATERNELLE", "PRIMAIRE"}:
+        history = registration_regime_history(registration)
+        if not history:
+            history = [{
+                "regime": selected_regime,
+                "effectiveMonth": body.registration_date.strftime("%Y-%m"),
+                "changedBy": current.id,
+                "changedAt": datetime.now(timezone.utc).isoformat(),
+            }]
+        existing_options["regimeHistory"] = history
+    else:
+        existing_options["regimeHistory"] = []
+    registration.options = {**existing_options, **body.options}
     registration.status = "validated"
     registration.updated_at = datetime.now(timezone.utc)
     student.status = "active"
