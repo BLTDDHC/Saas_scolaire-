@@ -216,7 +216,11 @@ class _CanonicalGradesPageState extends State<CanonicalGradesPage> {
           grades.where((item) => item.studentId == student.id).toList();
       final grade = matches.isEmpty ? null : matches.first;
       _gradeControllers[student.id] = TextEditingController(
-        text: grade?.grade == null ? '' : _formatNumber(grade!.grade!),
+        text: grade?.presence == 'absent'
+            ? 'ABS'
+            : grade?.grade == null
+                ? ''
+                : _formatNumber(grade!.grade!),
       );
       _presence[student.id] = grade?.presence ?? 'not_recorded';
     }
@@ -303,7 +307,11 @@ class _CanonicalGradesPageState extends State<CanonicalGradesPage> {
             grades.where((item) => item.studentId == student.id).firstOrNull;
         final key = _combinedKey(evaluation.id, student.id);
         _combinedGradeControllers[key] = TextEditingController(
-          text: grade?.grade == null ? '' : _formatNumber(grade!.grade!),
+          text: grade?.presence == 'absent'
+              ? 'ABS'
+              : grade?.grade == null
+                  ? ''
+                  : _formatNumber(grade!.grade!),
         );
         _combinedPresence[key] = grade?.presence ?? 'not_recorded';
       }
@@ -317,12 +325,16 @@ class _CanonicalGradesPageState extends State<CanonicalGradesPage> {
   ) {
     final key = _combinedKey(evaluation.id, student.id);
     final raw = _combinedGradeControllers[key]?.text.trim() ?? '';
-    final previousState = _combinedPresence[key] ?? 'not_recorded';
-    final value = raw.isEmpty ? null : double.tryParse(raw.replaceAll(',', '.'));
+    final normalized = raw.toUpperCase();
     final state = raw.isEmpty
-        ? (previousState == 'absent' ? 'absent' : 'not_recorded')
-        : 'present';
-    if (raw.isNotEmpty &&
+        ? 'not_recorded'
+        : normalized == 'ABS'
+            ? 'absent'
+            : 'present';
+    final value = state == 'present'
+        ? double.tryParse(raw.replaceAll(',', '.'))
+        : null;
+    if (state == 'present' &&
         (value == null || value < 0 || value > evaluation.maxScore)) {
       return null;
     }
@@ -367,9 +379,12 @@ class _CanonicalGradesPageState extends State<CanonicalGradesPage> {
       for (final student in students) {
         final key = _combinedKey(evaluation.id, student.id);
         final raw = _combinedGradeControllers[key]?.text.trim() ?? '';
-        final value =
-            raw.isEmpty ? null : double.tryParse(raw.replaceAll(',', '.'));
+        final normalized = raw.toUpperCase();
+        final value = raw.isEmpty || normalized == 'ABS'
+            ? null
+            : double.tryParse(raw.replaceAll(',', '.'));
         if (raw.isNotEmpty &&
+            normalized != 'ABS' &&
             (value == null || value < 0 || value > evaluation.maxScore)) {
           AppToast.error(
             context,
@@ -435,64 +450,6 @@ class _CanonicalGradesPageState extends State<CanonicalGradesPage> {
     }
   }
 
-  Widget _separatePresenceField(
-    StudentModel student, {
-    required bool enabled,
-  }) {
-    final value = _presence[student.id] ?? 'not_recorded';
-    return DropdownButtonFormField<String>(
-      key: ValueKey('grade-presence-${student.id}'),
-      isExpanded: true,
-      initialValue: value,
-      decoration: const InputDecoration(labelText: 'État', isDense: true),
-      items: const [
-        DropdownMenuItem(value: 'present', child: Text('Note')),
-        DropdownMenuItem(value: 'absent', child: Text('Absent')),
-        DropdownMenuItem(value: 'not_recorded', child: Text('Non noté')),
-      ],
-      onChanged: !enabled
-          ? null
-          : (next) => setState(() {
-                final state = next ?? 'not_recorded';
-                _presence[student.id] = state;
-                if (state != 'present') {
-                  _gradeControllers[student.id]?.clear();
-                }
-              }),
-    );
-  }
-
-  Widget _combinedPresenceField(
-    EvaluationModel evaluation,
-    StudentModel student,
-  ) {
-    final key = _combinedKey(evaluation.id, student.id);
-    final value = _combinedPresence[key] ?? 'not_recorded';
-    return DropdownButtonFormField<String>(
-      key: ValueKey('combined-presence-$key'),
-      isExpanded: true,
-      initialValue: value,
-      decoration: const InputDecoration(
-        labelText: 'État',
-        isDense: true,
-      ),
-      items: const [
-        DropdownMenuItem(value: 'present', child: Text('Note')),
-        DropdownMenuItem(value: 'absent', child: Text('Absent')),
-        DropdownMenuItem(value: 'not_recorded', child: Text('Non noté')),
-      ],
-      onChanged: _saving
-          ? null
-          : (next) => setState(() {
-                final state = next ?? 'not_recorded';
-                _combinedPresence[key] = state;
-                if (state != 'present') {
-                  _combinedGradeControllers[key]?.clear();
-                }
-              }),
-    );
-  }
-
   Widget _combinedGradeCell(
     EvaluationModel evaluation,
     StudentModel student, {
@@ -502,29 +459,17 @@ class _CanonicalGradesPageState extends State<CanonicalGradesPage> {
     final editable = const {'draft', 'rejected'}.contains(evaluation.status);
     return SizedBox(
       width: compact ? double.infinity : 185,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          TextField(
-            key: ValueKey('combined-grade-$key'),
-            controller: _combinedGradeControllers[key],
-            enabled: editable && !_saving,
-            keyboardType:
-                const TextInputType.numberWithOptions(decimal: true),
-            decoration: InputDecoration(
-              labelText:
-                  '${_eventLabel(_eventCode(evaluation) ?? evaluation.type)} /${_formatNumber(evaluation.maxScore)}',
-              isDense: true,
-            ),
-            onChanged: (value) {
-              if (value.trim().isNotEmpty) {
-                _combinedPresence[key] = 'present';
-              }
-            },
-          ),
-          const SizedBox(height: 6),
-          _combinedPresenceField(evaluation, student),
-        ],
+      child: TextField(
+        key: ValueKey('combined-grade-$key'),
+        controller: _combinedGradeControllers[key],
+        enabled: editable && !_saving,
+        keyboardType: TextInputType.text,
+        decoration: InputDecoration(
+          labelText:
+              '${_eventLabel(_eventCode(evaluation) ?? evaluation.type)} /${_formatNumber(evaluation.maxScore)}',
+          helperText: 'Note, ABS ou vide',
+          isDense: true,
+        ),
       ),
     );
   }
@@ -1136,14 +1081,17 @@ class _CanonicalGradesPageState extends State<CanonicalGradesPage> {
     }
     final entries = <GradeModel>[];
     for (final student in students) {
-      final previousState = _presence[student.id] ?? 'not_recorded';
       final raw = _gradeControllers[student.id]?.text.trim() ?? '';
-      final value =
-          raw.isEmpty ? null : double.tryParse(raw.replaceAll(',', '.'));
+      final normalized = raw.toUpperCase();
       final state = raw.isEmpty
-          ? (previousState == 'absent' ? 'absent' : 'not_recorded')
-          : 'present';
-      if (raw.isNotEmpty &&
+          ? 'not_recorded'
+          : normalized == 'ABS'
+              ? 'absent'
+              : 'present';
+      final value = state == 'present'
+          ? double.tryParse(raw.replaceAll(',', '.'))
+          : null;
+      if (state == 'present' &&
           (value == null || value < 0 || value > evaluation.maxScore)) {
         AppToast.error(
           context,
@@ -1984,28 +1932,15 @@ class _CanonicalGradesPageState extends State<CanonicalGradesPage> {
                                             style: const TextStyle(fontWeight: FontWeight.w700),
                                           ),
                                           const SizedBox(height: AppSpacing.s3),
-                                          ResponsiveFormGrid(
-                                            children: [
-                                              TextField(
-                                                key: ValueKey('grade-value-${student.id}'),
-                                                controller: _gradeControllers[student.id],
-                                                enabled: editable && !_saving,
-                                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                                decoration: InputDecoration(
-                                                  labelText: 'Note /${_formatNumber(selected.maxScore)}',
-                                                  helperText: 'Laissez vide si la note n’est pas renseignée.',
-                                                ),
-                                                onChanged: (value) {
-                                                  if (value.trim().isNotEmpty) {
-                                                    _presence[student.id] = 'present';
-                                                  }
-                                                },
-                                              ),
-                                              _separatePresenceField(
-                                                student,
-                                                enabled: editable && !_saving,
-                                              ),
-                                            ],
+                                          TextField(
+                                            key: ValueKey('grade-value-${student.id}'),
+                                            controller: _gradeControllers[student.id],
+                                            enabled: editable && !_saving,
+                                            keyboardType: TextInputType.text,
+                                            decoration: InputDecoration(
+                                              labelText: 'Note /${_formatNumber(selected.maxScore)}',
+                                              helperText: 'Note, ABS si absent, vide si non noté.',
+                                            ),
                                           ),
                                         ],
                                       ),
@@ -2019,8 +1954,7 @@ class _CanonicalGradesPageState extends State<CanonicalGradesPage> {
                                 const Row(children: [
                                   Expanded(flex: 2, child: Text('Nom')),
                                   Expanded(flex: 2, child: Text('Prénom')),
-                                  SizedBox(width: 160, child: Text('Note')),
-                                  SizedBox(width: 150, child: Text('État')),
+                                  SizedBox(width: 220, child: Text('Note')),
                                 ]),
                                 const SizedBox(height: 8),
                                 ...students.map((student) => Padding(
@@ -2029,28 +1963,16 @@ class _CanonicalGradesPageState extends State<CanonicalGradesPage> {
                                         Expanded(flex: 2, child: Text(student.lastName, overflow: TextOverflow.ellipsis)),
                                         Expanded(flex: 2, child: Text(student.firstName, overflow: TextOverflow.ellipsis)),
                                         SizedBox(
-                                          width: 160,
+                                          width: 220,
                                           child: TextField(
                                             key: ValueKey('grade-value-${student.id}'),
                                             controller: _gradeControllers[student.id],
                                             enabled: editable && !_saving,
-                                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                            keyboardType: TextInputType.text,
                                             decoration: InputDecoration(
                                               labelText: 'Note /${_formatNumber(selected.maxScore)}',
+                                              hintText: 'ex. 14 ou ABS',
                                             ),
-                                            onChanged: (value) {
-                                              if (value.trim().isNotEmpty) {
-                                                _presence[student.id] = 'present';
-                                              }
-                                            },
-                                          ),
-                                        ),
-                                        const SizedBox(width: 10),
-                                        SizedBox(
-                                          width: 150,
-                                          child: _separatePresenceField(
-                                            student,
-                                            enabled: editable && !_saving,
                                           ),
                                         ),
                                       ]),
