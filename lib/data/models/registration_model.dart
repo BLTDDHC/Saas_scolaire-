@@ -11,6 +11,9 @@ class StudentRegistrationModel {
   final String? levelId;
   final String? seriesId;
   final String? registrationDate; // ISO date
+  final String? cycleCode;
+  final String? schoolRegime;
+  final Map<String, dynamic> options;
   String status; // 'pending'|'validated'|'cancelled'
   final List<String> feeIds;
   final String? type;
@@ -33,6 +36,9 @@ class StudentRegistrationModel {
     this.levelId,
     this.seriesId,
     this.registrationDate,
+    this.cycleCode,
+    this.schoolRegime,
+    this.options = const {},
     this.status = 'pending',
     this.feeIds = const [],
     this.type,
@@ -56,6 +62,9 @@ class StudentRegistrationModel {
       levelId: json['levelId'] ?? json['level'],
       seriesId: json['seriesId'] ?? json['series'],
       registrationDate: json['registrationDate'] ?? json['createdAt'],
+      cycleCode: json['cycleCode']?.toString(),
+      schoolRegime: json['schoolRegime']?.toString(),
+      options: Map<String, dynamic>.from(json['options'] as Map? ?? const {}),
       status: json['status'] ?? 'pending',
       feeIds: json['feeIds'] != null ? List<String>.from(json['feeIds']) : [],
       type: json['type'],
@@ -81,6 +90,9 @@ class StudentRegistrationModel {
     'levelId': levelId,
     'seriesId': seriesId,
     'registrationDate': registrationDate,
+    'cycleCode': cycleCode,
+    'schoolRegime': schoolRegime,
+    'options': options,
     'status': status,
     'feeIds': feeIds,
     'type': type,
