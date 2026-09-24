@@ -12355,6 +12355,58 @@ def finance_fee_matches_registration(
         ))
     return False
 
+def validate_finance_fee_regime(
+    body: FinanceFeeInput,
+    establishment_id: uuid.UUID,
+    session: Session,
+) -> None:
+    if body.type != "tuition":
+        if body.regime is not None:
+            raise HTTPException(422, "Le régime concerne uniquement les frais mensuels")
+        return
+    if body.scope == "establishment":
+        if body.regime is not None:
+            raise HTTPException(
+                422,
+                "Un tarif mensuel par régime doit cibler un cycle, un niveau ou une classe",
+            )
+        return
+    cycle: SchoolCycle | None = None
+    if body.scope == "class":
+        try:
+            school_class = session.get(SchoolClass, uuid.UUID(str(body.classId)))
+        except (TypeError, ValueError):
+            school_class = None
+        cycle = session.get(SchoolCycle, school_class.cycle_id) if school_class and school_class.cycle_id else None
+    elif body.scope == "level":
+        try:
+            level = session.get(SchoolLevel, uuid.UUID(str(body.levelId)))
+        except (TypeError, ValueError):
+            level = None
+        cycle = session.get(SchoolCycle, level.cycle_id) if level else None
+    elif body.scope == "cycle":
+        try:
+            cycle = session.get(SchoolCycle, uuid.UUID(str(body.cycle)))
+        except (TypeError, ValueError):
+            cycle = session.scalar(select(SchoolCycle).where(
+                SchoolCycle.establishment_id == establishment_id,
+                SchoolCycle.code == canonical_cycle_code(str(body.cycle)),
+            ))
+    if not cycle or cycle.establishment_id != establishment_id:
+        return
+    code = canonical_cycle_code(cycle.code)
+    if code in {"MATERNELLE", "PRIMAIRE"}:
+        if body.regime not in {"part_time", "full_time"}:
+            raise HTTPException(
+                422,
+                "Choisissez Mi-temps ou Plein temps pour ce tarif mensuel",
+            )
+    elif body.regime is not None:
+        raise HTTPException(
+            422,
+            "Le régime ne s’applique pas aux tarifs Collège/Lycée",
+        )
+
 @app.post("/api/v1/school/finance/fees", status_code=201)
 def create_finance_fee(
     body: FinanceFeeInput,
@@ -12405,6 +12457,7 @@ def create_finance_fee(
             403,
             "Un administrateur de direction doit choisir un perimetre cycle, niveau ou classe",
         )
+    validate_finance_fee_regime(body, establishment_id, session)
     finance_lock(session, f"tariffs:{school_id}:{body.academicYearId}")
     if body.month is not None:
         from .finance import month_key
