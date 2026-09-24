@@ -160,6 +160,18 @@ class _NotificationsPageState extends State<NotificationsPage> {
     if (sent == true && mounted) await _load();
   }
 
+  DateTime _notificationDate(NotificationModel item) =>
+      DateTime.tryParse(item.time)?.toLocal() ??
+      DateTime.fromMillisecondsSinceEpoch(0);
+
+  String _monthLabel(DateTime value) {
+    const months = [
+      'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+      'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre',
+    ];
+    return '${months[value.month - 1]} ${value.year}';
+  }
+
   String _typeLabel(String? type) => const {
         'grade_entry_open': 'Saisie des notes',
         'evaluation_submitted': 'Notes soumises',
@@ -173,8 +185,14 @@ class _NotificationsPageState extends State<NotificationsPage> {
   Widget build(BuildContext context) {
     final store = context.watch<StoreService>();
     final items = store.getNotifications().toList()
-      ..sort((left, right) => right.time.compareTo(left.time));
+      ..sort((left, right) =>
+          _notificationDate(right).compareTo(_notificationDate(left)));
     final unread = items.where((item) => !item.read).length;
+    final grouped = <String, List<NotificationModel>>{};
+    for (final item in items) {
+      final label = _monthLabel(_notificationDate(item));
+      grouped.putIfAbsent(label, () => <NotificationModel>[]).add(item);
+    }
     final isAdmin = store.currentUser?.role == UserRole.admin;
 
     return WorkspacePage(
@@ -227,50 +245,81 @@ class _NotificationsPageState extends State<NotificationsPage> {
                 ? 'Toutes les notifications sont lues'
                 : '$unread notification(s) non lue(s)',
             child: Column(
-              children: items.map((NotificationModel item) {
-                return ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: CircleAvatar(
-                    child: Icon(item.read
-                        ? Icons.notifications_none_rounded
-                        : Icons.notifications_active_rounded),
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: grouped.entries.expand((group) sync* {
+                yield Padding(
+                  padding: const EdgeInsets.only(
+                    top: AppSpacing.s3,
+                    bottom: AppSpacing.s2,
                   ),
-                  title: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          item.title,
-                          style: TextStyle(
+                  child: Text(
+                    group.key,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                  ),
+                );
+                for (final item in group.value) {
+                  final date = _notificationDate(item);
+                  final hour = date.hour.toString().padLeft(2, '0');
+                  final minute = date.minute.toString().padLeft(2, '0');
+                  yield ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: CircleAvatar(
+                      child: Icon(item.read
+                          ? Icons.notifications_none_rounded
+                          : Icons.notifications_active_rounded),
+                    ),
+                    title: Wrap(
+                      spacing: AppSpacing.s2,
+                      runSpacing: AppSpacing.s2,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 520),
+                          child: Text(
+                            item.title,
+                            style: TextStyle(
                               fontWeight: item.read
                                   ? FontWeight.w500
-                                  : FontWeight.w700),
+                                  : FontWeight.w700,
+                            ),
+                          ),
                         ),
-                      ),
-                      AppBadge(
-                        label: _typeLabel(item.type),
-                        variant: item.read
-                            ? AppBadgeVariant.secondary
-                            : AppBadgeVariant.primary,
-                      ),
-                    ],
-                  ),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if ((item.message ?? '').isNotEmpty) Text(item.message!),
-                      const SizedBox(height: 4),
-                      Text(item.time),
-                    ],
-                  ),
-                  trailing: item.read
-                      ? null
-                      : IconButton(
-                          tooltip: 'Marquer comme lu',
-                          onPressed: () =>
-                              store.markNotificationAsRead(item.id),
-                          icon: const Icon(Icons.done_rounded),
+                        AppBadge(
+                          label: _typeLabel(item.type),
+                          variant: item.read
+                              ? AppBadgeVariant.secondary
+                              : AppBadgeVariant.primary,
                         ),
-                );
+                      ],
+                    ),
+                    subtitle: Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if ((item.message ?? '').isNotEmpty)
+                            Text(item.message!, softWrap: true),
+                          const SizedBox(height: 4),
+                          Text(
+                            '${date.day.toString().padLeft(2, '0')}/'
+                            '${date.month.toString().padLeft(2, '0')}/'
+                            '${date.year} à $hour:$minute',
+                          ),
+                        ],
+                      ),
+                    ),
+                    trailing: item.read
+                        ? null
+                        : IconButton(
+                            tooltip: 'Marquer comme lu',
+                            onPressed: () =>
+                                store.markNotificationAsRead(item.id),
+                            icon: const Icon(Icons.done_rounded),
+                          ),
+                  );
+                }
               }).toList(),
             ),
           ),
