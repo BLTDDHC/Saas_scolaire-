@@ -2019,6 +2019,14 @@ class StoreService extends ChangeNotifier {
     await refreshStudentsRemote(academicYearId: selectedYearId);
   }
 
+  Future<Map<String, dynamic>> changeStudentRegimeRemote(
+      String registrationId, String schoolRegime, String effectiveDate) async {
+    final result = await _repository.changeStudentRegime(
+        registrationId, schoolRegime, effectiveDate);
+    await refreshStudentsRemote(academicYearId: getSelectedAcademicYearId());
+    return result;
+  }
+
   Future<void> createGuardianAndLinkRemote({
     required String studentId,
     required String firstName,
@@ -6194,6 +6202,10 @@ class StoreService extends ChangeNotifier {
 
   Future<Map<String, dynamic>> loadSchoolFinance(Map<String, String> query) =>
       _repository.financeWorkspace(query);
+  Future<Map<String, dynamic>> parentFinanceSituationRemote(
+          String studentId, String academicYearId) =>
+      _repository.parentFinanceSituation(studentId, academicYearId);
+
   Future<Map<String, dynamic>> loadFinanceMonthlySituation(
           String registrationId, Map<String, String> query) =>
       _repository.financeMonthlySituation(registrationId, query);
