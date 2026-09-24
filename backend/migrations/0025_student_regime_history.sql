@@ -43,7 +43,7 @@ SELECT
   registration.school_regime,
   COALESCE(registration.registration_date, year.start_date)
 FROM student_academic_registrations registration
-JOIN school_classes class ON class.id = registration.class_id
+JOIN classes class ON class.id = registration.class_id
 JOIN school_cycles cycle ON cycle.id = class.cycle_id
 JOIN academic_years year ON year.id = registration.academic_year_id
 WHERE upper(cycle.code) IN ('MATERNELLE', 'PRIMAIRE')
