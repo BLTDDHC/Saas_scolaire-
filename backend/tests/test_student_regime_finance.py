@@ -12,6 +12,7 @@ import test_behavior_foundations as fixtures
 
 class StudentRegimeFinanceTests(unittest.TestCase):
     add = fixtures.BehaviorFoundations.add
+    assign = fixtures.BehaviorFoundations.assign
     cleanup = fixtures.BehaviorFoundations.cleanup
 
     def setUp(self):
