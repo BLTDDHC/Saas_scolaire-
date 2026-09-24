@@ -286,7 +286,8 @@ class _FinancePageState extends State<FinancePage> {
                                       title: Text(
                                           '${financeMonths[int.parse(monthRow['month'].substring(5)) - 1]} ${monthRow['month'].substring(0, 4)}'),
                                       subtitle: Text(
-                                          'Attendu ${money(monthRow['expected'])} · Payé ${money(monthRow['paid'])} · Reste ${money(monthRow['remaining'])} · ${financeStatus(monthRow['status'])}'),
+                                          'Attendu ${money(monthRow['expected'])} · Payé ${money(monthRow['paid'])} · Reste ${money(monthRow['remaining'])} · ${financeStatus(monthRow['status'])}'
+                                          '${monthRow['schoolRegime'] == null ? '' : ' · Régime : ${monthRow['schoolRegime'] == 'part_time' ? 'Mi-temps' : 'Plein temps'}'}'),
                                       onChanged: sending
                                           ? null
                                           : (checked) => refresh(() {
