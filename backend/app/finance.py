@@ -890,7 +890,7 @@ def update_fee(fee_id: str, body: m.FinanceFeeInput,
     school,tenant,year=context(current,session,body.schoolId,year_id)
     fee=m.finance_resource(session,'finance-fees',fee_id,school,current)
     # Context cannot silently move a historical tariff to another class/year/type.
-    for field in ('scope','cycle','levelId','classId','academicYearId','type','month'):
+    for field in ('scope','cycle','levelId','classId','academicYearId','type','month','schoolRegime'):
         if fee.payload.get(field) != getattr(body,field):
             raise HTTPException(409,'Conservez le contexte du tarif ; seul le montant et le libellé sont modifiables')
     m.finance_lock(session,f'tariffs:{school}:{year.id}')
