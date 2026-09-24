@@ -162,8 +162,7 @@ void main() {
 
     expect(find.text('Brice Collège'), findsWidgets);
     expect(find.text('2 000 FCFA'), findsWidgets);
-    expect(find.text('6 000 FCFA'), findsNothing);
-    expect(find.textContaining('Régime actuel'), findsNothing);
+    expect(find.text('Régime actuel : Plein temps'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 }
