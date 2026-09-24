@@ -49,6 +49,7 @@ void main() {
                   'students',
                   'grades',
                   'schedule',
+                  'finance',
                   'messages'
                 ],
               },
@@ -123,7 +124,40 @@ void main() {
                   'academicYearId': 'year-1',
                   'classId': 'class-1',
                   'className': '3e A',
+                  'cycleCode': 'COLLEGE',
+                  'schoolRegime': 'normal',
                   'status': 'active',
+                }
+              ],
+            }),
+            200);
+      }
+      if (request.url.path ==
+          '/api/v1/school/finance/parent-situation/student-linked') {
+        expect(request.url.queryParameters['academic_year_id'], 'year-1');
+        return http.Response(
+            jsonEncode({
+              'registrationId': 'registration-1',
+              'studentId': 'student-linked',
+              'studentName': 'Lié Élève',
+              'className': '3e A',
+              'currentRegime': null,
+              'summary': {
+                'expected': 20000,
+                'paid': 10000,
+                'remaining': 10000,
+                'credit': 0,
+                'advanceMonths': 0,
+                'unpaidMonths': 1,
+                'overdueMonths': 0,
+              },
+              'months': [
+                {
+                  'month': '2026-10',
+                  'expected': 10000,
+                  'paid': 10000,
+                  'remaining': 0,
+                  'status': 'paid',
                 }
               ],
             }),
@@ -159,14 +193,17 @@ void main() {
     expect(dashboardChildren.single['fullName'], 'Lié Élève');
     expect((dashboardChildren.single['years'] as List).single['className'],
         '3e A');
+    final finance = await store.parentFinanceSituationRemote(
+        'student-linked', 'year-1');
+    expect(finance['studentId'], 'student-linked');
+    expect((finance['summary'] as Map)['remaining'], 10000);
 
     final navigation = NavItems.getNavItemsForRole(UserRole.parent)
         .map((item) => item.id)
         .toSet();
     expect(navigation,
-        containsAll({'dashboard', 'tracking', 'grades', 'schedule'}));
+        containsAll({'dashboard', 'tracking', 'grades', 'finance', 'schedule'}));
     expect(navigation, isNot(contains('messages')));
-    expect(navigation, isNot(contains('finance')));
     expect(navigation, isNot(contains('attendance')));
     expect(navigation, isNot(contains('behavior')));
     expect(navigation, isNot(contains('documents')));
