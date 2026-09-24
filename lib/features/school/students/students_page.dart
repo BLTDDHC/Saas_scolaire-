@@ -459,8 +459,7 @@ class _StudentsPageState extends State<StudentsPage> {
                         label: 'Date de naissance',
                         value: birthDate,
                         firstDate: DateTime(1900),
-                        lastDate: AppDateUtils.parse(academicYear?.end) ??
-                        DateTime(now.year + 1, 12, 31),
+                        lastDate: DateTime.now(),
                         onChanged: (value) =>
                             setDialogState(() => birthDate = value),
                       ),
@@ -1300,14 +1299,13 @@ class _StudentsPageState extends State<StudentsPage> {
                     value: effectiveDate,
                     firstDate: DateTime.parse(
                         registration.registrationDate ?? '${now.year}-01-01'),
-                    lastDate: DateTime.now(),
+                    lastDate: AppDateUtils.parse(academicYear?.end) ??
+                        DateTime(now.year + 1, 12, 31),
                     onChanged: saving
-                        ? null
+                        ? (_) {}
                         : (value) {
-                            if (value != null) {
-                              setDialogState(() => effectiveDate =
-                                  DateTime(value.year, value.month, 1));
-                            }
+                            setDialogState(() => effectiveDate =
+                                DateTime(value.year, value.month, 1));
                           },
                   ),
                   const SizedBox(height: AppSpacing.s2),
