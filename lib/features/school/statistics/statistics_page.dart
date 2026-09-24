@@ -426,9 +426,6 @@ class _StatisticsContent extends StatelessWidget {
         : null;
     final decisions = Map<String, dynamic>.from(
         data['decisions'] as Map? ?? const <String, dynamic>{});
-    final teacherStatistics = Map<String, dynamic>.from(
-        data['teacherStatistics'] as Map? ?? const <String, dynamic>{});
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -741,6 +738,117 @@ class _StatisticsContent extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+class _LevelDistributionCard extends StatelessWidget {
+  const _LevelDistributionCard({super.key, required this.rows});
+
+  final List<Map<String, dynamic>> rows;
+
+  @override
+  Widget build(BuildContext context) {
+    final visible = rows.where((row) =>
+        ((row['studentCount'] as num?)?.toInt() ?? 0) > 0).toList();
+    final total = visible.fold<int>(
+      0,
+      (sum, row) => sum + ((row['studentCount'] as num?)?.toInt() ?? 0),
+    );
+    return AppCard(
+      title: 'Répartition des élèves par niveau',
+      subtitle:
+          'Uniquement les niveaux du cycle et du périmètre actuellement autorisés',
+      child: visible.isEmpty
+          ? const Text('Aucun effectif disponible pour ce périmètre.')
+          : Column(
+              children: visible.map((row) {
+                final count = (row['studentCount'] as num?)?.toInt() ?? 0;
+                final ratio = total == 0 ? 0.0 : count / total;
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: AppSpacing.s3),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text('${row['level'] ?? 'Niveau'}',
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w600)),
+                          ),
+                          Text('$count'),
+                        ],
+                      ),
+                      const SizedBox(height: AppSpacing.s1),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(20),
+                        child: TweenAnimationBuilder<double>(
+                          tween: Tween(begin: 0, end: ratio),
+                          duration: const Duration(milliseconds: 320),
+                          curve: Curves.easeOutCubic,
+                          builder: (context, value, _) =>
+                              LinearProgressIndicator(
+                            value: value,
+                            minHeight: 9,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+    );
+  }
+}
+
+class _ClassRankingCard extends StatelessWidget {
+  const _ClassRankingCard({super.key, required this.rows});
+
+  final List<Map<String, dynamic>> rows;
+
+  @override
+  Widget build(BuildContext context) {
+    final ranked = List<Map<String, dynamic>>.from(rows)
+      ..sort((left, right) {
+        final byAverage =
+            ((right['average20'] as num?)?.toDouble() ?? -1).compareTo(
+          (left['average20'] as num?)?.toDouble() ?? -1,
+        );
+        if (byAverage != 0) return byAverage;
+        return '${left['className'] ?? ''}'
+            .compareTo('${right['className'] ?? ''}');
+      });
+    final visible = ranked.take(5).toList();
+    return AppCard(
+      title: 'Classement des classes',
+      subtitle: 'Basé uniquement sur les résultats officiels du filtre actif',
+      child: visible.isEmpty
+          ? const Text('Aucun classement officiel disponible.')
+          : Column(
+              children: [
+                for (var index = 0; index < visible.length; index++)
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                    leading: CircleAvatar(
+                      radius: 16,
+                      child: Text('${index + 1}'),
+                    ),
+                    title: Text('${visible[index]['className'] ?? 'Classe'}'),
+                    subtitle: Text(
+                      visible[index]['successRate'] == null
+                          ? 'Réussite : —'
+                          : 'Réussite : ${visible[index]['successRate']} %',
+                    ),
+                    trailing: Text(
+                      '${visible[index]['average20'] ?? '—'} / 20',
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+              ],
+            ),
     );
   }
 }
@@ -1113,30 +1221,39 @@ class _Metric extends StatelessWidget {
   final Color color;
 
   @override
-  Widget build(BuildContext context) => AppCard(
-        child: Row(
-          children: [
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: .1),
-                borderRadius: BorderRadius.circular(AppRadius.md),
+  Widget build(BuildContext context) => TweenAnimationBuilder<double>(
+        tween: Tween(begin: .96, end: 1),
+        duration: const Duration(milliseconds: 240),
+        curve: Curves.easeOutCubic,
+        builder: (context, scale, child) => Opacity(
+          opacity: ((scale - .96) / .04).clamp(0, 1),
+          child: Transform.scale(scale: scale, child: child),
+        ),
+        child: AppCard(
+          child: Row(
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: .1),
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                ),
+                child: Icon(icon, color: color, size: 22),
               ),
-              child: Icon(icon, color: color, size: 21),
-            ),
-            const SizedBox(width: AppSpacing.s3),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(label, style: Theme.of(context).textTheme.bodySmall),
-                  const SizedBox(height: AppSpacing.s1),
-                  Text(value, style: AppTypography.heading3()),
-                ],
+              const SizedBox(width: AppSpacing.s3),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(label, style: Theme.of(context).textTheme.bodySmall),
+                    const SizedBox(height: AppSpacing.s1),
+                    Text(value, style: AppTypography.heading3()),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       );
 }
