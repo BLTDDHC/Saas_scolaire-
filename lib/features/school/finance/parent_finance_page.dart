@@ -319,16 +319,18 @@ class _ParentFinancePageState extends State<ParentFinancePage> {
                         }).toList(),
                       );
                     }
+                    final showRegime = regime != null;
                     return SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
                       child: DataTable(
-                        columns: const [
-                          DataColumn(label: Text('Mois')),
-                          DataColumn(label: Text('Régime')),
-                          DataColumn(label: Text('Tarif applicable')),
-                          DataColumn(label: Text('Déjà payé')),
-                          DataColumn(label: Text('Reste')),
-                          DataColumn(label: Text('Statut')),
+                        columns: [
+                          const DataColumn(label: Text('Mois')),
+                          if (showRegime)
+                            const DataColumn(label: Text('Régime')),
+                          const DataColumn(label: Text('Tarif applicable')),
+                          const DataColumn(label: Text('Déjà payé')),
+                          const DataColumn(label: Text('Reste')),
+                          const DataColumn(label: Text('Statut')),
                         ],
                         rows: months
                             .map(
@@ -336,7 +338,8 @@ class _ParentFinancePageState extends State<ParentFinancePage> {
                                 cells: [
                                   DataCell(
                                       Text(_month(row['month']?.toString()))),
-                                  DataCell(Text(_regime(row['schoolRegime']))),
+                                  if (showRegime)
+                                    DataCell(Text(_regime(row['schoolRegime']))),
                                   DataCell(Text(_money(row['expected']))),
                                   DataCell(Text(_money(row['paid']))),
                                   DataCell(Text(_money(row['remaining']))),
