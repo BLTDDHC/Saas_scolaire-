@@ -9,7 +9,6 @@ import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/app_empty_state.dart';
 import '../../../shared/widgets/responsive_grid.dart';
 import '../../../shared/widgets/workspace_header.dart';
-import '../grades/student_results_page.dart';
 
 class ParentTrackingPage extends StatefulWidget {
   const ParentTrackingPage({super.key});
@@ -78,7 +77,7 @@ class _ParentTrackingPageState extends State<ParentTrackingPage> {
   Widget build(BuildContext context) => WorkspacePage(
         title: 'Suivi de mes enfants',
         subtitle:
-            'Résultats par périodes configurées, présence et comportement à partir des données officielles',
+            'Présence, comportement et évolution générale de l’enfant sélectionné',
         actions: [
           IconButton.filledTonal(
             onPressed: _trackingRequest == null ? null : _retry,
@@ -278,16 +277,13 @@ class _ParentTrackingPageState extends State<ParentTrackingPage> {
           ),
           const SizedBox(height: AppSpacing.s4),
         ],
-        Text('Résultats détaillés',
-            style: Theme.of(context).textTheme.titleLarge),
-        const SizedBox(height: AppSpacing.s3),
-        StudentResultsPage(
-          key: ValueKey('tracking-$_childId-$_yearId'),
-          embedded: true,
-          request: Future.value({
-            'studentName': data['studentName'],
-            'years': [results],
-          }),
+        AppCard(
+          title: 'Notes et résultats',
+          subtitle:
+              'Le détail par matière et évaluation reste disponible dans le module dédié.',
+          child: const Text(
+            'Utilisez « Notes des enfants » pour consulter les devoirs, compositions, examens et moyennes.',
+          ),
         ),
       ],
     );
