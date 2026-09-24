@@ -12366,8 +12366,6 @@ def finance_fee_matches_registration(
     session: Session,
     establishment_id: uuid.UUID,
 ) -> bool:
-    if body.schoolRegime is not None and registration.payload.get("schoolRegime") != body.schoolRegime:
-        return False
     if body.scope == "establishment":
         return True
     class_id = registration.payload.get("classId")
