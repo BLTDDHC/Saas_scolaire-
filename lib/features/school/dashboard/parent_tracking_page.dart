@@ -9,7 +9,6 @@ import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/app_empty_state.dart';
 import '../../../shared/widgets/responsive_grid.dart';
 import '../../../shared/widgets/workspace_header.dart';
-import '../grades/student_results_page.dart';
 
 class ParentTrackingPage extends StatefulWidget {
   const ParentTrackingPage({super.key});
@@ -278,16 +277,13 @@ class _ParentTrackingPageState extends State<ParentTrackingPage> {
           ),
           const SizedBox(height: AppSpacing.s4),
         ],
-        Text('Résultats détaillés',
-            style: Theme.of(context).textTheme.titleLarge),
-        const SizedBox(height: AppSpacing.s3),
-        StudentResultsPage(
-          key: ValueKey('tracking-$_childId-$_yearId'),
-          embedded: true,
-          request: Future.value({
-            'studentName': data['studentName'],
-            'years': [results],
-          }),
+        AppCard(
+          title: 'Résumé du suivi',
+          subtitle:
+              'Le détail des matières, devoirs, compositions et examens reste dans « Notes des enfants ».',
+          child: const Text(
+            'Cette page rassemble uniquement les indicateurs utiles de présence, comportement et évolution générale.',
+          ),
         ),
       ],
     );
