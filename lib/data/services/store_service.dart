@@ -1904,7 +1904,7 @@ class StoreService extends ChangeNotifier {
 
   Future<StudentModel> createStudentRemote(Map<String, dynamic> identity,
       {String? classId,
-      String schoolRegime = 'normal',
+      String? schoolRegime,
       bool hasTd = false,
       Map<String, dynamic> registrationOptions = const {}}) async {
     final created =
@@ -2725,6 +2725,7 @@ class StoreService extends ChangeNotifier {
     required String academicYearId,
     required String desiredClassId,
     String registrationKind = 'registration',
+    String? schoolRegime,
     bool submit = true,
   }) =>
       _repository.createPreEnrollment({
@@ -2734,6 +2735,7 @@ class StoreService extends ChangeNotifier {
         'academicYearId': academicYearId,
         'desiredClassId': desiredClassId,
         'registrationKind': registrationKind,
+        if (schoolRegime != null) 'schoolRegime': schoolRegime,
         'status': submit ? 'submitted' : 'draft',
       });
 
@@ -6197,6 +6199,14 @@ class StoreService extends ChangeNotifier {
   Future<Map<String, dynamic>> loadFinanceMonthlySituation(
           String registrationId, Map<String, String> query) =>
       _repository.financeMonthlySituation(registrationId, query);
+
+  Future<Map<String, dynamic>> loadParentFinanceSituation(
+          String studentId, String academicYearId) =>
+      _repository.parentFinanceSituation(studentId, academicYearId);
+
+  Future<Map<String, dynamic>> changeStudentRegimeRemote(
+          String registrationId, String regime, String effectiveDate) =>
+      _repository.changeStudentRegime(registrationId, regime, effectiveDate);
   Future<Map<String, dynamic>> paySchoolFinance(Map<String, dynamic> body) =>
       _repository.schoolFinancePayment(body);
   Future<Map<String, dynamic>> saveFinanceTariff(Map<String, dynamic> body,
