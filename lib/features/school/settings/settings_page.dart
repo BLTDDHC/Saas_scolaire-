@@ -6,6 +6,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../data/datasources/api_client.dart';
 import '../../../data/models/establishment_model.dart';
 import '../../../data/services/store_service.dart';
+import '../../auth/change_password_dialog.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/app_form_field.dart';
