@@ -858,6 +858,7 @@ def update_fee(fee_id: str, body: m.FinanceFeeInput,
         raise HTTPException(422,'Année scolaire invalide') from exc
     school,tenant,year=context(current,session,body.schoolId,year_id)
     fee=m.finance_resource(session,'finance-fees',fee_id,school,current)
+    m.validate_finance_fee_regime(body, tenant, session)
     # Context cannot silently move a historical tariff to another class/year/type.
     for field in ('scope','cycle','levelId','classId','academicYearId','type','month','regime'):
         if fee.payload.get(field) != getattr(body,field):
