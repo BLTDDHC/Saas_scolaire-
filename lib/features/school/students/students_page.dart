@@ -392,7 +392,7 @@ class _StudentsPageState extends State<StudentsPage> {
         initialClass?.structuredLevelId ?? initialClass?.levelId;
     String gender = student?.sex ?? 'M';
     String schoolRegime =
-        preEnrollment?['schoolRegime']?.toString() ?? 'normal';
+        preEnrollment['schoolRegime']?.toString() ?? 'normal';
     String guardianType =
         primaryGuardian?['relationship']?.toString() ?? 'tuteur';
     bool hasTd = false;
