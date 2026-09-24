@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/utils/responsive_utils.dart';
+import '../../core/utils/notification_date_utils.dart';
 import '../../core/utils/school_module_access.dart';
 import '../../data/services/store_service.dart';
 import '../../shared/widgets/app_header.dart';
@@ -343,9 +344,11 @@ class _WorkflowNotificationsBar extends StatelessWidget {
         .where((item) =>
             !item.read &&
             const {'grade_entry_open', 'results_available'}.contains(item.type))
-        .toList();
+        .toList()
+      ..sort((left, right) => notificationDate(right.time)
+          .compareTo(notificationDate(left.time)));
     if (items.isEmpty) return const SizedBox.shrink();
-    final latest = items.last;
+    final latest = items.first;
     return Material(
       color: AppColors.info50,
       child: ListTile(
@@ -366,12 +369,33 @@ class _WorkflowNotificationsBar extends StatelessWidget {
                     width: 520,
                     child: ListView(
                       shrinkWrap: true,
-                      children: items
-                          .map((item) => ListTile(
-                                title: Text(item.title),
-                                subtitle: Text(item.message ?? ''),
-                              ))
-                          .toList(),
+                      children: () {
+                        final widgets = <Widget>[];
+                        String? currentMonth;
+                        for (final item in items) {
+                          final month = notificationMonthKey(item.time);
+                          if (month != currentMonth) {
+                            widgets.add(Padding(
+                              padding: const EdgeInsets.only(
+                                  top: AppSpacing.s2),
+                              child: Text(
+                                notificationMonthLabel(item.time),
+                                style: Theme.of(dialogContext)
+                                    .textTheme
+                                    .titleSmall
+                                    ?.copyWith(
+                                        fontWeight: FontWeight.w800),
+                              ),
+                            ));
+                            currentMonth = month;
+                          }
+                          widgets.add(ListTile(
+                            title: Text(item.title),
+                            subtitle: Text(item.message ?? ''),
+                          ));
+                        }
+                        return widgets;
+                      }(),
                     ),
                   ),
                   actions: [
