@@ -12466,6 +12466,18 @@ def create_finance_fee(
             403,
             "Un administrateur de direction doit choisir un perimetre cycle, niveau ou classe",
         )
+    if body.schoolRegime is not None:
+        if body.type != "tuition":
+            raise HTTPException(422, "Le régime concerne uniquement les frais mensuels")
+        target_cycle = None
+        if body.scope == "class":
+            target_cycle = session.get(SchoolCycle, target_class.cycle_id) if target_class.cycle_id else None
+        elif body.scope == "level":
+            target_cycle = session.get(SchoolCycle, target_level.cycle_id) if target_level.cycle_id else None
+        elif body.scope == "cycle":
+            target_cycle = cycle
+        if target_cycle and canonical_cycle_code(target_cycle.code) not in {"MATERNELLE", "PRIMAIRE"}:
+            raise HTTPException(422, "Un tarif par régime est réservé à la Maternelle et au Primaire")
     finance_lock(session, f"tariffs:{school_id}:{body.academicYearId}")
     if body.month is not None:
         from .finance import month_key
@@ -12479,6 +12491,7 @@ def create_finance_fee(
         and str(row.payload.get("academicYearId")) == body.academicYearId
         and row.payload.get('type', 'tuition') == body.type
         and row.payload.get('month') == body.month
+        and row.payload.get('schoolRegime') == body.schoolRegime
         and (body.type != 'other' or row.payload.get('name', '').strip().casefold() == body.name.strip().casefold())
         and row.payload.get("scope", "establishment") == body.scope
         and str(row.payload.get("classId")) == str(body.classId)
@@ -12493,6 +12506,7 @@ def create_finance_fee(
         "scope": body.scope, "cycle": body.cycle, "levelId": body.levelId,
         "classId": body.classId, "description": body.description.strip(),
         "type": body.type, "frequency": body.frequency, "month": body.month,
+        "schoolRegime": body.schoolRegime,
         "schoolId": school_id, "institutionId": school_id,
         "academicYearId": body.academicYearId, "schoolYearId": body.academicYearId,
         "status": "active", "createdAt": datetime.now(timezone.utc).isoformat(),
