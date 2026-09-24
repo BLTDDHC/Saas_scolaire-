@@ -193,6 +193,113 @@ class SchoolFinance(unittest.TestCase):
             '2026-10', '2026-11', '2026-12', '2027-01'
         ])
 
+    def _prepare_primary_regime_finance(self):
+        self.cycle.code = 'PRIMAIRE'
+        self.level.code = 'CM2'
+        self.cl.cycle_id = self.cycle.id
+        self.cl.school_level_id = self.level.id
+        self.reg.school_regime = 'full_time'
+        self.s.flush()
+        self.add(m.StudentRegimeHistory(
+            establishment_id=self.tenant.id,
+            registration_id=self.reg.id,
+            student_id=self.reg.student_id,
+            school_regime='full_time',
+            effective_date=date(2026, 9, 1),
+            created_by=uuid.UUID(self.admin.id),
+        ))
+        for regime, amount in [('full_time', 10000), ('part_time', 6000)]:
+            m.create_finance_fee(m.FinanceFeeInput(
+                name=f'Tarif {regime}',
+                amount=amount,
+                scope='class',
+                classId=str(self.cl.id),
+                type='tuition',
+                frequency='monthly',
+                schoolRegime=regime,
+                academicYearId=str(self.year.id),
+                schoolId=self.school,
+            ), self.admin, self.s)
+
+    def test_regime_change_preserves_old_payments_and_changes_future_tariff(self):
+        self._prepare_primary_regime_finance()
+        self.assertEqual(self.own(month='2026-10')['expected'], 10000)
+        october = self.pay(4000, month='2026-10')
+        m.change_student_registration_regime(
+            self.reg.id,
+            m.StudentRegimeChangeInput(
+                schoolRegime='part_time',
+                effectiveDate=date(2027, 2, 1),
+            ),
+            self.admin,
+            self.s,
+        )
+        old_month = self.own(month='2026-10')
+        self.assertEqual(
+            (old_month['expected'], old_month['paid'], old_month['remaining']),
+            (10000, 4000, 6000),
+        )
+        self.assertEqual(self.own(month='2027-01')['expected'], 10000)
+        february = self.own(month='2027-02')
+        self.assertEqual(february['expected'], 6000)
+        self.assertEqual(february['schoolRegime'], 'part_time')
+        history = m.student_regime_history_json(self.reg, self.s)
+        self.assertEqual(
+            [(row['schoolRegime'], row['effectiveDate']) for row in history],
+            [('full_time', '2026-09-01'), ('part_time', '2027-02-01')],
+        )
+        receipt = f.receipt(october['receipt']['id'], self.school, self.admin, self.s)
+        self.assertEqual(receipt['amount'], 4000)
+
+    def test_college_rejects_visible_school_regime(self):
+        self.cycle.code = 'COLLEGE'
+        self.s.flush()
+        with self.assertRaises(HTTPException):
+            m.validate_school_regime(self.cl, 'part_time', self.s)
+        self.assertEqual(m.validate_school_regime(self.cl, 'normal', self.s), 'normal')
+
+    def test_parent_finance_is_isolated_to_linked_child(self):
+        self._prepare_primary_regime_finance()
+        parent_user = self.add(m.User(
+            email=f'parent-{uuid.uuid4().hex}@test.local',
+            password_hash='test-only',
+            name='Parent Rollback',
+            role='parent',
+            school_id=self.tenant.id,
+            status='active',
+        ))
+        guardian = self.add(m.Guardian(
+            establishment_id=self.tenant.id,
+            user_id=parent_user.id,
+            first_name='Parent',
+            last_name='Rollback',
+            status='active',
+        ))
+        self.add(m.StudentGuardian(
+            establishment_id=self.tenant.id,
+            student_id=self.reg.student_id,
+            guardian_id=guardian.id,
+            relationship='parent',
+            is_primary=True,
+        ))
+        principal = m.Principal(
+            id=str(parent_user.id),
+            role='parent',
+            school_id=self.school,
+        )
+        situation = f.parent_situation(
+            self.reg.student_id, self.year.id, principal, self.s
+        )
+        self.assertEqual(situation['studentId'], str(self.reg.student_id))
+        self.assertEqual(situation['schoolRegime'], 'full_time')
+        self.assertEqual(situation['months'][0]['expected'], 10000)
+        self.assertIn('remaining', situation['summary'])
+        with self.assertRaises(HTTPException) as denied:
+            f.parent_situation(
+                self.students[1].id, self.year.id, principal, self.s
+            )
+        self.assertEqual(denied.exception.status_code, 403)
+
     def test_monthly_situation_returns_all_months_in_one_projection(self):
         self.fee()
         situation = f.monthly_situation(
