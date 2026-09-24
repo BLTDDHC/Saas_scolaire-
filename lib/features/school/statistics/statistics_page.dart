@@ -71,6 +71,9 @@ class _StatisticsPageState extends State<StatisticsPage> {
   }
 
   String _eventLabel(String code) => const {
+        'devoir_1': 'Devoir 1',
+        'devoir_2': 'Devoir 2',
+        'composition': 'Composition',
         'devoir_departemental': 'Devoir départemental',
         'cepe_test': 'CEPE Test',
         'cepe_blanc': 'CEPE Blanc',
@@ -183,6 +186,9 @@ class _StatisticsPageState extends State<StatisticsPage> {
             (_subjectId == null || item.subjectId == _subjectId) &&
             item.examCode != null &&
             const {
+              'devoir_1',
+              'devoir_2',
+              'composition',
               'devoir_departemental',
               'cepe_test',
               'cepe_blanc',
