@@ -83,6 +83,21 @@ List<Map<String, dynamic>> get _teacherEvaluations => [
         'createdBy': 'user-teacher-1',
         'createdAt': '2026-10-02T08:00:00Z',
       },
+      {
+        'id': 'evaluation-3',
+        'schoolId': 'school_003',
+        'title': 'Devoir départemental',
+        'type': 'exam',
+        'examCode': 'devoir_departemental',
+        'academicYearId': 'year-active',
+        'periodId': 'period-t1',
+        'classId': 'class-1',
+        'subjectId': 'subject-1',
+        'status': 'draft',
+        'maxScore': 20,
+        'createdBy': 'user-teacher-1',
+        'createdAt': '2026-10-03T08:00:00Z',
+      },
     ];
 
 Map<String, dynamic> get _workspace => {
@@ -637,6 +652,10 @@ void main() {
     expect(
       find.byKey(const ValueKey('combined-grade-evaluation-2|student-1')),
       findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('combined-grade-evaluation-3|student-1')),
+      findsNothing,
     );
     expect(find.byKey(const Key('submit-combined-grades')), findsOneWidget);
     expect(tester.takeException(), isNull);
