@@ -378,13 +378,6 @@ class _CanonicalGradesPageState extends State<CanonicalGradesPage> {
           return;
         }
         final grade = _combinedGradeFor(evaluation, student)!;
-        if (submit && grade.presence == 'not_recorded') {
-          AppToast.warning(
-            context,
-            'Complétez ${evaluation.title} pour ${student.fullName} ou marquez l’élève absent.',
-          );
-          return;
-        }
         entries.add(grade);
       }
       sheets[evaluation] = entries;
@@ -435,64 +428,6 @@ class _CanonicalGradesPageState extends State<CanonicalGradesPage> {
     }
   }
 
-  Widget _separatePresenceField(
-    StudentModel student, {
-    required bool enabled,
-  }) {
-    final value = _presence[student.id] ?? 'not_recorded';
-    return DropdownButtonFormField<String>(
-      key: ValueKey('grade-presence-${student.id}'),
-      isExpanded: true,
-      initialValue: value,
-      decoration: const InputDecoration(labelText: 'État', isDense: true),
-      items: const [
-        DropdownMenuItem(value: 'present', child: Text('Note')),
-        DropdownMenuItem(value: 'absent', child: Text('Absent')),
-        DropdownMenuItem(value: 'not_recorded', child: Text('Non noté')),
-      ],
-      onChanged: !enabled
-          ? null
-          : (next) => setState(() {
-                final state = next ?? 'not_recorded';
-                _presence[student.id] = state;
-                if (state != 'present') {
-                  _gradeControllers[student.id]?.clear();
-                }
-              }),
-    );
-  }
-
-  Widget _combinedPresenceField(
-    EvaluationModel evaluation,
-    StudentModel student,
-  ) {
-    final key = _combinedKey(evaluation.id, student.id);
-    final value = _combinedPresence[key] ?? 'not_recorded';
-    return DropdownButtonFormField<String>(
-      key: ValueKey('combined-presence-$key'),
-      isExpanded: true,
-      initialValue: value,
-      decoration: const InputDecoration(
-        labelText: 'État',
-        isDense: true,
-      ),
-      items: const [
-        DropdownMenuItem(value: 'present', child: Text('Note')),
-        DropdownMenuItem(value: 'absent', child: Text('Absent')),
-        DropdownMenuItem(value: 'not_recorded', child: Text('Non noté')),
-      ],
-      onChanged: _saving
-          ? null
-          : (next) => setState(() {
-                final state = next ?? 'not_recorded';
-                _combinedPresence[key] = state;
-                if (state != 'present') {
-                  _combinedGradeControllers[key]?.clear();
-                }
-              }),
-    );
-  }
-
   Widget _combinedGradeCell(
     EvaluationModel evaluation,
     StudentModel student, {
@@ -501,30 +436,23 @@ class _CanonicalGradesPageState extends State<CanonicalGradesPage> {
     final key = _combinedKey(evaluation.id, student.id);
     final editable = const {'draft', 'rejected'}.contains(evaluation.status);
     return SizedBox(
-      width: compact ? double.infinity : 185,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          TextField(
-            key: ValueKey('combined-grade-$key'),
-            controller: _combinedGradeControllers[key],
-            enabled: editable && !_saving,
-            keyboardType:
-                const TextInputType.numberWithOptions(decimal: true),
-            decoration: InputDecoration(
-              labelText:
-                  '${_eventLabel(_eventCode(evaluation) ?? evaluation.type)} /${_formatNumber(evaluation.maxScore)}',
-              isDense: true,
-            ),
-            onChanged: (value) {
-              if (value.trim().isNotEmpty) {
-                _combinedPresence[key] = 'present';
-              }
-            },
-          ),
-          const SizedBox(height: 6),
-          _combinedPresenceField(evaluation, student),
-        ],
+      width: compact ? double.infinity : 165,
+      child: TextField(
+        key: ValueKey('combined-grade-$key'),
+        controller: _combinedGradeControllers[key],
+        enabled: editable && !_saving,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        decoration: InputDecoration(
+          labelText:
+              '${_eventLabel(_eventCode(evaluation) ?? evaluation.type)} /${_formatNumber(evaluation.maxScore)}',
+          helperText: 'Vide = non noté',
+          isDense: true,
+        ),
+        onChanged: (value) {
+          final trimmed = value.trim();
+          _combinedPresence[key] =
+              trimmed.isEmpty ? 'not_recorded' : 'present';
+        },
       ),
     );
   }
@@ -572,10 +500,11 @@ class _CanonicalGradesPageState extends State<CanonicalGradesPage> {
             return SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: DataTable(
-                dataRowMinHeight: 112,
-                dataRowMaxHeight: 132,
+                dataRowMinHeight: 76,
+                dataRowMaxHeight: 92,
                 columns: [
-                  const DataColumn(label: Text('Nom et prénom')),
+                  const DataColumn(label: Text('Nom')),
+                  const DataColumn(label: Text('Prénom')),
                   ...evaluations.map((evaluation) => DataColumn(
                     label: Text(_eventLabel(
                         _eventCode(evaluation) ?? evaluation.type)),
@@ -583,8 +512,14 @@ class _CanonicalGradesPageState extends State<CanonicalGradesPage> {
                 ],
                 rows: students.map((student) => DataRow(cells: [
                   DataCell(SizedBox(
-                    width: 210,
-                    child: Text('${student.lastName} ${student.firstName}'),
+                    width: 150,
+                    child: Text(student.lastName,
+                        overflow: TextOverflow.ellipsis),
+                  )),
+                  DataCell(SizedBox(
+                    width: 150,
+                    child: Text(student.firstName,
+                        overflow: TextOverflow.ellipsis),
                   )),
                   ...evaluations.map((evaluation) => DataCell(
                     _combinedGradeCell(
@@ -598,27 +533,12 @@ class _CanonicalGradesPageState extends State<CanonicalGradesPage> {
             );
           }),
           const SizedBox(height: AppSpacing.s4),
-          Wrap(
-            spacing: AppSpacing.s3,
-            runSpacing: AppSpacing.s3,
-            children: [
-              AppButton(
-                label: _saving ? 'Enregistrement…' : 'Enregistrer le brouillon',
-                icon: Icons.save_outlined,
-                variant: AppButtonVariant.secondary,
-                onPressed: _saving
-                    ? null
-                    : () => _saveCombinedGrades(store, submit: false),
-              ),
-              AppButton(
-                key: const Key('submit-combined-grades'),
-                label: _saving ? 'Validation…' : 'Valider les notes',
-                icon: Icons.send_rounded,
-                onPressed: _saving
-                    ? null
-                    : () => _saveCombinedGrades(store, submit: true),
-              ),
-            ],
+          AppButton(
+            key: const Key('submit-combined-grades'),
+            label: _saving ? 'Validation…' : 'Valider les notes',
+            icon: Icons.send_rounded,
+            onPressed:
+                _saving ? null : () => _saveCombinedGrades(store, submit: true),
           ),
         ],
       ),
@@ -1866,7 +1786,7 @@ class _CanonicalGradesPageState extends State<CanonicalGradesPage> {
           if (_periods.isEmpty && !_loading)
             const AppCard(
               child: Text(
-                'Aucune période configurée. Créez les périodes dans Paramètres pédagogiques.',
+                'Aucune période configurée. Créez les périodes dans le module Périodes.',
               ),
             ),
           if (!isAdmin &&
@@ -1984,28 +1904,21 @@ class _CanonicalGradesPageState extends State<CanonicalGradesPage> {
                                             style: const TextStyle(fontWeight: FontWeight.w700),
                                           ),
                                           const SizedBox(height: AppSpacing.s3),
-                                          ResponsiveFormGrid(
-                                            children: [
-                                              TextField(
-                                                key: ValueKey('grade-value-${student.id}'),
-                                                controller: _gradeControllers[student.id],
-                                                enabled: editable && !_saving,
-                                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                                decoration: InputDecoration(
-                                                  labelText: 'Note /${_formatNumber(selected.maxScore)}',
-                                                  helperText: 'Laissez vide si la note n’est pas renseignée.',
-                                                ),
-                                                onChanged: (value) {
-                                                  if (value.trim().isNotEmpty) {
-                                                    _presence[student.id] = 'present';
-                                                  }
-                                                },
-                                              ),
-                                              _separatePresenceField(
-                                                student,
-                                                enabled: editable && !_saving,
-                                              ),
-                                            ],
+                                          TextField(
+                                            key: ValueKey('grade-value-${student.id}'),
+                                            controller: _gradeControllers[student.id],
+                                            enabled: editable && !_saving,
+                                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                            decoration: InputDecoration(
+                                              labelText: 'Note /${_formatNumber(selected.maxScore)}',
+                                              helperText: 'Laissez vide si la note n’est pas renseignée.',
+                                            ),
+                                            onChanged: (value) {
+                                              final trimmed = value.trim();
+                                              _presence[student.id] = trimmed.isEmpty
+                                                  ? 'not_recorded'
+                                                  : 'present';
+                                            },
                                           ),
                                         ],
                                       ),
@@ -2019,8 +1932,7 @@ class _CanonicalGradesPageState extends State<CanonicalGradesPage> {
                                 const Row(children: [
                                   Expanded(flex: 2, child: Text('Nom')),
                                   Expanded(flex: 2, child: Text('Prénom')),
-                                  SizedBox(width: 160, child: Text('Note')),
-                                  SizedBox(width: 150, child: Text('État')),
+                                  SizedBox(width: 180, child: Text('Note')),
                                 ]),
                                 const SizedBox(height: 8),
                                 ...students.map((student) => Padding(
@@ -2029,7 +1941,7 @@ class _CanonicalGradesPageState extends State<CanonicalGradesPage> {
                                         Expanded(flex: 2, child: Text(student.lastName, overflow: TextOverflow.ellipsis)),
                                         Expanded(flex: 2, child: Text(student.firstName, overflow: TextOverflow.ellipsis)),
                                         SizedBox(
-                                          width: 160,
+                                          width: 180,
                                           child: TextField(
                                             key: ValueKey('grade-value-${student.id}'),
                                             controller: _gradeControllers[student.id],
@@ -2037,20 +1949,14 @@ class _CanonicalGradesPageState extends State<CanonicalGradesPage> {
                                             keyboardType: const TextInputType.numberWithOptions(decimal: true),
                                             decoration: InputDecoration(
                                               labelText: 'Note /${_formatNumber(selected.maxScore)}',
+                                              helperText: 'Vide = non noté',
                                             ),
                                             onChanged: (value) {
-                                              if (value.trim().isNotEmpty) {
-                                                _presence[student.id] = 'present';
-                                              }
+                                              final trimmed = value.trim();
+                                              _presence[student.id] = trimmed.isEmpty
+                                                  ? 'not_recorded'
+                                                  : 'present';
                                             },
-                                          ),
-                                        ),
-                                        const SizedBox(width: 10),
-                                        SizedBox(
-                                          width: 150,
-                                          child: _separatePresenceField(
-                                            student,
-                                            enabled: editable && !_saving,
                                           ),
                                         ),
                                       ]),
