@@ -425,23 +425,32 @@ class StatisticsSnapshotView extends StatelessWidget {
   Widget build(BuildContext context) => FutureBuilder<Map<String, dynamic>>(
         future: request,
         builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
-            return const WorkspaceLoadingState(
-              label: 'Mise à jour des analyses…',
-            );
-          }
-          if (snapshot.hasError || !snapshot.hasData) {
-            return const WorkspaceErrorState(
-              message: 'Impossible de charger les statistiques.',
-            );
-          }
-          return _StatisticsContent(data: snapshot.data!);
+          final child = snapshot.connectionState != ConnectionState.done
+              ? const WorkspaceLoadingState(
+                  key: ValueKey('statistics-loading'),
+                  label: 'Mise à jour des analyses…',
+                )
+              : snapshot.hasError || !snapshot.hasData
+                  ? const WorkspaceErrorState(
+                      key: ValueKey('statistics-error'),
+                      message: 'Impossible de charger les statistiques.',
+                    )
+                  : _StatisticsContent(
+                      key: const ValueKey('statistics-content'),
+                      data: snapshot.data!,
+                    );
+          return AnimatedSwitcher(
+            duration: const Duration(milliseconds: 220),
+            switchInCurve: Curves.easeOut,
+            switchOutCurve: Curves.easeIn,
+            child: child,
+          );
         },
       );
 }
 
 class _StatisticsContent extends StatelessWidget {
-  const _StatisticsContent({required this.data});
+  const _StatisticsContent({super.key, required this.data});
 
   final Map<String, dynamic> data;
 
@@ -453,10 +462,6 @@ class _StatisticsContent extends StatelessWidget {
     );
     final byClass = List<Map<String, dynamic>>.from(
       (data['byClass'] as List? ?? const [])
-          .map((item) => Map<String, dynamic>.from(item as Map)),
-    );
-    final byCycle = List<Map<String, dynamic>>.from(
-      (data['byCycle'] as List? ?? const [])
           .map((item) => Map<String, dynamic>.from(item as Map)),
     );
     final byLevel = List<Map<String, dynamic>>.from(
@@ -503,9 +508,6 @@ class _StatisticsContent extends StatelessWidget {
         : null;
     final decisions = Map<String, dynamic>.from(
         data['decisions'] as Map? ?? const <String, dynamic>{});
-    final teacherStatistics = Map<String, dynamic>.from(
-        data['teacherStatistics'] as Map? ?? const <String, dynamic>{});
-
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: 1),
       duration: const Duration(milliseconds: 320),
