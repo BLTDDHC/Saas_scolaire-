@@ -1144,17 +1144,17 @@ class _StudentsPageState extends State<StudentsPage> {
                 ),
                 const SizedBox(height: AppSpacing.s3),
                 AppDateField(
-                  label: 'Date d’effet',
+                  label: 'Mois d’effet',
                   value: effectiveDate,
                   firstDate: AppDateUtils.parse(registration.registrationDate) ??
                       DateTime(DateTime.now().year - 1),
                   lastDate: DateTime(DateTime.now().year + 2, 12, 31),
-                  onChanged: (value) =>
-                      setDialogState(() => effectiveDate = value),
+                  onChanged: (value) => setDialogState(() =>
+                      effectiveDate = DateTime(value.year, value.month, 1)),
                 ),
                 const SizedBox(height: AppSpacing.s3),
                 const Text(
-                  'Les paiements déjà validés restent inchangés. Le nouveau tarif s’appliquera aux échéances concernées à partir de cette date.',
+                  'Le changement s’applique à partir du premier jour du mois sélectionné. Les paiements déjà validés restent inchangés.',
                 ),
               ],
             ),
