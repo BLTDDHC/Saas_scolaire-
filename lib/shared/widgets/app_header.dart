@@ -9,6 +9,7 @@ import '../../data/services/store_service.dart';
 import '../../features/auth/change_password_dialog.dart';
 import '../../features/school/students/student_photo_avatar.dart';
 import '../../features/school/shared/user_profile_avatar.dart';
+import '../../core/utils/notification_date_utils.dart';
 import 'app_button.dart';
 import 'app_modal.dart';
 import 'app_toast.dart';
@@ -246,8 +247,59 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (dialogContext, refresh) {
-          final items = store.getNotifications().reversed.take(50).toList();
-          final unread = items.where((item) => !item.read).length;
+          final items = store.getNotifications().toList()
+            ..sort((left, right) => notificationDate(right.time)
+                .compareTo(notificationDate(left.time)));
+          final visibleItems = items.take(50).toList();
+          final groupedChildren = <Widget>[];
+          String? currentMonth;
+          for (final item in visibleItems) {
+            final month = notificationMonthKey(item.time);
+            if (currentMonth != month) {
+              groupedChildren.add(Padding(
+                padding: const EdgeInsets.only(top: AppSpacing.s3),
+                child: Text(
+                  notificationMonthLabel(item.time),
+                  style: Theme.of(dialogContext)
+                      .textTheme
+                      .titleSmall
+                      ?.copyWith(fontWeight: FontWeight.w800),
+                ),
+              ));
+              groupedChildren.add(const Divider());
+              currentMonth = month;
+            }
+            groupedChildren.add(ListTile(
+              leading: Icon(item.read
+                  ? Icons.notifications_none_rounded
+                  : Icons.notifications_active_rounded),
+              title: Text(
+                item.title,
+                style: TextStyle(
+                    fontWeight:
+                        item.read ? FontWeight.w400 : FontWeight.w700),
+              ),
+              subtitle: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (item.message?.isNotEmpty == true) Text(item.message!),
+                  Text(item.time,
+                      style: Theme.of(dialogContext).textTheme.bodySmall),
+                ],
+              ),
+              trailing: item.read
+                  ? null
+                  : IconButton(
+                      tooltip: 'Marquer comme lu',
+                      onPressed: () {
+                        store.markNotificationAsRead(item.id);
+                        refresh(() {});
+                      },
+                      icon: const Icon(Icons.done_rounded),
+                    ),
+            ));
+          }
+          final unread = visibleItems.where((item) => !item.read).length;
           return AlertDialog(
             title: Row(children: [
               const Expanded(child: Text('Notifications')),
@@ -263,49 +315,14 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
             ]),
             content: SizedBox(
               width: 560,
-              child: items.isEmpty
+              child: visibleItems.isEmpty
                   ? const Padding(
                       padding: EdgeInsets.symmetric(vertical: AppSpacing.s8),
                       child: Center(child: Text('Aucune notification.')),
                     )
-                  : ListView.separated(
+                  : ListView(
                       shrinkWrap: true,
-                      itemCount: items.length,
-                      separatorBuilder: (_, __) => const Divider(height: 1),
-                      itemBuilder: (context, index) {
-                        final item = items[index];
-                        return ListTile(
-                          leading: Icon(item.read
-                              ? Icons.notifications_none_rounded
-                              : Icons.notifications_active_rounded),
-                          title: Text(
-                            item.title,
-                            style: TextStyle(
-                                fontWeight: item.read
-                                    ? FontWeight.w400
-                                    : FontWeight.w700),
-                          ),
-                          subtitle: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              if (item.message?.isNotEmpty == true)
-                                Text(item.message!),
-                              Text(item.time,
-                                  style: Theme.of(context).textTheme.bodySmall),
-                            ],
-                          ),
-                          trailing: item.read
-                              ? null
-                              : IconButton(
-                                  tooltip: 'Marquer comme lu',
-                                  onPressed: () {
-                                    store.markNotificationAsRead(item.id);
-                                    refresh(() {});
-                                  },
-                                  icon: const Icon(Icons.done_rounded),
-                                ),
-                        );
-                      },
+                      children: groupedChildren,
                     ),
             ),
             actions: [
