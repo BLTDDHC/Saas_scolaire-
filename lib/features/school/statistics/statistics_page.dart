@@ -26,6 +26,7 @@ class _StatisticsPageState extends State<StatisticsPage> {
   String? _classId;
   String? _periodId;
   String? _subjectId;
+  String? _eventCode;
   String? _loadedYearId;
   Future<Map<String, dynamic>>? _request;
   Map<String, dynamic>? _snapshot;
@@ -43,6 +44,7 @@ class _StatisticsPageState extends State<StatisticsPage> {
       classId: _classId,
       periodId: _periodId,
       subjectId: _subjectId,
+      eventCode: _eventCode,
     );
     _request = request;
     _snapshot = null;
@@ -67,6 +69,17 @@ class _StatisticsPageState extends State<StatisticsPage> {
     }
     return null;
   }
+
+  String _eventLabel(String code) => const {
+        'devoir_departemental': 'Devoir départemental',
+        'cepe_test': 'CEPE Test',
+        'cepe_blanc': 'CEPE Blanc',
+        'bepc_test': 'BEPC Test',
+        'bepc_blanc': 'BEPC Blanc',
+        'bac_test': 'BAC Test',
+        'bac_blanc': 'BAC Blanc',
+      }[code] ??
+      code;
 
   Future<void> _downloadPdf(StoreService store) async {
     final snapshot = _snapshot;
@@ -134,6 +147,7 @@ class _StatisticsPageState extends State<StatisticsPage> {
     final yearId = store.getSelectedAcademicYearId();
     if (_request == null || yearId != _loadedYearId) {
       _periodId = null;
+      _eventCode = null;
       _load(store);
       _loadPeriods(store, yearId);
     }
@@ -160,6 +174,37 @@ class _StatisticsPageState extends State<StatisticsPage> {
         .toList();
     final subjects =
         store.getSubjects().where((item) => item.status == 'active').toList();
+    final visibleClassIds = classes.map((item) => item.id).toSet();
+    final availableEvents = store
+        .getEvaluations()
+        .where((item) =>
+            visibleClassIds.contains(item.classId) &&
+            (_periodId == null || item.periodId == _periodId) &&
+            (_subjectId == null || item.subjectId == _subjectId) &&
+            item.examCode != null &&
+            const {
+              'devoir_departemental',
+              'cepe_test',
+              'cepe_blanc',
+              'bepc_test',
+              'bepc_blanc',
+              'bac_test',
+              'bac_blanc',
+            }.contains(item.examCode))
+        .map((item) => item.examCode!)
+        .toSet()
+        .toList()
+      ..sort((left, right) => _eventLabel(left).compareTo(_eventLabel(right)));
+    if (_eventCode != null && !availableEvents.contains(_eventCode)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && !availableEvents.contains(_eventCode)) {
+          setState(() {
+            _eventCode = null;
+            _filtersDirty = true;
+          });
+        }
+      });
+    }
 
     return WorkspacePage(
       title: 'Statistiques & analyses',
@@ -195,6 +240,7 @@ class _StatisticsPageState extends State<StatisticsPage> {
                     _cycleId = value;
                     _levelId = null;
                     _classId = null;
+                    _eventCode = null;
                     _filtersDirty = true;
                   });
                 },
@@ -223,6 +269,7 @@ class _StatisticsPageState extends State<StatisticsPage> {
                   setState(() {
                     _levelId = value;
                     _classId = null;
+                    _eventCode = null;
                     _filtersDirty = true;
                   });
                 },
@@ -274,6 +321,7 @@ class _StatisticsPageState extends State<StatisticsPage> {
                 ],
                 onChanged: (value) => setState(() {
                   _periodId = value;
+                  _eventCode = null;
                   _filtersDirty = true;
                 }),
               ),
@@ -296,6 +344,35 @@ class _StatisticsPageState extends State<StatisticsPage> {
                 ],
                 onChanged: (value) => setState(() {
                   _subjectId = value;
+                  _eventCode = null;
+                  _filtersDirty = true;
+                }),
+              ),
+            ),
+            SizedBox(
+              width: 250,
+              child: DropdownButtonFormField<String?>(
+                key: ValueKey(
+                    'statistics-event-${_periodId ?? 'all'}-${_eventCode ?? 'period'}'),
+                initialValue: _eventCode,
+                isExpanded: true,
+                decoration:
+                    const InputDecoration(labelText: 'Résultat / examen'),
+                items: [
+                  const DropdownMenuItem<String?>(
+                    value: null,
+                    child: Text('Résultat de la période'),
+                  ),
+                  ...availableEvents.map((code) => DropdownMenuItem<String?>(
+                        value: code,
+                        child: Text(
+                          _eventLabel(code),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      )),
+                ],
+                onChanged: (value) => setState(() {
+                  _eventCode = value;
                   _filtersDirty = true;
                 }),
               ),
