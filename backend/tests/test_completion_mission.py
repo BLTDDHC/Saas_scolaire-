@@ -344,8 +344,121 @@ class MissionCompletionTests(unittest.TestCase):
             "classId": str(self.cl.id),
             "periodId": str(self.periods[0].id),
             "subjectId": str(affectation.subject_id),
+            "eventCode": None,
         })
         self.assertTrue(result["snapshotGeneratedAt"])
+
+
+    def test_departmental_assessment_is_available_only_from_college(self):
+        def cycle(code: str):
+            existing = self.s.scalar(m.select(m.SchoolCycle).where(
+                m.SchoolCycle.establishment_id == self.tenant.id,
+                m.SchoolCycle.code == code,
+            ))
+            if existing:
+                return existing
+            return self.add(m.SchoolCycle(
+                establishment_id=self.tenant.id,
+                code=code,
+                name=code.title(),
+                status="active",
+            ))
+
+        def school_class(code: str):
+            cycle_row = cycle(code)
+            return self.add(m.SchoolClass(
+                establishment_id=self.tenant.id,
+                academic_year_id=self.year.id,
+                cycle_id=cycle_row.id,
+                name=f"Classe {code} départemental {uuid.uuid4().hex[:6]}",
+                status="active",
+            ))
+
+        for code in ("MATERNELLE", "PRIMAIRE"):
+            with self.assertRaises(m.HTTPException) as raised:
+                m.validate_program_type_for_class(
+                    school_class(code), "exam", "devoir_departemental", self.s
+                )
+            self.assertEqual(raised.exception.status_code, 422)
+
+        m.validate_program_type_for_class(
+            school_class("COLLEGE"), "exam", "devoir_departemental", self.s
+        )
+        m.validate_program_type_for_class(
+            school_class("LYCEE"), "exam", "devoir_departemental", self.s
+        )
+
+    def test_statistics_can_filter_departmental_official_result(self):
+        affectation = self.s.scalar(m.select(m.Affectation).where(
+            m.Affectation.class_id == self.cl.id,
+        ))
+        self.add(m.Evaluation(
+            establishment_id=self.tenant.id,
+            class_id=self.cl.id,
+            subject_id=affectation.subject_id,
+            academic_year_id=self.year.id,
+            academic_period_id=self.periods[0].id,
+            affectation_id=affectation.id,
+            name="Devoir départemental",
+            type="exam",
+            exam_code="devoir_departemental",
+            period="T1",
+            max_value=20,
+            status="submitted",
+            created_by=m.uuid.UUID(self.principals[0].id),
+        ))
+        payload = {
+            "calculationRuleVersion": m.RESULT_CALCULATION_RULE_VERSION,
+            "students": [{
+                "studentId": str(self.students[0].id),
+                "studentName": "Résultat général",
+                "average": 8,
+                "subjects": [],
+            }],
+            "eventResults": {
+                "devoir_departemental": {
+                    "event": "Devoir départemental",
+                    "students": [{
+                        "studentId": str(self.students[0].id),
+                        "studentName": "Résultat départemental",
+                        "average": 15,
+                        "subjects": [{
+                            "subjectId": str(affectation.subject_id),
+                            "subject": "Mathématiques",
+                            "average": 15,
+                        }],
+                    }],
+                },
+            },
+        }
+        self.add(m.ResultCalculation(
+            establishment_id=self.tenant.id,
+            academic_year_id=self.year.id,
+            class_id=self.cl.id,
+            academic_period_id=self.periods[0].id,
+            status="official",
+            payload=payload,
+            source_updated_at=m.datetime.now(m.timezone.utc),
+            calculated_at=m.datetime.now(m.timezone.utc),
+        ))
+
+        result = m.statistics(
+            academic_year_id=str(self.year.id),
+            class_id=str(self.cl.id),
+            period_id=str(self.periods[0].id),
+            event_code="devoir_departemental",
+            current=self._school_admin(),
+            session=self.s,
+        )
+
+        self.assertEqual(result["overallAverage"], 15)
+        self.assertEqual(result["successRate"], 100)
+        self.assertEqual(result["appliedFilters"]["eventCode"],
+                         "devoir_departemental")
+        self.assertIn(
+            {"code": "devoir_departemental", "name": "Devoir départemental"},
+            result["filters"]["resultEvents"],
+        )
 
 
 if __name__ == "__main__":
