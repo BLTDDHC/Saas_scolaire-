@@ -11,8 +11,8 @@ import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/app_form_field.dart';
 import '../../../shared/widgets/app_toast.dart';
 import '../../../shared/widgets/workspace_header.dart';
+import '../../auth/change_password_dialog.dart';
 import 'calendar_settings_card.dart';
-import 'pedagogical_settings_card.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -141,7 +141,7 @@ class _SettingsPageState extends State<SettingsPage> {
     final user = store.currentUser;
     return WorkspacePage(
       title: 'Paramètres',
-      subtitle: 'Votre profil, l’établissement et les réglages pédagogiques',
+      subtitle: 'Compte, établissement, sécurité et préférences d’affichage',
       children: [
         AppCard(
           title: 'Mon Profil Utilisateur',
@@ -165,7 +165,20 @@ class _SettingsPageState extends State<SettingsPage> {
           const CalendarSettingsCard(),
           const SizedBox(height: AppSpacing.s6),
         ],
-        const PedagogicalSettingsCard(),
+        AppCard(
+          title: 'Sécurité du compte',
+          subtitle:
+              'Les périodes scolaires sont gérées dans le module « Périodes » et ne sont pas dupliquées ici.',
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: AppButton(
+              label: 'Modifier le mot de passe',
+              icon: Icons.password_rounded,
+              variant: AppButtonVariant.secondary,
+              onPressed: () => showChangePasswordDialog(context),
+            ),
+          ),
+        ),
         const SizedBox(height: AppSpacing.s6),
         AppCard(
           title: 'Thème & Apparence',
