@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/utils/notification_date_utils.dart';
 import '../../../data/models/other_models.dart';
 import '../../../data/services/store_service.dart';
 import '../../../shared/widgets/app_badge.dart';
@@ -169,11 +170,86 @@ class _NotificationsPageState extends State<NotificationsPage> {
       }[type] ??
       (type == null || type.isEmpty ? 'Information' : type);
 
+  List<Widget> _notificationSections(
+    List<NotificationModel> items,
+    StoreService store,
+  ) {
+    final widgets = <Widget>[];
+    String? previousMonth;
+    for (final item in items) {
+      final month = notificationMonthKey(item.time);
+      if (month != previousMonth) {
+        if (widgets.isNotEmpty) {
+          widgets.add(const SizedBox(height: AppSpacing.s4));
+        }
+        widgets.add(
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              notificationMonthLabel(item.time),
+              key: ValueKey('notification-month-$month'),
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+            ),
+          ),
+        );
+        widgets.add(const Divider());
+        previousMonth = month;
+      }
+      widgets.add(
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: CircleAvatar(
+            child: Icon(item.read
+                ? Icons.notifications_none_rounded
+                : Icons.notifications_active_rounded),
+          ),
+          title: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  item.title,
+                  style: TextStyle(
+                      fontWeight:
+                          item.read ? FontWeight.w500 : FontWeight.w700),
+                ),
+              ),
+              AppBadge(
+                label: _typeLabel(item.type),
+                variant: item.read
+                    ? AppBadgeVariant.secondary
+                    : AppBadgeVariant.primary,
+              ),
+            ],
+          ),
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if ((item.message ?? '').isNotEmpty) Text(item.message!),
+              const SizedBox(height: 4),
+              Text(item.time),
+            ],
+          ),
+          trailing: item.read
+              ? null
+              : IconButton(
+                  tooltip: 'Marquer comme lu',
+                  onPressed: () => store.markNotificationAsRead(item.id),
+                  icon: const Icon(Icons.done_rounded),
+                ),
+        ),
+      );
+    }
+    return widgets;
+  }
+
   @override
   Widget build(BuildContext context) {
     final store = context.watch<StoreService>();
     final items = store.getNotifications().toList()
-      ..sort((left, right) => right.time.compareTo(left.time));
+      ..sort((left, right) =>
+          notificationDate(right.time).compareTo(notificationDate(left.time)));
     final unread = items.where((item) => !item.read).length;
     final isAdmin = store.currentUser?.role == UserRole.admin;
 
@@ -227,51 +303,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
                 ? 'Toutes les notifications sont lues'
                 : '$unread notification(s) non lue(s)',
             child: Column(
-              children: items.map((NotificationModel item) {
-                return ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: CircleAvatar(
-                    child: Icon(item.read
-                        ? Icons.notifications_none_rounded
-                        : Icons.notifications_active_rounded),
-                  ),
-                  title: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          item.title,
-                          style: TextStyle(
-                              fontWeight: item.read
-                                  ? FontWeight.w500
-                                  : FontWeight.w700),
-                        ),
-                      ),
-                      AppBadge(
-                        label: _typeLabel(item.type),
-                        variant: item.read
-                            ? AppBadgeVariant.secondary
-                            : AppBadgeVariant.primary,
-                      ),
-                    ],
-                  ),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if ((item.message ?? '').isNotEmpty) Text(item.message!),
-                      const SizedBox(height: 4),
-                      Text(item.time),
-                    ],
-                  ),
-                  trailing: item.read
-                      ? null
-                      : IconButton(
-                          tooltip: 'Marquer comme lu',
-                          onPressed: () =>
-                              store.markNotificationAsRead(item.id),
-                          icon: const Icon(Icons.done_rounded),
-                        ),
-                );
-              }).toList(),
+              children: _notificationSections(items, store),
             ),
           ),
       ],
