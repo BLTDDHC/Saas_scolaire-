@@ -49,6 +49,7 @@ void main() {
                   'students',
                   'grades',
                   'schedule',
+                  'finance',
                   'messages'
                 ],
               },
@@ -163,8 +164,10 @@ void main() {
     final navigation = NavItems.getNavItemsForRole(UserRole.parent)
         .map((item) => item.id)
         .toSet();
-    expect(navigation,
-        containsAll({'dashboard', 'tracking', 'grades', 'schedule'}));
+    expect(
+        navigation,
+        containsAll(
+            {'dashboard', 'tracking', 'grades', 'schedule', 'parent_finance'}));
     expect(navigation, isNot(contains('messages')));
     expect(navigation, isNot(contains('finance')));
     expect(navigation, isNot(contains('attendance')));
