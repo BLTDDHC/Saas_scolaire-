@@ -18,6 +18,7 @@ import 'dashboard/school_dashboard.dart';
 import 'dashboard/parent_tracking_page.dart';
 import 'documents/documents_page.dart';
 import 'finance/finance_page.dart';
+import 'finance/parent_finance_page.dart';
 import 'grades/canonical_grades_page.dart';
 import 'grades/student_results_page.dart';
 import 'periods/periods_page.dart';
@@ -59,7 +60,7 @@ class _SchoolShellState extends State<SchoolShell> {
     if (role == UserRole.admin) return true;
     const studentPages = {'dashboard', 'grades', 'schedule', 'notifications'};
     const parentPages = {
-      'dashboard', 'tracking', 'grades', 'schedule', 'notifications'
+      'dashboard', 'tracking', 'grades', 'schedule', 'finance', 'notifications'
     };
     const teacherPages = {
       'dashboard',
@@ -221,7 +222,9 @@ class _SchoolShellState extends State<SchoolShell> {
       case 'assignments':
         return const CanonicalGradesPage();
       case 'finance':
-        return const FinancePage();
+        return store.currentUser?.role == UserRole.parent
+            ? const ParentFinancePage()
+            : const FinancePage();
       case 'documents':
         return const DocumentsPage();
       case 'statistics':
