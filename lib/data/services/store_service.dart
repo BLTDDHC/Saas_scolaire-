@@ -1247,7 +1247,8 @@ class StoreService extends ChangeNotifier {
           String? levelId,
           String? classId,
           String? periodId,
-          String? subjectId}) =>
+          String? subjectId,
+          String? eventCode}) =>
       _repository.statistics(
           schoolId: schoolId,
           academicYearId: academicYearId,
@@ -1255,7 +1256,8 @@ class StoreService extends ChangeNotifier {
           levelId: levelId,
           classId: classId,
           periodId: periodId,
-          subjectId: subjectId);
+          subjectId: subjectId,
+          eventCode: eventCode);
 
   Future<EstablishmentModel> loadCurrentEstablishment() async {
     final establishment =
