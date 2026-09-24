@@ -160,6 +160,26 @@ class _NotificationsPageState extends State<NotificationsPage> {
     if (sent == true && mounted) await _load();
   }
 
+  DateTime? _notificationDate(NotificationModel item) =>
+      DateTime.tryParse(item.time)?.toLocal();
+
+  String _monthLabel(DateTime? value) {
+    if (value == null) return 'Date non disponible';
+    const months = [
+      'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+      'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre',
+    ];
+    return '${months[value.month - 1]} ${value.year}';
+  }
+
+  String _displayTime(NotificationModel item) {
+    final value = _notificationDate(item);
+    if (value == null) return item.time;
+    String two(int number) => number.toString().padLeft(2, '0');
+    return '${two(value.day)}/${two(value.month)}/${value.year} · '
+        '${two(value.hour)}:${two(value.minute)}';
+  }
+
   String _typeLabel(String? type) => const {
         'grade_entry_open': 'Saisie des notes',
         'evaluation_submitted': 'Notes soumises',
@@ -173,8 +193,19 @@ class _NotificationsPageState extends State<NotificationsPage> {
   Widget build(BuildContext context) {
     final store = context.watch<StoreService>();
     final items = store.getNotifications().toList()
-      ..sort((left, right) => right.time.compareTo(left.time));
+      ..sort((left, right) {
+        final l = _notificationDate(left);
+        final r = _notificationDate(right);
+        if (l != null && r != null) return r.compareTo(l);
+        if (l != null) return -1;
+        if (r != null) return 1;
+        return right.time.compareTo(left.time);
+      });
     final unread = items.where((item) => !item.read).length;
+    final groups = <String, List<NotificationModel>>{};
+    for (final item in items) {
+      groups.putIfAbsent(_monthLabel(_notificationDate(item)), () => []).add(item);
+    }
     final isAdmin = store.currentUser?.role == UserRole.admin;
 
     return WorkspacePage(
@@ -227,49 +258,69 @@ class _NotificationsPageState extends State<NotificationsPage> {
                 ? 'Toutes les notifications sont lues'
                 : '$unread notification(s) non lue(s)',
             child: Column(
-              children: items.map((NotificationModel item) {
-                return ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: CircleAvatar(
-                    child: Icon(item.read
-                        ? Icons.notifications_none_rounded
-                        : Icons.notifications_active_rounded),
-                  ),
-                  title: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          item.title,
-                          style: TextStyle(
-                              fontWeight: item.read
-                                  ? FontWeight.w500
-                                  : FontWeight.w700),
-                        ),
-                      ),
-                      AppBadge(
-                        label: _typeLabel(item.type),
-                        variant: item.read
-                            ? AppBadgeVariant.secondary
-                            : AppBadgeVariant.primary,
-                      ),
-                    ],
-                  ),
-                  subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: groups.entries.map((entry) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: AppSpacing.s5),
+                  child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if ((item.message ?? '').isNotEmpty) Text(item.message!),
-                      const SizedBox(height: 4),
-                      Text(item.time),
+                      Text(
+                        entry.key,
+                        key: ValueKey('notification-month-${entry.key}'),
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w800,
+                            ),
+                      ),
+                      const SizedBox(height: AppSpacing.s2),
+                      ...entry.value.map((NotificationModel item) => ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: CircleAvatar(
+                              child: Icon(item.read
+                                  ? Icons.notifications_none_rounded
+                                  : Icons.notifications_active_rounded),
+                            ),
+                            title: Wrap(
+                              spacing: AppSpacing.s2,
+                              runSpacing: AppSpacing.s1,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                Text(
+                                  item.title,
+                                  style: TextStyle(
+                                    fontWeight: item.read
+                                        ? FontWeight.w500
+                                        : FontWeight.w700,
+                                  ),
+                                ),
+                                AppBadge(
+                                  label: _typeLabel(item.type),
+                                  variant: item.read
+                                      ? AppBadgeVariant.secondary
+                                      : AppBadgeVariant.primary,
+                                ),
+                              ],
+                            ),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                if ((item.message ?? '').isNotEmpty)
+                                  Text(item.message!),
+                                const SizedBox(height: 4),
+                                Text(_displayTime(item)),
+                              ],
+                            ),
+                            trailing: item.read
+                                ? null
+                                : IconButton(
+                                    tooltip: 'Marquer comme lu',
+                                    onPressed: () =>
+                                        store.markNotificationAsRead(item.id),
+                                    icon: const Icon(Icons.done_rounded),
+                                  ),
+                          )),
                     ],
                   ),
-                  trailing: item.read
-                      ? null
-                      : IconButton(
-                          tooltip: 'Marquer comme lu',
-                          onPressed: () =>
-                              store.markNotificationAsRead(item.id),
-                          icon: const Icon(Icons.done_rounded),
-                        ),
                 );
               }).toList(),
             ),
