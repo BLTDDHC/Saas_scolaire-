@@ -415,6 +415,14 @@ class _StudentsPageState extends State<StudentsPage> {
     bool regimeRequiredForSelectedClass() =>
         const {'MATERNELLE', 'PRIMAIRE'}.contains(selectedCycleCode());
 
+    if (regimeRequiredForSelectedClass()) {
+      if (!const {'part_time', 'full_time'}.contains(schoolRegime)) {
+        schoolRegime = 'full_time';
+      }
+    } else {
+      schoolRegime = 'normal';
+    }
+
     bool tdAllowedForSelectedClass() {
       final selected = allClasses.where((item) => item.id == selectedClass);
       if (selected.isEmpty) return false;
