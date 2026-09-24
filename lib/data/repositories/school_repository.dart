@@ -33,6 +33,12 @@ class SchoolRepository {
           Map<String, dynamic> body) async =>
       Map<String, dynamic>.from(
           await _api.post('/api/v1/school/finance/school-payments', body));
+
+  Future<Map<String, dynamic>> parentFinanceSituation(
+          String studentId, String academicYearId) async =>
+      Map<String, dynamic>.from(await _api.get(
+          '/api/v1/school/finance/parent-situation/${Uri.encodeComponent(studentId)}?'
+          '${Uri(queryParameters: {'academic_year_id': academicYearId}).query}'));
   Future<Map<String, dynamic>> updateFinanceTariff(
           String id, Map<String, dynamic> body) async =>
       Map<String, dynamic>.from(
@@ -411,7 +417,7 @@ class SchoolRepository {
       Map<String, dynamic>.from(
           await _api.post('/api/v1/school/students/$studentId/registrations', {
         'classId': classId,
-        'schoolRegime': schoolRegime,
+        if (schoolRegime != null) 'schoolRegime': schoolRegime,
         'hasTd': hasTd,
         'options': options,
       }));
@@ -421,6 +427,12 @@ class SchoolRepository {
       Map<String, dynamic>.from(await _api.put(
           '/api/v1/school/student-registrations/$registrationId',
           {'classId': classId}));
+
+  Future<Map<String, dynamic>> changeStudentRegime(
+          String registrationId, Map<String, dynamic> payload) async =>
+      Map<String, dynamic>.from(await _api.put(
+          '/api/v1/school/student-registrations/$registrationId/regime',
+          payload));
 
   Future<List<Map<String, dynamic>>> preEnrollments(
       {String? academicYearId, String? status}) async {
@@ -453,7 +465,7 @@ class SchoolRepository {
 
   Future<Map<String, dynamic>> approvePreEnrollment(String id,
           {String? classId,
-          String schoolRegime = 'normal',
+          String? schoolRegime,
           bool hasTd = false,
           Map<String, dynamic> options = const {}}) async =>
       Map<String, dynamic>.from(
