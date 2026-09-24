@@ -9877,6 +9877,7 @@ def school_organization_summary(
         "activeCycleCount": cycle_count,
         "classCount": class_count,
         "studentCount": student_count,
+        "scopeCycleCount": len(selected_cycle_ids),
         "teacherCount": teacher_count,
         "subjectCount": subject_count,
         "assignmentCount": assignment_count,
