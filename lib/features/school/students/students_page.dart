@@ -1314,15 +1314,7 @@ class _StudentsPageState extends State<StudentsPage> {
         return;
       }
       final registration = registrations.first;
-      final raw = await store.studentDetailsRemote(student.id,
-          academicYearId: yearId);
-      final details = raw.toJson();
-      final registrationData =
-          details['registration'] is Map<String, dynamic>
-              ? Map<String, dynamic>.from(details['registration'] as Map)
-              : <String, dynamic>{};
-      var currentRegime =
-          registrationData['schoolRegime']?.toString() ?? 'full_time';
+      var currentRegime = registration.schoolRegime ?? 'full_time';
       var nextRegime =
           currentRegime == 'part_time' ? 'full_time' : 'part_time';
       final year = store
