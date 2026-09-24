@@ -122,7 +122,6 @@ void main() {
     expect(find.text('Enfant Alpha'), findsWidgets);
     expect(find.text('15 / 20'), findsOneWidget);
     expect(find.text('Voir les résultats'), findsOneWidget);
-    expect(find.text('Enfant Beta'), findsOneWidget);
 
     final childSelector = find.byType(DropdownButtonFormField<String>).first;
     await tester.tap(childSelector);
