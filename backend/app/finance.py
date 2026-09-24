@@ -14,6 +14,7 @@ guard = m.require_module_roles('finance', 'admin', 'superadmin')
 receipt_guard = m.require_module_roles(
     'finance', 'admin', 'superadmin', 'student', 'parent'
 )
+parent_guard = m.require_module_roles('finance', 'parent')
 KINDS = {'registration': 'Inscription', 'reenrollment': 'Réinscription',
          'tuition': 'Frais mensuels', 'td': 'TD', 'other': 'Autres frais'}
 MONTHS = ('janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet',
@@ -140,9 +141,20 @@ def prior_registration(session, reg, year):
     return result
 
 
+def billing_regime(session, reg, cl, kind, month):
+    if kind != 'tuition':
+        return None
+    cycle = session.get(m.SchoolCycle, cl.cycle_id) if cl.cycle_id else None
+    if not cycle or m.canonical_cycle_code(cycle.code) not in {'MATERNELLE', 'PRIMAIRE'}:
+        return None
+    target = date.fromisoformat(f'{month}-01') if month else date.today()
+    return m.regime_for_date(session, reg, target)
+
+
 def fee_for(session, current, school, reg, cl, kind, month=None, fee_id=None, name=None):
     cache = session.info.get('finance_fee_cache')
-    key = (str(reg.id), str(cl.id), kind, month, fee_id, name)
+    applicable_regime = billing_regime(session, reg, cl, kind, month)
+    key = (str(reg.id), str(cl.id), kind, month, fee_id, name, applicable_regime)
     if cache is not None and key in cache:
         return cache[key]
     probe = m.Resource(payload={'classId': str(cl.id)})
@@ -160,9 +172,12 @@ def fee_for(session, current, school, reg, cl, kind, month=None, fee_id=None, na
         body = m.FinanceFeeInput(**fields)
         if body.month is not None and body.month != month:
             continue
+        fee_regime = data.get('schoolRegime')
+        if fee_regime is not None and fee_regime != applicable_regime:
+            continue
         if m.finance_fee_matches_registration(body, probe, session, reg.establishment_id):
             rank = {'establishment': 0, 'cycle': 1, 'level': 2, 'class': 3}[body.scope]
-            matches.append(((rank, body.month is not None), fee))
+            matches.append(((rank, body.month is not None, fee_regime is not None), fee))
     if not matches:
         if cache is not None:
             cache[key] = None
@@ -242,13 +257,26 @@ def invoice(session, current, school, reg, cl, student, kind, month, fee_id=None
         except HTTPException:
             eligible = False
     fee = fee_for(session, current, school, reg, cl, kind, month, fee_id) if eligible else None
+    applicable_regime = billing_regime(session, reg, cl, kind, month)
     identifier = assignment_key(session, reg, kind, month, fee.id if fee else None)
     assignment = m.Resource(id=identifier, kind='finance-fee-assignments', school_id=school,
         establishment_id=reg.establishment_id, academic_year_id=reg.academic_year_id,
         payload={'id': identifier, 'registrationId': str(reg.id), 'schoolRegistrationId': str(reg.id),
             'studentId': str(student.id), 'academicYearId': str(reg.academic_year_id),
             'feeId': fee.id if fee else None, 'amount': int(fee.payload['amount']) if fee else 0,
-            'type': kind, 'month': month, 'schoolId': school, 'status': 'assigned'})
+            'type': kind, 'month': month, 'schoolRegime': applicable_regime,
+            'schoolId': school, 'status': 'assigned'})
+    persisted_assignment = session.get(
+        m.Resource, {'kind': 'finance-fee-assignments', 'id': identifier}
+    )
+    if persisted_assignment is not None:
+        assignment = persisted_assignment
+        stored_fee_id = persisted_assignment.payload.get('feeId')
+        if stored_fee_id:
+            stored_fee = session.get(m.Resource, {'kind': 'finance-fees', 'id': stored_fee_id})
+            if stored_fee is not None:
+                fee = stored_fee
+        applicable_regime = persisted_assignment.payload.get('schoolRegime', applicable_regime)
     balance = m.finance_assignment_balance(session, school, assignment)
     # A validated school registration is itself the proof of settlement for
     # registration/re-enrollment. It is not a second cash payment and must not
@@ -278,6 +306,12 @@ def invoice(session, current, school, reg, cl, student, kind, month, fee_id=None
         'cycle': cycle_name, 'registrationStatus': reg.status,
         'academicYearId': str(reg.academic_year_id), 'schoolId': school,
         'type': kind, 'month': month, 'label': label, 'feeId': fee.id if fee else None,
+        'schoolRegime': applicable_regime,
+        'regimeLabel': (
+            'Mi-temps' if applicable_regime == 'part_time'
+            else 'Plein temps' if applicable_regime == 'full_time'
+            else None
+        ),
         'eligible': eligible, 'hasTd': reg.has_td, **balance,
         'credit': max(0, balance['paid']-balance['expected'])}
     if not eligible:
@@ -478,6 +512,88 @@ def monthly_situation(
         'classId': str(school_class.id),
         'className': school_class.name,
         'months': rows,
+    }
+
+
+@router.get('/parent-situation/{student_id}')
+def parent_situation(
+    student_id: uuid.UUID,
+    academic_year_id: uuid.UUID,
+    current: m.Principal = Depends(parent_guard),
+    session: Session = Depends(m.db),
+):
+    enable_read_cache(session)
+    school, tenant = m.module_tenant_scope(current, session)
+    guardian = session.scalar(select(m.Guardian).where(
+        m.Guardian.user_id == uuid.UUID(current.id),
+        m.Guardian.establishment_id == tenant,
+        m.Guardian.status == 'active',
+    ))
+    if not guardian:
+        raise HTTPException(403, 'Profil parent invalide')
+    linked = session.scalar(select(m.StudentGuardian.id).where(
+        m.StudentGuardian.guardian_id == guardian.id,
+        m.StudentGuardian.student_id == student_id,
+        m.StudentGuardian.establishment_id == tenant,
+    ))
+    if not linked:
+        raise HTTPException(404, 'Enfant introuvable')
+    year = session.get(m.AcademicYear, academic_year_id)
+    if not year or year.establishment_id != tenant:
+        raise HTTPException(422, 'Année scolaire invalide')
+    reg = session.scalar(select(m.StudentAcademicRegistration).where(
+        m.StudentAcademicRegistration.student_id == student_id,
+        m.StudentAcademicRegistration.academic_year_id == academic_year_id,
+        m.StudentAcademicRegistration.establishment_id == tenant,
+        m.StudentAcademicRegistration.status.in_(('validated', 'active')),
+    ))
+    if not reg:
+        raise HTTPException(404, 'Inscription scolaire introuvable pour cette année')
+    cl = session.get(m.SchoolClass, reg.class_id)
+    student = session.get(m.Student, reg.student_id)
+    if not cl or not student:
+        raise HTTPException(409, 'Dossier scolaire incomplet')
+
+    rows = []
+    today = date.today()
+    for month in billing_months(session, year):
+        row, _ = invoice(session, current, school, reg, cl, student, 'tuition', month)
+        month_day = date.fromisoformat(f'{month}-01')
+        month_end = month_day.replace(day=calendar.monthrange(month_day.year, month_day.month)[1])
+        overdue = row['remaining'] > 0 and month_end < today
+        rows.append({**row, 'overdue': overdue})
+
+    total_expected = sum(int(row['expected']) for row in rows if row['status'] != 'not_applicable')
+    total_paid = sum(int(row['paid']) for row in rows if row['status'] != 'not_applicable')
+    total_remaining = sum(int(row['remaining']) for row in rows if row['status'] != 'not_applicable')
+    advance_rows = [
+        row for row in rows
+        if row['paid'] > 0 and date.fromisoformat(f"{row['month']}-01") > today.replace(day=1)
+    ]
+    cycle = session.get(m.SchoolCycle, cl.cycle_id) if cl.cycle_id else None
+    cycle_code = m.canonical_cycle_code(cycle.code if cycle else '')
+    regime_visible = cycle_code in {'MATERNELLE', 'PRIMAIRE'}
+    return {
+        'studentId': str(student.id),
+        'studentName': f'{student.last_name} {student.first_name}',
+        'classId': str(cl.id),
+        'className': cl.name,
+        'academicYearId': str(year.id),
+        'academicYearName': year.name,
+        'cycleCode': cycle_code,
+        'schoolRegime': m.regime_for_date(session, reg, today) if regime_visible else None,
+        'regimeHistory': (
+            [m.regime_history_json(item) for item in m.regime_history_rows(session, reg.id)]
+            if regime_visible else []
+        ),
+        'months': rows,
+        'unpaidMonths': [row for row in rows if row['remaining'] > 0],
+        'overdueMonths': [row for row in rows if row['overdue']],
+        'advanceMonths': advance_rows,
+        'advanceAmount': sum(int(row['paid']) for row in advance_rows),
+        'totalExpected': total_expected,
+        'totalPaid': total_paid,
+        'totalRemaining': total_remaining,
     }
 
 
