@@ -182,10 +182,19 @@ void openStudentRegistrationModal(
   final hasExistingRegistration = student.academicYearId == yearId &&
       student.classId != null &&
       student.classId!.isNotEmpty;
-  String schoolRegime = const {'normal', 'part_time', 'full_time'}
+  bool regimeRequiredForClass(String? selectedClassId) {
+    final selected = classes.where((item) => item.id == selectedClassId);
+    if (selected.isEmpty) return false;
+    final cycle = store.getSchoolCycles()
+        .where((item) => item.id == selected.first.cycleId)
+        .firstOrNull;
+    return const {'MATERNELLE', 'PRIMAIRE'}
+        .contains((cycle?.code ?? '').toUpperCase());
+  }
+  String schoolRegime = const {'part_time', 'full_time'}
           .contains(preselectedRegistrationType)
       ? preselectedRegistrationType!
-      : 'normal';
+      : (regimeRequiredForClass(classId) ? 'part_time' : 'normal');
   bool hasTd = false;
   bool tdAllowedForClass(String? selectedClassId) {
     final selected = classes.where((item) => item.id == selectedClassId);
@@ -214,25 +223,29 @@ void openStudentRegistrationModal(
                     .toList(),
                 onChanged: (value) => setState(() {
                   classId = value;
+                  schoolRegime = regimeRequiredForClass(value)
+                      ? (schoolRegime == 'full_time' ? 'full_time' : 'part_time')
+                      : 'normal';
                   if (!tdAllowedForClass(value)) hasTd = false;
                 }),
               ),
               if (!hasExistingRegistration) ...[
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  isExpanded: true,
-                  initialValue: schoolRegime,
-                  decoration: const InputDecoration(labelText: 'Régime'),
-                  items: const [
-                    DropdownMenuItem(value: 'normal', child: Text('Normal')),
-                    DropdownMenuItem(
-                        value: 'part_time', child: Text('Mi-temps')),
-                    DropdownMenuItem(
-                        value: 'full_time', child: Text('Plein temps')),
-                  ],
-                  onChanged: (value) =>
-                      setState(() => schoolRegime = value ?? 'normal'),
-                ),
+                if (regimeRequiredForClass(classId)) ...[
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    isExpanded: true,
+                    initialValue: schoolRegime,
+                    decoration: const InputDecoration(labelText: 'Régime *'),
+                    items: const [
+                      DropdownMenuItem(
+                          value: 'part_time', child: Text('Mi-temps')),
+                      DropdownMenuItem(
+                          value: 'full_time', child: Text('Plein temps')),
+                    ],
+                    onChanged: (value) => setState(
+                        () => schoolRegime = value ?? 'part_time'),
+                  ),
+                ],
                 if (tdAllowedForClass(classId))
                   CheckboxListTile(
                     contentPadding: EdgeInsets.zero,
@@ -391,13 +404,23 @@ class _StudentsPageState extends State<StudentsPage> {
     String? selectedLevel =
         initialClass?.structuredLevelId ?? initialClass?.levelId;
     String gender = student?.sex ?? 'M';
-    String schoolRegime = 'normal';
+    String schoolRegime = const {'part_time', 'full_time'}
+            .contains(preEnrollment?['schoolRegime']?.toString())
+        ? preEnrollment!['schoolRegime'].toString()
+        : 'normal';
     String guardianType =
         primaryGuardian?['relationship']?.toString() ?? 'tuteur';
     bool hasTd = false;
     bool orphanFather = false;
     bool orphanMother = false;
     bool medicallyFit = true;
+    bool regimeRequiredForSelectedClass() {
+      final selected = allClasses.where((item) => item.id == selectedClass);
+      if (selected.isEmpty) return false;
+      final cycle = cycles.where((item) => item.id == selected.first.cycleId).firstOrNull;
+      return const {'MATERNELLE', 'PRIMAIRE'}
+          .contains((cycle?.code ?? '').toUpperCase());
+    }
     bool tdAllowedForSelectedClass() {
       final selected = allClasses.where((item) => item.id == selectedClass);
       if (selected.isEmpty) return false;
@@ -567,27 +590,31 @@ class _StudentsPageState extends State<StudentsPage> {
                           ? null
                           : (value) => setDialogState(() {
                                 selectedClass = value;
+                                schoolRegime = regimeRequiredForSelectedClass()
+                                    ? (schoolRegime == 'full_time' ? 'full_time' : 'part_time')
+                                    : 'normal';
                                 if (!tdAllowedForSelectedClass()) hasTd = false;
                               }),
                     ),
                     ...[
                       const SizedBox(height: AppSpacing.s3),
-                      if (student == null || preEnrollment != null)
+                      if ((student == null || preEnrollment != null) &&
+                          regimeRequiredForSelectedClass())
                         DropdownButtonFormField<String>(
                           isExpanded: true,
-                          initialValue: schoolRegime,
+                          initialValue: schoolRegime == 'full_time'
+                              ? 'full_time'
+                              : 'part_time',
                           decoration:
                               const InputDecoration(labelText: 'Régime *'),
                           items: const [
-                            DropdownMenuItem(
-                                value: 'normal', child: Text('Normal')),
                             DropdownMenuItem(
                                 value: 'part_time', child: Text('Mi-temps')),
                             DropdownMenuItem(
                                 value: 'full_time', child: Text('Plein temps')),
                           ],
                           onChanged: (value) => setDialogState(
-                              () => schoolRegime = value ?? 'normal'),
+                              () => schoolRegime = value ?? 'part_time'),
                         ),
                       if ((student == null || preEnrollment != null) &&
                           tdAllowedForSelectedClass())
