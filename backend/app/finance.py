@@ -140,6 +140,24 @@ def prior_registration(session, reg, year):
     return result
 
 
+def regime_for_month(session, reg, cl, month):
+    cycle = session.get(m.SchoolCycle, cl.cycle_id) if cl.cycle_id else None
+    code = m.canonical_cycle_code(cycle.code) if cycle else ''
+    if code not in {'MATERNELLE', 'PRIMAIRE'}:
+        return None
+    target = date.fromisoformat(f'{month}-01') if month else date.today()
+    change = session.scalar(select(m.StudentRegimeHistory).where(
+        m.StudentRegimeHistory.registration_id == reg.id,
+        m.StudentRegimeHistory.effective_date <= target,
+    ).order_by(
+        m.StudentRegimeHistory.effective_date.desc(),
+        m.StudentRegimeHistory.created_at.desc(),
+    ))
+    if change:
+        return change.regime
+    return reg.school_regime if reg.school_regime in {'part_time', 'full_time'} else None
+
+
 def fee_for(session, current, school, reg, cl, kind, month=None, fee_id=None, name=None):
     cache = session.info.get('finance_fee_cache')
     key = (str(reg.id), str(cl.id), kind, month, fee_id, name)
@@ -159,6 +177,9 @@ def fee_for(session, current, school, reg, cl, kind, month=None, fee_id=None, na
         fields = {key: data[key] for key in m.FinanceFeeInput.model_fields if key in data}
         body = m.FinanceFeeInput(**fields)
         if body.month is not None and body.month != month:
+            continue
+        applicable_regime = regime_for_month(session, reg, cl, month) if kind == 'tuition' else None
+        if body.regime != applicable_regime:
             continue
         if m.finance_fee_matches_registration(body, probe, session, reg.establishment_id):
             rank = {'establishment': 0, 'cycle': 1, 'level': 2, 'class': 3}[body.scope]
@@ -278,6 +299,7 @@ def invoice(session, current, school, reg, cl, student, kind, month, fee_id=None
         'cycle': cycle_name, 'registrationStatus': reg.status,
         'academicYearId': str(reg.academic_year_id), 'schoolId': school,
         'type': kind, 'month': month, 'label': label, 'feeId': fee.id if fee else None,
+        'regime': regime_for_month(session, reg, cl, month) if kind == 'tuition' else None,
         'eligible': eligible, 'hasTd': reg.has_td, **balance,
         'credit': max(0, balance['paid']-balance['expected'])}
     if not eligible:
@@ -472,6 +494,7 @@ def monthly_situation(
         'registrationId': str(reg.id),
         'studentId': str(student.id),
         'studentName': f'{student.last_name} {student.first_name}',
+        'regime': regime_for_month(session, reg, school_class, date.today().strftime('%Y-%m')),
         'firstName': student.first_name,
         'lastName': student.last_name,
         'matricule': reg.registration_number or student.registration_number,
@@ -691,6 +714,86 @@ def pay(body: SchoolPaymentInput, current: m.Principal=Depends(guard),session: S
     return result
 
 
+@router.get('/parent-situation/{student_id}')
+def parent_situation(
+    student_id: uuid.UUID,
+    academic_year_id: uuid.UUID,
+    current: m.Principal = Depends(receipt_guard),
+    session: Session = Depends(m.db),
+):
+    if current.role != 'parent':
+        raise HTTPException(403, 'Cette situation financière est réservée au parent')
+    school, tenant, year = context(current, session, None, academic_year_id)
+    try:
+        guardian = session.scalar(select(m.Guardian).where(
+            m.Guardian.user_id == uuid.UUID(current.id),
+            m.Guardian.establishment_id == tenant,
+            m.Guardian.status == 'active',
+        ))
+    except ValueError:
+        guardian = None
+    if not guardian or not session.scalar(select(m.StudentGuardian.id).where(
+        m.StudentGuardian.guardian_id == guardian.id,
+        m.StudentGuardian.student_id == student_id,
+        m.StudentGuardian.establishment_id == tenant,
+    )):
+        raise HTTPException(404, 'Enfant introuvable')
+    reg = session.scalar(select(m.StudentAcademicRegistration).where(
+        m.StudentAcademicRegistration.student_id == student_id,
+        m.StudentAcademicRegistration.academic_year_id == year.id,
+        m.StudentAcademicRegistration.establishment_id == tenant,
+        m.StudentAcademicRegistration.status.in_(('validated', 'active')),
+    ))
+    if not reg:
+        raise HTTPException(404, 'Inscription scolaire introuvable')
+    cl = session.get(m.SchoolClass, reg.class_id)
+    student = session.get(m.Student, reg.student_id)
+    if not cl or not student:
+        raise HTTPException(409, 'Dossier scolaire incomplet')
+    enable_read_cache(session)
+    rows = [
+        invoice(session, current, school, reg, cl, student, 'tuition', month)[0]
+        for month in billing_months(session, year)
+    ]
+    today_month = date.today().strftime('%Y-%m')
+    overdue = [
+        row for row in rows
+        if row['month'] < today_month and row['remaining'] > 0
+        and row['status'] not in {'no_tariff', 'not_applicable'}
+    ]
+    unpaid = [
+        row for row in rows
+        if row['remaining'] > 0 and row['status'] not in {'no_tariff', 'not_applicable'}
+    ]
+    advance = [
+        row for row in rows
+        if row['month'] > today_month and row['paid'] > 0
+    ]
+    total_expected = sum(row['expected'] for row in rows if row['status'] != 'no_tariff')
+    total_paid = sum(min(row['paid'], row['expected']) for row in rows if row['status'] != 'no_tariff')
+    total_remaining = sum(row['remaining'] for row in rows if row['status'] != 'no_tariff')
+    current_regime = regime_for_month(session, reg, cl, today_month)
+    return {
+        'studentId': str(student.id),
+        'studentName': f'{student.last_name} {student.first_name}',
+        'registrationId': str(reg.id),
+        'classId': str(cl.id),
+        'className': cl.name,
+        'academicYearId': str(year.id),
+        'regime': current_regime,
+        'months': rows,
+        'unpaidMonths': unpaid,
+        'overdueMonths': overdue,
+        'advanceMonths': advance,
+        'summary': {
+            'expected': total_expected,
+            'paid': total_paid,
+            'remaining': total_remaining,
+            'advanceMonthCount': len(advance),
+        },
+    }
+
+
 @router.get('/receipts')
 def receipts(academic_year_id: uuid.UUID,school_id: str | None=None,
     current: m.Principal=Depends(guard),session: Session=Depends(m.db)):
@@ -756,7 +859,7 @@ def update_fee(fee_id: str, body: m.FinanceFeeInput,
     school,tenant,year=context(current,session,body.schoolId,year_id)
     fee=m.finance_resource(session,'finance-fees',fee_id,school,current)
     # Context cannot silently move a historical tariff to another class/year/type.
-    for field in ('scope','cycle','levelId','classId','academicYearId','type','month'):
+    for field in ('scope','cycle','levelId','classId','academicYearId','type','month','regime'):
         if fee.payload.get(field) != getattr(body,field):
             raise HTTPException(409,'Conservez le contexte du tarif ; seul le montant et le libellé sont modifiables')
     m.finance_lock(session,f'tariffs:{school}:{year.id}')
