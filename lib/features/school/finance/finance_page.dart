@@ -1204,26 +1204,32 @@ class _FinancePageState extends State<FinancePage> {
                           DataCell(Text(f['name'] ?? '')),
                           DataCell(
                               Text(financeKinds[f['type']] ?? 'Autres frais')),
-                          DataCell(Text(f['scope'] == 'class'
-                              ? classes
-                                  .where((c) => c['id'] == f['classId'])
-                                  .map((c) => c['name'])
-                                  .join()
-                              : f['scope'] == 'level'
-                                  ? classes
-                                      .where(
-                                          (c) => c['levelId'] == f['levelId'])
-                                      .map((c) => c['levelName'] ?? 'Niveau')
-                                      .toSet()
-                                      .join()
-                                  : f['scope'] == 'cycle'
-                                      ? classes
-                                          .where(
-                                              (c) => c['cycleId'] == f['cycle'])
-                                          .map((c) => c['cycleName'] ?? 'Cycle')
-                                          .toSet()
-                                          .join()
-                                      : 'Établissement')),
+                          DataCell(Text([
+                            f['scope'] == 'class'
+                                ? classes
+                                    .where((c) => c['id'] == f['classId'])
+                                    .map((c) => c['name'])
+                                    .join()
+                                : f['scope'] == 'level'
+                                    ? classes
+                                        .where((c) =>
+                                            c['levelId'] == f['levelId'])
+                                        .map((c) =>
+                                            c['levelName'] ?? 'Niveau')
+                                        .toSet()
+                                        .join()
+                                    : f['scope'] == 'cycle'
+                                        ? classes
+                                            .where((c) =>
+                                                c['cycleId'] == f['cycle'])
+                                            .map((c) =>
+                                                c['cycleName'] ?? 'Cycle')
+                                            .toSet()
+                                            .join()
+                                        : 'Établissement',
+                            if (f['schoolRegime'] == 'part_time') 'Mi-temps',
+                            if (f['schoolRegime'] == 'full_time') 'Plein temps',
+                          ].where((value) => value.toString().isNotEmpty).join(' · '))),
                           DataCell(Text(money(f['amount']))),
                           DataCell(TextButton(
                               onPressed: () => _tariff(f),
