@@ -1271,8 +1271,8 @@ class StudentPreEnrollmentInput(BaseModel):
     registration_kind: Literal["registration", "reenrollment"] = Field(
         default="registration", alias="registrationKind"
     )
-    school_regime: Literal["normal", "part_time", "full_time"] = Field(
-        default="normal", alias="schoolRegime"
+    school_regime: Literal["normal", "part_time", "full_time"] | None = Field(
+        default=None, alias="schoolRegime"
     )
     status: Literal["draft", "submitted"] = "draft"
 
@@ -5066,7 +5066,7 @@ def change_student_registration_regime(
         raise HTTPException(422, "Le changement ne peut pas précéder l'inscription")
     current_month = date.today().replace(day=1)
     if effective_date > current_month:
-        raise HTTPException(422, "Le changement de régime ne peut pas être antidaté dans le futur")
+        raise HTTPException(422, "La date d’effet du régime ne peut pas être future")
     history = registration_regime_history(item)
     if not history:
         history.append({
@@ -5302,12 +5302,31 @@ def update_student_pre_enrollment(
             409,
             "Les informations personnelles ne peuvent pas être modifiées pendant la réinscription",
         )
+    selected_regime = body.school_regime or provisional.school_regime
+    validate_school_regime(school_class, selected_regime, session)
     student.first_name = body.first_name
     student.last_name = body.last_name
     student.updated_at = datetime.now(timezone.utc)
     item.desired_class_id = school_class.id
     item.updated_at = datetime.now(timezone.utc)
     provisional.class_id = school_class.id
+    provisional.school_regime = selected_regime
+    options = dict(provisional.options or {})
+    if class_cycle_code(school_class, session) in {"MATERNELLE", "PRIMAIRE"}:
+        year = session.get(AcademicYear, item.academic_year_id)
+        effective_month = (
+            year.start_date.strftime("%Y-%m")
+            if year else provisional.registration_date.strftime("%Y-%m")
+        )
+        options["regimeHistory"] = [{
+            "regime": selected_regime,
+            "effectiveMonth": effective_month,
+            "changedBy": current.id,
+            "changedAt": datetime.now(timezone.utc).isoformat(),
+        }]
+    else:
+        options["regimeHistory"] = []
+    provisional.options = options
     provisional.updated_at = datetime.now(timezone.utc)
     session.commit()
     return pre_enrollment_json(item, session)
