@@ -16,10 +16,10 @@ Map<String, dynamic> _year({
       'registration': {
         'academicYearId': 'year-1',
         'academicYearName': '2026-2027',
-        'className': '3e A',
-        'cycle': 'Collège',
-        'cycleCode': 'COLLEGE',
-        'level': '3e',
+        'className': 'Terminale A',
+        'cycle': 'Lycée',
+        'cycleCode': 'LYCEE',
+        'level': 'Terminale',
       },
       'notes': [
         {
