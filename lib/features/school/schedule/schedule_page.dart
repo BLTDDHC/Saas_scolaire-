@@ -137,8 +137,11 @@ class _SchedulePageState extends State<SchedulePage> {
       final levelId = schoolClass.structuredLevelId ?? schoolClass.levelId;
       if (levelId == null || levelId.isEmpty) return const <SubjectModel>[];
 
+      final activeTeacherIds = allTeachers.map((item) => item.id).toSet();
       final assignedSubjectIds = affectations
-          .where((item) => item.classId == selectedClassId)
+          .where((item) =>
+              item.classId == selectedClassId &&
+              activeTeacherIds.contains(item.teacherId))
           .map((item) => item.subjectId)
           .whereType<String>()
           .toSet();
@@ -179,10 +182,22 @@ class _SchedulePageState extends State<SchedulePage> {
       AppToast.warning(context, 'Aucune classe n’est disponible.');
       return;
     }
+    final eligibleClasses =
+        classes.where((item) => subjectsForClass(item.id).isNotEmpty).toList();
+    if (eligibleClasses.isEmpty) {
+      AppToast.warning(
+        context,
+        'Aucune classe ne possède à la fois une matière assignée à son niveau/série et un enseignant affecté.',
+      );
+      return;
+    }
 
     var classId = existing?['classId']?.toString() ??
         _selectedClassId ??
-        classes.first.id;
+        eligibleClasses.first.id;
+    if (!eligibleClasses.any((item) => item.id == classId)) {
+      classId = eligibleClasses.first.id;
+    }
     var availableSubjects = subjectsForClass(classId);
     if (availableSubjects.isEmpty) {
       AppToast.warning(
@@ -232,7 +247,7 @@ class _SchedulePageState extends State<SchedulePage> {
                   AppSelectField<String>(
                     label: 'Classe',
                     value: classId,
-                    items: classes
+                    items: eligibleClasses
                         .map((c) =>
                             DropdownMenuItem(value: c.id, child: Text(c.name)))
                         .toList(),
