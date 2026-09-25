@@ -142,7 +142,7 @@ class _CanonicalGradesPageState extends State<CanonicalGradesPage> {
 
   List<({String value, String label})> _availableEvaluationKinds(
       StoreService store,
-      {String? classId}) {
+      {String? classId, String? periodId}) {
     final selectedClass = store
         .getClasses()
         .where((item) => item.id == (classId ?? _classId))
@@ -160,21 +160,39 @@ class _CanonicalGradesPageState extends State<CanonicalGradesPage> {
 
     final options = <({String value, String label})>[];
     if (cycleCode == 'MATERNELLE' || cycleCode == 'PRIMAIRE') {
-      options.add((value: 'composition', label: 'Composition'));
-    } else {
-      options
-        ..add((value: 'devoir_1', label: 'Devoir 1'))
-        ..add((value: 'devoir_2', label: 'Devoir 2'))
-        ..add((value: 'composition', label: 'Composition'));
+      final period = _periods
+          .where((item) => item['id']?.toString() == (periodId ?? _periodId))
+          .firstOrNull;
+      final order = (period?['sortOrder'] as num?)?.toInt();
+      final periodName = period?['name']?.toString() ?? 'trimestre';
+      if (order == 1) {
+        options
+          ..add((value: 'composition_octobre', label: 'Composition du mois d’Octobre'))
+          ..add((value: 'composition_novembre', label: 'Composition du mois de Novembre'));
+      } else if (order == 2) {
+        options
+          ..add((value: 'composition_janvier', label: 'Composition du mois de Janvier'))
+          ..add((value: 'composition_fevrier', label: 'Composition du mois de Février'));
+      } else if (order == 3) {
+        options
+          ..add((value: 'composition_avril', label: 'Composition du mois d’Avril'))
+          ..add((value: 'composition_mai', label: 'Composition du mois de Mai'));
+      }
+      options.add(
+        (value: 'composition', label: 'Composition du $periodName'),
+      );
+      return options;
     }
+
+    options
+      ..add((value: 'devoir_1', label: 'Devoir 1'))
+      ..add((value: 'devoir_2', label: 'Devoir 2'))
+      ..add((value: 'composition', label: 'Composition'));
     if (cycleCode == 'COLLEGE' || cycleCode == 'LYCEE') {
-      options.add((value: 'devoir_departemental', label: 'Devoir départemental'));
+      options.add(
+          (value: 'devoir_departemental', label: 'Devoir départemental'));
     }
-    if (cycleCode == 'PRIMAIRE' && levelCode == 'CM2') {
-      options
-        ..add((value: 'cepe_test', label: 'CEPE test'))
-        ..add((value: 'cepe_blanc', label: 'CEPE blanc'));
-    } else if (cycleCode == 'COLLEGE' && levelCode == '3E') {
+    if (cycleCode == 'COLLEGE' && levelCode == '3E') {
       options
         ..add((value: 'bepc_test', label: 'BEPC test'))
         ..add((value: 'bepc_blanc', label: 'BEPC blanc'));
@@ -260,7 +278,13 @@ class _CanonicalGradesPageState extends State<CanonicalGradesPage> {
       const {
         'devoir_1': 'Devoir 1',
         'devoir_2': 'Devoir 2',
-        'composition': 'Composition',
+        'composition': 'Composition du trimestre',
+        'composition_octobre': 'Composition du mois d’Octobre',
+        'composition_novembre': 'Composition du mois de Novembre',
+        'composition_janvier': 'Composition du mois de Janvier',
+        'composition_fevrier': 'Composition du mois de Février',
+        'composition_avril': 'Composition du mois d’Avril',
+        'composition_mai': 'Composition du mois de Mai',
         'cepe_test': 'CEPE test',
         'cepe_blanc': 'CEPE blanc',
         'bepc_test': 'BEPC test',
@@ -868,10 +892,10 @@ class _CanonicalGradesPageState extends State<CanonicalGradesPage> {
     List<({String value, String label})> commonKinds() {
       final targets = targetClasses();
       if (targets.isEmpty) return const [];
-      var common = _availableEvaluationKinds(store, classId: targets.first.id);
+      var common = _availableEvaluationKinds(store, classId: targets.first.id, periodId: _periodId);
       for (final schoolClass in targets.skip(1)) {
         final allowed =
-            _availableEvaluationKinds(store, classId: schoolClass.id)
+            _availableEvaluationKinds(store, classId: schoolClass.id, periodId: _periodId)
                 .map((item) => item.value)
                 .toSet();
         common = common.where((item) => allowed.contains(item.value)).toList();
@@ -1036,7 +1060,8 @@ class _CanonicalGradesPageState extends State<CanonicalGradesPage> {
                               ? 'exam'
                               : code.startsWith('devoir_')
                                   ? 'devoir'
-                                  : code == 'composition'
+                                  : (code == 'composition' ||
+                                          code.startsWith('composition_'))
                                       ? 'composition'
                                       : (code.endsWith('_test')
                                           ? 'test'
@@ -1430,6 +1455,12 @@ class _CanonicalGradesPageState extends State<CanonicalGradesPage> {
         .map(_eventCode)
         .whereType<String>()
         .where(const {
+          'composition_octobre',
+          'composition_novembre',
+          'composition_janvier',
+          'composition_fevrier',
+          'composition_avril',
+          'composition_mai',
           'cepe_test',
           'cepe_blanc',
           'bepc_test',
@@ -1442,6 +1473,12 @@ class _CanonicalGradesPageState extends State<CanonicalGradesPage> {
         .toList()
       ..sort((left, right) {
         const order = [
+          'composition_octobre',
+          'composition_novembre',
+          'composition_janvier',
+          'composition_fevrier',
+          'composition_avril',
+          'composition_mai',
           'cepe_test',
           'cepe_blanc',
           'bepc_test',
