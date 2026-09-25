@@ -145,8 +145,8 @@ class StudentResultsView(unittest.TestCase):
         self.assertIn('bepc_blanc', codes)
 
 
-    def test_period_metadata_distinguishes_month_from_trimester(self):
-        month = self.add(m.AcademicPeriod(
+    def test_published_results_keep_only_three_pedagogical_trimesters(self):
+        legacy_month = self.add(m.AcademicPeriod(
             establishment_id=self.tenant.id,
             academic_year_id=self.year.id,
             parent_period_id=self.periods[0].id,
@@ -159,11 +159,14 @@ class StudentResultsView(unittest.TestCase):
             result = m.student_results(
                 self.student.id, self.year.id, self.admin, self.s
             )
-        october = next(item for item in result['periods']
-                       if item['periodId'] == str(month.id))
-        self.assertEqual(october['period'], 'Octobre')
-        self.assertEqual(october['periodType'], 'month')
-        self.assertEqual(october['parentPeriodId'], str(self.periods[0].id))
+        self.assertEqual(len(result['periods']), 3)
+        self.assertTrue(all(
+            item['periodType'] == 'trimester' for item in result['periods']
+        ))
+        self.assertNotIn(
+            str(legacy_month.id),
+            {item['periodId'] for item in result['periods']},
+        )
 
     def test_unofficial_result_is_not_exposed(self):
         with patch.object(m, 'school_results', return_value={
