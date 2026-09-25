@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
+import '../../core/theme/app_shadows.dart';
 
 /// Card EduPro — reproduction de components.css (.card)
 class AppCard extends StatelessWidget {
@@ -54,16 +55,7 @@ class AppCard extends StatelessWidget {
               isDark ? AppColors.darkBorderColor : AppColors.lightBorderColor,
           width: 0.5,
         ),
-        // Profondeur légère et unique pour tout le SaaS : suffisamment
-        // perceptible pour hiérarchiser les surfaces sans glass/blur coûteux.
-        boxShadow: [
-          BoxShadow(
-            color: (isDark ? Colors.black : AppColors.primary900)
-                .withValues(alpha: isDark ? .16 : .055),
-            blurRadius: 18,
-            offset: const Offset(0, 6),
-          ),
-        ],
+        boxShadow: isDark ? AppShadows.darkSm : AppShadows.sm,
       ),
       padding: padding ?? const EdgeInsets.all(AppSpacing.s4),
       child: Material(
