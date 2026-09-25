@@ -236,6 +236,88 @@ class AuthenticationGuards(unittest.TestCase):
         self.assertEqual(duplicate.exception.status_code, 409)
         self.assertIn("déjà associé", duplicate.exception.detail)
 
+    def test_deleted_affectation_stays_hidden_after_database_reload(self):
+        subject = self.add(m.Subject(
+            establishment_id=self.tenant.id,
+            name=f"Suppression persistante {uuid.uuid4()}",
+            status="active",
+        ))
+        affectation = self.add(m.Affectation(
+            establishment_id=self.tenant.id,
+            teacher_id=self.teachers[0].id,
+            class_id=self.cl.id,
+            subject_id=subject.id,
+            status="active",
+        ))
+        current = m.Principal(id=str(uuid.uuid4()), role="superadmin")
+
+        before = m.list_affectations(
+            school_id=str(self.tenant.id),
+            academic_year_id=self.year.id,
+            current=current,
+            session=self.s,
+        )
+        self.assertTrue(any(item["id"] == str(affectation.id) for item in before))
+
+        response = m.archive_affectation(
+            affectation.id,
+            current=current,
+            session=self.s,
+        )
+        self.assertEqual(response.status_code, 204)
+        self.s.expire_all()
+        self.assertEqual(
+            self.s.get(m.Affectation, affectation.id).status,
+            "inactive",
+        )
+
+        after = m.list_affectations(
+            school_id=str(self.tenant.id),
+            academic_year_id=self.year.id,
+            current=current,
+            session=self.s,
+        )
+        self.assertFalse(any(item["id"] == str(affectation.id) for item in after))
+
+    def test_timetable_subject_requires_explicit_level_series_configuration(self):
+        level = self.add(m.SchoolLevel(
+            establishment_id=self.tenant.id,
+            cycle_id=self.cycle.id,
+            code=f"NIV-{uuid.uuid4().hex[:8]}",
+            name="Niveau planning",
+            status="active",
+        ))
+        self.cl.school_level_id = level.id
+        configured = self.add(m.Subject(
+            establishment_id=self.tenant.id,
+            name=f"Matiere planning {uuid.uuid4()}",
+            status="active",
+        ))
+        unconfigured = self.add(m.Subject(
+            establishment_id=self.tenant.id,
+            name=f"Matiere hors planning {uuid.uuid4()}",
+            status="active",
+        ))
+        self.add(m.SubjectLevelSetting(
+            establishment_id=self.tenant.id,
+            academic_year_id=self.year.id,
+            subject_id=configured.id,
+            school_level_id=level.id,
+            series_id=None,
+            coefficient=1,
+            grading_scale=20,
+            contributes_to_average=True,
+            status="active",
+        ))
+        self.s.flush()
+
+        self.assertTrue(m.subject_is_explicitly_configured_for_class(
+            self.s, self.cl, configured.id
+        ))
+        self.assertFalse(m.subject_is_explicitly_configured_for_class(
+            self.s, self.cl, unconfigured.id
+        ))
+
     def test_academic_year_update_persists_name_and_dates_in_its_tenant(self):
         updated = m.update_academic_year(
             self.year.id,
