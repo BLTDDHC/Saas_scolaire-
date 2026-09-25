@@ -3652,8 +3652,24 @@ def get_own_profile_photo(
     session: Session = Depends(db),
 ):
     row = _user_profile_photo_row(session, uuid.UUID(current.id))
-    path = Path(str(row.payload.get("path"))) if row and row.payload.get("path") else None
-    if not row or not path or not path.is_file():
+    if not row:
+        raise HTTPException(404, "Photo de profil introuvable")
+
+    encoded = row.payload.get("contentBase64")
+    if encoded:
+        try:
+            content = base64.b64decode(str(encoded), validate=True)
+        except (ValueError, binascii.Error):
+            raise HTTPException(500, "Photo de profil invalide")
+        return Response(
+            content=content,
+            media_type=row.payload.get("mimeType") or "image/jpeg",
+            headers={"Cache-Control": "private, max-age=300"},
+        )
+
+    # Compatibilité avec les anciennes photos enregistrées sur disque.
+    path = Path(str(row.payload.get("path"))) if row.payload.get("path") else None
+    if not path or not path.is_file():
         raise HTTPException(404, "Photo de profil introuvable")
     return Response(
         content=path.read_bytes(),
@@ -3670,18 +3686,14 @@ def update_own_profile_photo(
     if current.role not in {"admin", "superadmin"}:
         raise HTTPException(403, "La photo de profil est gérée par l’administration")
     user_id = uuid.UUID(current.id)
-    content, extension = _decode_student_photo(body)
-    target_dir = USER_PROFILE_PHOTO_ROOT / str(user_id)
-    target_dir.mkdir(parents=True, exist_ok=True)
-    target = target_dir / f"profile{extension}"
-    temporary = target_dir / f".profile-{uuid.uuid4().hex}.tmp"
-    temporary.write_bytes(content)
-    temporary.replace(target)
+    content, _ = _decode_student_photo(body)
     row = _user_profile_photo_row(session, user_id)
     old_path = Path(str(row.payload.get("path"))) if row and row.payload.get("path") else None
     payload = {
         "userId": str(user_id),
-        "path": str(target),
+        # Render utilise un système de fichiers éphémère. La photo doit donc
+        # vivre dans PostgreSQL pour rester disponible après redéploiement.
+        "contentBase64": base64.b64encode(content).decode("ascii"),
         "mimeType": body.mime_type.lower(),
         "originalName": body.name,
         "size": len(content),
@@ -3698,8 +3710,11 @@ def update_own_profile_photo(
             establishment_id=resolve_establishment_id(session, current.school_id),
             payload=payload,
         ))
-    if old_path and old_path != target and old_path.is_file() and old_path.parent == target_dir:
-        old_path.unlink(missing_ok=True)
+    if old_path and old_path.is_file():
+        try:
+            old_path.unlink(missing_ok=True)
+        except OSError:
+            pass
     session.commit()
     return {"updatedAt": payload["updatedAt"]}
 
