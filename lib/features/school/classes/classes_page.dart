@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
-import '../../../core/utils/responsive_utils.dart';
 import '../../../data/datasources/api_client.dart';
 import '../../../data/models/class_model.dart';
 import '../../../data/models/affectation_model.dart';
