@@ -109,7 +109,9 @@ class AuthenticationGuards(unittest.TestCase):
             role="admin",
             school_id=str(self.tenant.id),
         )
-        raw = b"persistent-profile-photo"
+        raw = m.base64.b64decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9ZNRQAAAAASUVORK5CYII="
+        )
         body = m.StudentPhotoUpdateInput(
             name="profile.png",
             mimeType="image/png",
