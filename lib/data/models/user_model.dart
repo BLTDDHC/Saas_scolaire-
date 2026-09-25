@@ -20,6 +20,7 @@ class UserModel {
   final String? lastLoginAt;
   final String? subject;
   final String? className;
+  final String? teacherId;
   final List<String>? childrenIds;
   AccountStatus status;
   bool passwordSet;
@@ -44,6 +45,7 @@ class UserModel {
     this.lastLoginAt,
     this.subject,
     this.className,
+    this.teacherId,
     this.childrenIds,
     this.status = AccountStatus.active,
     this.passwordSet = true,
@@ -90,6 +92,7 @@ class UserModel {
       lastLoginAt: json['lastLoginAt'],
       subject: json['subject'],
       className: json['class'],
+      teacherId: json['teacherId']?.toString(),
       childrenIds:
           json['children'] != null ? List<String>.from(json['children']) : null,
       status: AccountStatus.fromValue(json['status']),
@@ -124,6 +127,7 @@ class UserModel {
       'lastLoginAt': lastLoginAt,
       'subject': subject,
       'class': className,
+      'teacherId': teacherId,
       'children': childrenIds,
       'status': status.value,
       'passwordSet': passwordSet,
@@ -150,6 +154,7 @@ class UserModel {
     String? lastLoginAt,
     String? subject,
     String? className,
+    String? teacherId,
     List<String>? childrenIds,
     AccountStatus? status,
     bool? passwordSet,
@@ -174,6 +179,7 @@ class UserModel {
       lastLoginAt: lastLoginAt ?? this.lastLoginAt,
       subject: subject ?? this.subject,
       className: className ?? this.className,
+      teacherId: teacherId ?? this.teacherId,
       childrenIds: childrenIds ?? this.childrenIds,
       status: status ?? this.status,
       passwordSet: passwordSet ?? this.passwordSet,
