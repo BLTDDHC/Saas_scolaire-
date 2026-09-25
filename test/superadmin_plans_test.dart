@@ -153,7 +153,7 @@ void main() {
     expect(find.text('ÉDUCATION'), findsOneWidget);
   });
 
-  testWidgets('applique le socle professionnel et sauvegarde ses capacités',
+  testWidgets('utilise le catalogue backend sans présélection commerciale Flutter',
       (tester) async {
     desktop(tester);
     final plans = <PlanModel>[];
@@ -170,11 +170,26 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('create-plan')));
     await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('plan-preset-essential')), findsNothing);
+    expect(find.byKey(const Key('plan-preset-professional')), findsNothing);
+    expect(find.byKey(const Key('plan-preset-premium')), findsNothing);
+
     await tester.enterText(find.byKey(const Key('plan-name')), 'PROFESSIONNEL');
     await tester.enterText(find.byKey(const Key('plan-price')), '30000');
-    await tester.tap(find.byKey(const Key('plan-preset-professional')));
+    await tester.tap(find.byKey(const Key('plan-feature-students')));
+    await tester.tap(find.byKey(const Key('plan-feature-grades')));
+    await tester.tap(find.byKey(const Key('plan-feature-documents')));
+    await tester.tap(find.byKey(const Key('plan-capability-parents.access')));
+    await tester.tap(
+        find.byKey(const Key('plan-capability-grades.publish_teacher')));
+    await tester.tap(
+        find.byKey(const Key('plan-capability-grades.publish_parent')));
+    await tester.tap(
+        find.byKey(const Key('plan-capability-documents.advanced_search')));
     await tester.tap(find.byKey(const Key('plan-save')));
     await tester.pumpAndSettle();
+
     expect(created?.features, containsAll(['students', 'grades', 'documents']));
     expect(created?.limits['capabilitiesConfigured'], isTrue);
     expect(
