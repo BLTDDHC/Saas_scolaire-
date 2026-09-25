@@ -52,6 +52,38 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 );
 """
 
+# Base.metadata.create_all() uses Python-side defaults for these ORM models.
+# Historical SQL migrations perform direct INSERTs and therefore require the
+# equivalent PostgreSQL server defaults when those tables already exist.
+SERVER_DEFAULT_ALIGNMENT_SQL = """
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+ALTER TABLE school_cycles ALTER COLUMN id SET DEFAULT gen_random_uuid();
+ALTER TABLE school_cycles ALTER COLUMN status SET DEFAULT 'active';
+ALTER TABLE school_cycles ALTER COLUMN sort_order SET DEFAULT 0;
+ALTER TABLE school_cycles ALTER COLUMN created_at SET DEFAULT now();
+ALTER TABLE school_cycles ALTER COLUMN updated_at SET DEFAULT now();
+
+ALTER TABLE school_levels ALTER COLUMN id SET DEFAULT gen_random_uuid();
+ALTER TABLE school_levels ALTER COLUMN status SET DEFAULT 'active';
+ALTER TABLE school_levels ALTER COLUMN sort_order SET DEFAULT 0;
+ALTER TABLE school_levels ALTER COLUMN created_at SET DEFAULT now();
+ALTER TABLE school_levels ALTER COLUMN updated_at SET DEFAULT now();
+
+ALTER TABLE school_series ALTER COLUMN id SET DEFAULT gen_random_uuid();
+ALTER TABLE school_series ALTER COLUMN sort_order SET DEFAULT 0;
+ALTER TABLE school_series ALTER COLUMN status SET DEFAULT 'active';
+ALTER TABLE school_series ALTER COLUMN created_at SET DEFAULT now();
+ALTER TABLE school_series ALTER COLUMN updated_at SET DEFAULT now();
+
+ALTER TABLE school_directions ALTER COLUMN id SET DEFAULT gen_random_uuid();
+ALTER TABLE school_directions ALTER COLUMN status SET DEFAULT 'active';
+ALTER TABLE school_directions ALTER COLUMN created_at SET DEFAULT now();
+ALTER TABLE school_directions ALTER COLUMN updated_at SET DEFAULT now();
+
+ALTER TABLE school_direction_cycles ALTER COLUMN created_at SET DEFAULT now();
+"""
+
 CREATE_TABLE_RE = re.compile(
     r"CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:(?:\"?public\"?)\.)?\"?([a-zA-Z0-9_]+)\"?",
     re.IGNORECASE,
@@ -117,6 +149,16 @@ def apply_pending_migrations(engine: Engine) -> None:
         )
         if missing_before:
             print("[migrations] missing before apply: " + ", ".join(missing_before))
+
+        # Align server-side defaults expected by historical backfill INSERTs.
+        # This is additive metadata only; it does not rewrite existing rows.
+        try:
+            _execute_script(driver, SERVER_DEFAULT_ALIGNMENT_SQL)
+            driver.commit()
+        except Exception:
+            driver.rollback()
+            print("[migrations] FAILED server-default alignment")
+            raise
 
         # Match the proven GitHub Actions migration order: ORM schema first,
         # then composite baseline indexes, then the historical SQL migrations.
