@@ -4694,6 +4694,9 @@ class StoreService extends ChangeNotifier {
 
   String? getCurrentTeacherId() {
     if (_currentUser == null) return null;
+    if (_currentUser!.teacherId?.isNotEmpty == true) {
+      return _currentUser!.teacherId;
+    }
     final teacher = _teachers
         .where((t) =>
             t.userId == _currentUser!.id ||
