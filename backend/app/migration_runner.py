@@ -118,6 +118,19 @@ def apply_pending_migrations(engine: Engine) -> None:
         if missing_before:
             print("[migrations] missing before apply: " + ", ".join(missing_before))
 
+        # Match the proven GitHub Actions migration order: ORM schema first,
+        # then composite baseline indexes, then the historical SQL migrations.
+        # Migration 0004 uses ON CONFLICT(establishment_id, code) against tables
+        # that Base.metadata.create_all() may have created without these unique
+        # constraints, so the alignment must happen before 0004.
+        try:
+            _execute_script(driver, BASELINE_INDEX_SQL)
+            driver.commit()
+        except Exception:
+            driver.rollback()
+            print("[migrations] FAILED baseline-index alignment")
+            raise
+
         with driver.cursor() as cursor:
             cursor.execute("SELECT filename FROM schema_migrations")
             applied = {row[0] for row in cursor.fetchall()}
@@ -141,18 +154,6 @@ def apply_pending_migrations(engine: Engine) -> None:
                 driver.rollback()
                 print(f"[migrations] FAILED {path.name}; transaction rolled back")
                 raise
-
-        # The CI workflow creates these composite unique indexes before applying
-        # historical migrations because ORM metadata does not declare all of
-        # them. Apply the same alignment after the migrations have created the
-        # relevant tables. Each statement uses IF NOT EXISTS.
-        try:
-            _execute_script(driver, BASELINE_INDEX_SQL)
-            driver.commit()
-        except Exception:
-            driver.rollback()
-            print("[migrations] FAILED baseline-index alignment")
-            raise
 
         after = _existing_tables(driver)
         missing_after = sorted(expected_tables - after)
