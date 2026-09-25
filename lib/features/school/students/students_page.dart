@@ -1404,25 +1404,22 @@ class _StudentsPageState extends State<StudentsPage> {
       return true;
     }).toList();
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(AppSpacing.s6),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        WorkspaceHeader(
-            title: 'Élèves et inscriptions',
-            subtitle:
-                'Retrouvez un élève, gérez son inscription et son dossier scolaire. Les inscriptions alimentent automatiquement Finance.',
-            actions: [
-              AppButton(
-                  label: 'Importer les photos',
-                  icon: Icons.add_photo_alternate_outlined,
-                  variant: AppButtonVariant.secondary,
-                  onPressed: () => showStudentPhotoImportDialog(context)),
-              AppButton(
-                  label: 'Inscrire / Réinscrire',
-                  icon: Icons.person_add_alt_1,
-                  onPressed: _openEntryFlow),
-            ]),
-        const SizedBox(height: AppSpacing.s5),
+    return WorkspacePage(
+      title: 'Élèves et inscriptions',
+      subtitle:
+          'Retrouvez un élève, gérez son inscription et son dossier scolaire. Les inscriptions alimentent automatiquement Finance.',
+      actions: [
+        AppButton(
+            label: 'Importer les photos',
+            icon: Icons.add_photo_alternate_outlined,
+            variant: AppButtonVariant.secondary,
+            onPressed: () => showStudentPhotoImportDialog(context)),
+        AppButton(
+            label: 'Inscrire / Réinscrire',
+            icon: Icons.person_add_alt_1,
+            onPressed: _openEntryFlow),
+      ],
+      children: [
         if (!_loading && _preEnrollments.isNotEmpty) ...[
           AppCard(
             title: 'Préinscrits (${_preEnrollments.length})',
@@ -1524,15 +1521,15 @@ class _StudentsPageState extends State<StudentsPage> {
         ]),
         const SizedBox(height: AppSpacing.s5),
         if (_loading)
-          const Center(
-              child: CircularProgressIndicator(key: Key('students-loading')))
+          const WorkspaceLoadingState(
+            key: Key('students-loading'),
+            label: 'Chargement des élèves et inscriptions…',
+          )
         else if (_error != null)
-          AppCard(
-              child: Column(children: [
-            Text(_error!, textAlign: TextAlign.center),
-            const SizedBox(height: AppSpacing.s3),
-            AppButton(label: 'Réessayer', onPressed: _load)
-          ]))
+          WorkspaceErrorState(
+            message: 'Impossible de charger les élèves.',
+            onRetry: _load,
+          )
         else if (students.isEmpty)
           const AppEmptyState(
             iconData: Icons.people_outline_rounded,
@@ -1642,7 +1639,7 @@ class _StudentsPageState extends State<StudentsPage> {
                             ]))
                         .toList(),
                   ))),
-      ]),
+      ],
     );
   }
 }
