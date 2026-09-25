@@ -44,6 +44,21 @@ bearer = HTTPBearer()
 KINDS = {"establishments", "subscriptions", "academic-years", "students", "teachers", "classes", "subjects", "evaluations", "grades", "affectations", "absences", "assignments", "documents", "announcements", "conversations", "notifications", "student-registrations", "finance-fees", "finance-registrations", "finance-fee-assignments", "finance-payments", "finance-receipts", "financial-accounts", "financial-lines", "financial-payment-records", "school-levels", "series", "annual-bulletins", "annual-decisions", "re-enrollment-requests", "behavior-assessments"}
 PASSWORD_MIN_LENGTH = 8
 RESULT_CALCULATION_RULE_VERSION = "mc-composition-v2"
+
+def normalize_given_name(value: str) -> str:
+    """Canonical human given-name casing used outside authentication."""
+    cleaned = " ".join(value.strip().split())
+    return cleaned[:1].upper() + cleaned[1:].lower() if cleaned else cleaned
+
+def normalize_family_name(value: str) -> str:
+    """Family names are stored in uppercase to avoid case-only duplicates."""
+    return " ".join(value.strip().split()).upper()
+
+def normalize_display_label(value: str) -> str:
+    """Canonical label casing: Octobre, Première période, etc."""
+    cleaned = " ".join(value.strip().split())
+    return cleaned[:1].upper() + cleaned[1:].lower() if cleaned else cleaned
+
 STUDENT_PHOTO_ROOT = Path(__file__).resolve().parents[1] / "storage" / "student-photos"
 USER_PROFILE_PHOTO_ROOT = Path(__file__).resolve().parents[1] / "storage" / "user-profile-photos"
 STUDENT_PHOTO_MAX_BYTES = 5 * 1024 * 1024
@@ -1394,6 +1409,12 @@ class TeacherInput(BaseModel):
             raise ValueError("Numero de telephone invalide")
         return value
 
+    @model_validator(mode="after")
+    def normalize_teacher_identity(self):
+        self.first_name = normalize_given_name(self.first_name)
+        self.last_name = normalize_family_name(self.last_name)
+        return self
+
 class TeacherUpdateInput(BaseModel):
     model_config = ConfigDict(populate_by_name=True, extra="forbid")
     first_name: str | None = Field(default=None, alias="firstName", min_length=1, max_length=100)
@@ -1408,6 +1429,27 @@ class TeacherUpdateInput(BaseModel):
     diploma: str | None = Field(default=None, max_length=150)
     hire_date: date | None = Field(default=None, alias="hireDate")
     status: Literal["active", "inactive", "archived"] | None = None
+
+    @field_validator("first_name", "last_name", "employee_number", "specialization", "email", "phone", "address", "diploma", mode="before")
+    @classmethod
+    def trim_teacher_update_fields(cls, value: Any) -> Any:
+        if isinstance(value, str):
+            value = value.strip()
+            return value or None
+        return value
+
+    @field_validator("email")
+    @classmethod
+    def normalize_teacher_update_email(cls, value: str | None) -> str | None:
+        return value.lower() if value else None
+
+    @model_validator(mode="after")
+    def normalize_teacher_update_identity(self):
+        if self.first_name is not None:
+            self.first_name = normalize_given_name(self.first_name)
+        if self.last_name is not None:
+            self.last_name = normalize_family_name(self.last_name)
+        return self
 
 class SubjectInput(BaseModel):
     model_config = ConfigDict(populate_by_name=True, extra="forbid")
@@ -1461,7 +1503,7 @@ class AcademicPeriodInput(BaseModel):
         if self.start_date and self.end_date and self.start_date > self.end_date:
             raise ValueError("La date de debut doit preceder la date de fin")
         self.code = self.code.strip().upper() if self.code else None
-        self.name = self.name.strip()
+        self.name = normalize_display_label(self.name)
         return self
 
 class EvaluationInput(BaseModel):
@@ -1768,9 +1810,9 @@ class StudentIdentityInput(BaseModel):
 
     @model_validator(mode='after')
     def normalize_student(self):
-        self.first_name = self.first_name.strip()
-        self.last_name = self.last_name.strip()
-        self.nationality = self.nationality.strip()
+        self.first_name = normalize_given_name(self.first_name)
+        self.last_name = normalize_family_name(self.last_name)
+        self.nationality = normalize_display_label(self.nationality)
         self.address = self.address.strip()
         self.email = self.email.lower().strip() if self.email else None
         self.phone = self.phone.strip() if self.phone else None
@@ -1791,6 +1833,22 @@ class StudentIdentityUpdateInput(BaseModel):
     phone: str | None = Field(default=None, max_length=32)
     address: str | None = Field(default=None, min_length=1, max_length=500)
     status: Literal['active', 'archived'] | None = None
+
+    @model_validator(mode='after')
+    def normalize_student_update(self):
+        if self.first_name is not None:
+            self.first_name = normalize_given_name(self.first_name)
+        if self.last_name is not None:
+            self.last_name = normalize_family_name(self.last_name)
+        if self.nationality is not None:
+            self.nationality = normalize_display_label(self.nationality)
+        if self.email is not None:
+            self.email = self.email.strip().lower()
+        if self.phone is not None:
+            self.phone = self.phone.strip()
+        if self.address is not None:
+            self.address = self.address.strip()
+        return self
 
 class StudentRegistrationInput(BaseModel):
     model_config = ConfigDict(populate_by_name=True, extra='forbid')
@@ -1851,8 +1909,8 @@ class GuardianInput(BaseModel):
                 raise ValueError('Numéro de téléphone invalide')
         if self.email and not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+', self.email):
             raise ValueError('Adresse e-mail invalide')
-        self.first_name = self.first_name.strip()
-        self.last_name = self.last_name.strip()
+        self.first_name = normalize_given_name(self.first_name)
+        self.last_name = normalize_family_name(self.last_name)
         self.phone = self.phone.strip() if self.phone else None
         self.second_phone = self.second_phone.strip() if self.second_phone else None
         self.email = self.email.lower().strip() if self.email else None
