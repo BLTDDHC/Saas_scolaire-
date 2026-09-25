@@ -11,6 +11,7 @@ fi
 export PATH="$FLUTTER_DIR/bin:$PATH"
 flutter config --enable-web
 flutter pub get
+dart run flutter_launcher_icons
 
 if [ -z "${API_BASE_URL:-}" ]; then
   echo "API_BASE_URL must be defined for the hosted Flutter build." >&2
