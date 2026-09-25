@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
+import '../../core/theme/app_shadows.dart';
 import '../../core/theme/app_typography.dart';
 
 enum AppButtonVariant { primary, secondary, ghost, danger, success }
@@ -34,6 +35,7 @@ class AppButton extends StatefulWidget {
 
 class _AppButtonState extends State<AppButton> {
   bool _isHovered = false;
+  bool _isPressed = false;
 
   @override
   Widget build(BuildContext context) {
@@ -101,13 +103,18 @@ class _AppButtonState extends State<AppButton> {
         break;
     }
 
+    final enabled = widget.onPressed != null && !widget.isLoading;
+    final buttonShadows = widget.variant == AppButtonVariant.primary && enabled
+        ? (_isHovered ? AppShadows.primaryButtonHover : AppShadows.primaryButton)
+        : const <BoxShadow>[];
+
     final child = AnimatedContainer(
       duration: AppDurations.fast,
       decoration: BoxDecoration(
-        color:
-            widget.onPressed == null ? bgColor.withValues(alpha: 0.5) : bgColor,
+        color: enabled ? bgColor : bgColor.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(AppRadius.md),
         border: Border.fromBorderSide(borderSide),
+        boxShadow: buttonShadows,
       ),
       padding: padding,
       child: widget.isLoading
@@ -149,7 +156,6 @@ class _AppButtonState extends State<AppButton> {
             ),
     );
 
-    final enabled = widget.onPressed != null && !widget.isLoading;
     return Semantics(
       button: true,
       enabled: enabled,
@@ -161,11 +167,19 @@ class _AppButtonState extends State<AppButton> {
           borderRadius: BorderRadius.circular(AppRadius.md),
           child: InkWell(
             onHover: (value) => setState(() => _isHovered = value),
+            onHighlightChanged: enabled
+                ? (value) => setState(() => _isPressed = value)
+                : null,
             onTap: enabled ? widget.onPressed : null,
             borderRadius: BorderRadius.circular(AppRadius.md),
-            child: widget.fullWidth
-                ? SizedBox(width: double.infinity, child: child)
-                : child,
+            child: AnimatedScale(
+              duration: AppDurations.fast,
+              curve: Curves.easeOutCubic,
+              scale: _isPressed ? .985 : 1,
+              child: widget.fullWidth
+                  ? SizedBox(width: double.infinity, child: child)
+                  : child,
+            ),
           ),
         ),
       ),
