@@ -1957,6 +1957,9 @@ class EvaluationInput(BaseModel):
     title: str = Field(min_length=1, max_length=100)
     type: Literal['devoir', 'composition', 'test', 'exam', 'exam_blanc']
     exam_code: Literal[
+        'composition_octobre', 'composition_novembre',
+        'composition_janvier', 'composition_fevrier',
+        'composition_avril', 'composition_mai',
         'cepe_test', 'cepe_blanc', 'bepc_test', 'bepc_blanc',
         'bac_test', 'bac_blanc', 'devoir_departemental'
     ] | None = Field(default=None, alias='examCode')
@@ -6772,6 +6775,40 @@ def module_tenant_scope(
         raise HTTPException(404, "Etablissement introuvable")
     return public_id, database_id
 
+CANONICAL_TRIMESTERS = {
+    'T1': ('1er trimestre', 1),
+    'T2': ('2e trimestre', 2),
+    'T3': ('3e trimestre', 3),
+}
+
+
+def canonicalize_trimester_input(body: AcademicPeriodInput) -> None:
+    if body.period_type != 'trimester' or body.parent_period_id is not None:
+        raise HTTPException(
+            422,
+            "Les seules périodes scolaires autorisées sont les trois trimestres",
+        )
+    code = (body.code or '').strip().upper()
+    if code not in CANONICAL_TRIMESTERS:
+        identity = normalize_display_label(body.name).lower()
+        if identity.startswith('1er') or identity.startswith('1e'):
+            code = 'T1'
+        elif identity.startswith('2e') or identity.startswith('2ème'):
+            code = 'T2'
+        elif identity.startswith('3e') or identity.startswith('3ème'):
+            code = 'T3'
+        else:
+            raise HTTPException(
+                422,
+                "Choisissez uniquement le 1er, le 2e ou le 3e trimestre",
+            )
+    canonical_name, canonical_order = CANONICAL_TRIMESTERS[code]
+    body.code = code
+    body.name = canonical_name
+    body.sort_order = canonical_order
+    body.parent_period_id = None
+
+
 def academic_period_json(item: AcademicPeriod, session: Session) -> dict[str, Any]:
     return {
         "id": str(item.id),
@@ -7119,11 +7156,7 @@ def create_academic_period(
         raise HTTPException(422, "Annee scolaire introuvable")
     if year.establishment_id != database_id:
         raise HTTPException(403, "Annee inter-etablissement interdite")
-    if body.period_type != 'trimester' or body.parent_period_id is not None:
-        raise HTTPException(
-            422,
-            "Les seules périodes scolaires autorisées sont les trois trimestres",
-        )
+    canonicalize_trimester_input(body)
     if body.parent_period_id:
         parent = session.get(AcademicPeriod, body.parent_period_id)
         if (not parent or parent.establishment_id != database_id
@@ -7418,7 +7451,17 @@ def create_evaluation(
             "Un element pedagogique portant ce libelle existe deja pour cette matiere",
         )
     if body.exam_code:
-        if body.exam_code == 'devoir_departemental':
+        if body.exam_code in PRIMARY_MONTHLY_COMPOSITION_CODES:
+            if period.period_type != 'trimester':
+                raise HTTPException(
+                    422,
+                    'Une composition mensuelle doit être rattachée à un trimestre',
+                )
+            validate_monthly_composition_period(period, body.exam_code)
+            validate_program_type_for_class(
+                school_class, body.type, body.exam_code, session
+            )
+        elif body.exam_code == 'devoir_departemental':
             if body.type != 'exam':
                 raise HTTPException(422, 'Le type ne correspond pas au devoir departemental')
             if cycle_code not in {'COLLEGE', 'LYCEE'}:
@@ -14901,11 +14944,7 @@ def update_academic_period(period_id: uuid.UUID, body: AcademicPeriodInput,
     if item.establishment_id != database_id:
         raise HTTPException(403, 'Acces inter-etablissement interdit')
     ensure_year_tenant(body.academic_year_id, database_id, session)
-    if body.period_type != 'trimester' or body.parent_period_id is not None:
-        raise HTTPException(
-            422,
-            'Les seules périodes scolaires autorisées sont les trois trimestres',
-        )
+    canonicalize_trimester_input(body)
     if body.parent_period_id:
         parent = session.get(AcademicPeriod, body.parent_period_id)
         if (not parent or parent.id == item.id
