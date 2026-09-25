@@ -5418,6 +5418,7 @@ def list_guardians(
 @app.post("/api/v1/school/guardians", status_code=201)
 def create_guardian(
     body: GuardianInput,
+    response: Response,
     school_id: str | None = None,
     current: Principal = Depends(require_module("students")),
     session: Session = Depends(db),
@@ -5426,25 +5427,44 @@ def create_guardian(
     person_filters = []
     if body.phone:
         normalized_phone = re.sub(r'[^0-9+]', '', body.phone)
-        person_filters.append(func.regexp_replace(GuardianPerson.phone, r'[^0-9+]', '', 'g') == normalized_phone)
+        person_filters.append(
+            func.regexp_replace(GuardianPerson.phone, r'[^0-9+]', '', 'g')
+            == normalized_phone
+        )
     if body.email:
-        person_filters.append(func.lower(GuardianPerson.email) == body.email)
-    person = session.scalar(select(GuardianPerson).where(*[
-        person_filters[0] if len(person_filters) == 1 else person_filters[0] | person_filters[1]
-    ])) if person_filters else None
-    if not person:
+        person_filters.append(
+            func.lower(GuardianPerson.email)
+            == body.email.strip().lower()
+        )
+
+    person = None
+    if person_filters:
+        person = session.scalar(
+            select(GuardianPerson).where(or_(*person_filters))
+        )
+
+    if person:
+        existing = session.scalar(select(Guardian).where(
+            Guardian.establishment_id == database_id,
+            Guardian.person_id == person.id,
+            Guardian.status == "active",
+        ))
+        if existing:
+            # A legal guardian is unique inside an establishment but may be
+            # linked to several children. Creation is therefore idempotent:
+            # reuse the existing profile instead of creating a duplicate.
+            response.status_code = status.HTTP_200_OK
+            return guardian_json(existing, session)
+    else:
         person = GuardianPerson(**body.model_dump())
         session.add(person)
         session.flush()
-    existing = session.scalar(select(Guardian).where(
-        Guardian.establishment_id == database_id,
-        Guardian.person_id == person.id,
-    ))
-    if existing:
-        raise HTTPException(409, 'Ce responsable existe déjà dans cet établissement')
+
     item = Guardian(
         establishment_id=database_id,
-        created_direction_id=(uuid.UUID(current.direction_id) if current.direction_id else None),
+        created_direction_id=(
+            uuid.UUID(current.direction_id) if current.direction_id else None
+        ),
         person_id=person.id,
         **body.model_dump(),
     )
@@ -5574,9 +5594,23 @@ def link_student_guardian(
     session: Session = Depends(db),
 ):
     student = ensure_student_scope(student_id, current, session)
-    guardian = ensure_guardian_scope(body.guardian_id, current, session)
+    guardian = session.get(Guardian, body.guardian_id)
+    if not guardian or guardian.status != "active":
+        raise HTTPException(404, "Responsable introuvable")
     if guardian.establishment_id != student.establishment_id:
         raise HTTPException(403, "Responsable inter-établissement interdit")
+
+    # A guardian may have children in several directions/cycles of the same
+    # establishment. The student's own scope has already been validated above,
+    # so reusing that guardian is legitimate even if the guardian was first
+    # created or linked from another direction.
+    existing_link = session.scalar(select(StudentGuardian).where(
+        StudentGuardian.student_id == student.id,
+        StudentGuardian.guardian_id == guardian.id,
+    ))
+    if existing_link:
+        raise HTTPException(409, "Ce responsable est déjà associé à cet élève")
+
     if body.is_primary:
         for link in session.scalars(select(StudentGuardian).where(StudentGuardian.student_id == student.id)).all():
             link.is_primary = False
