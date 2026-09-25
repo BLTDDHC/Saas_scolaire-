@@ -28,9 +28,11 @@ class AppEmptyState extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.s8),
-        child: Column(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 560),
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.s8),
+          child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -38,8 +40,24 @@ class AppEmptyState extends StatelessWidget {
               width: 52,
               height: 52,
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primaryContainer,
-                borderRadius: BorderRadius.circular(AppRadius.lg),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Theme.of(context).colorScheme.primaryContainer,
+                    Theme.of(context)
+                        .colorScheme
+                        .secondaryContainer
+                        .withValues(alpha: .65),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(AppRadius.xl),
+                border: Border.all(
+                  color: Theme.of(context)
+                      .colorScheme
+                      .primary
+                      .withValues(alpha: .12),
+                ),
               ),
               alignment: Alignment.center,
               child: iconData == null
@@ -77,7 +95,8 @@ class AppEmptyState extends StatelessWidget {
                 variant: AppButtonVariant.primary,
               ),
             ],
-          ],
+            ],
+          ),
         ),
       ),
     );
