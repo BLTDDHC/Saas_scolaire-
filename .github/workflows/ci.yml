@@ -113,6 +113,9 @@ jobs:
       - name: Install Flutter dependencies
         run: flutter pub get
 
+      - name: Generate application icons
+        run: dart run flutter_launcher_icons
+
       - name: Flutter analyze
         run: flutter analyze --no-fatal-infos
 
