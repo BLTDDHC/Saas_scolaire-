@@ -104,17 +104,46 @@ class _CanonicalGradesPageState extends State<CanonicalGradesPage> {
           : await store.schoolSeriesRemote();
       await store.refreshEvaluationsRemote(academicYearId: yearId);
       if (!mounted) return;
+
+      EvaluationModel? teacherDefaultEvaluation;
+      if (store.currentUser?.role == UserRole.teacher) {
+        final teacherEvaluations = store
+            .getEvaluations()
+            .where((item) => item.academicYearId == yearId)
+            .toList()
+          ..sort((left, right) {
+            const editableOrder = {
+              'rejected': 0,
+              'draft': 1,
+              'submitted': 2,
+              'validated': 3,
+              'locked': 4,
+            };
+            final byStatus = (editableOrder[left.status] ?? 9)
+                .compareTo(editableOrder[right.status] ?? 9);
+            if (byStatus != 0) return byStatus;
+            return left.title.compareTo(right.title);
+          });
+        if (teacherEvaluations.isNotEmpty) {
+          teacherDefaultEvaluation = teacherEvaluations.first;
+        }
+      }
+
       setState(() {
         _periods = periods;
         _series = series;
         _loadedYearId = yearId;
-        _periodId = periods.any((item) => item['id'] == _periodId)
-            ? _periodId
-            : (periods.isEmpty ? null : periods.first['id']?.toString());
+        _periodId = teacherDefaultEvaluation?.periodId ??
+            (periods.any((item) => item['id'] == _periodId)
+                ? _periodId
+                : (periods.isEmpty ? null : periods.first['id']?.toString()));
         _evaluationId = null;
         _readyClassesForBatch = const {};
         _clearGradeEditors();
       });
+      if (teacherDefaultEvaluation != null && mounted) {
+        _selectEvaluation(teacherDefaultEvaluation, store);
+      }
     } catch (error) {
       if (!mounted) return;
       setState(() => _error =
@@ -297,13 +326,34 @@ class _CanonicalGradesPageState extends State<CanonicalGradesPage> {
 
 
   List<EvaluationModel> _ordinaryEvaluations(StoreService store) {
-    const ordinary = {'devoir_1', 'devoir_2', 'composition'};
+    const ordinary = {
+      'devoir_1',
+      'devoir_2',
+      'composition_octobre',
+      'composition_novembre',
+      'composition_janvier',
+      'composition_fevrier',
+      'composition_avril',
+      'composition_mai',
+      'composition',
+    };
     final rows = _contextEvaluations(store)
         .where((item) => ordinary.contains(_eventCode(item)))
         .toList();
-    const order = {'devoir_1': 1, 'devoir_2': 2, 'composition': 3};
+    const order = {
+      'devoir_1': 1,
+      'devoir_2': 2,
+      'composition_octobre': 3,
+      'composition_novembre': 4,
+      'composition_janvier': 3,
+      'composition_fevrier': 4,
+      'composition_avril': 3,
+      'composition_mai': 4,
+      'composition': 5,
+    };
     rows.sort((left, right) =>
-        (order[_eventCode(left)] ?? 99).compareTo(order[_eventCode(right)] ?? 99));
+        (order[_eventCode(left)] ?? 99)
+            .compareTo(order[_eventCode(right)] ?? 99));
     return rows;
   }
 
@@ -385,7 +435,10 @@ class _CanonicalGradesPageState extends State<CanonicalGradesPage> {
         return byFirst != 0 ? byFirst : a.id.compareTo(b.id);
       });
     if (students.isEmpty) {
-      AppToast.warning(context, 'Aucun élève inscrit dans cette classe.');
+      AppToast.warning(
+        context,
+        'Aucun élève inscrit et validé dans cette classe. Les préinscriptions doivent être finalisées avant la saisie des notes.',
+      );
       return;
     }
 
