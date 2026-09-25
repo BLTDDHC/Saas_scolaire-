@@ -16,7 +16,7 @@ class PeriodsPage extends StatelessWidget {
   Widget build(BuildContext context) => const WorkspacePage(
         title: 'Périodes',
         subtitle:
-            'Configurez les trimestres, mois et périodes personnalisées de l’année scolaire sélectionnée.',
+            'Configurez les 1er, 2e et 3e trimestres de l’année scolaire sélectionnée.',
         children: [
           PedagogicalSettingsCard(),
           SizedBox(height: AppSpacing.s6),
