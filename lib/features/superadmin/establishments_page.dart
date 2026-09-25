@@ -19,7 +19,6 @@ import '../../shared/widgets/app_page_header.dart';
 import '../../shared/widgets/app_toast.dart';
 import '../../shared/widgets/responsive_grid.dart';
 import '../../shared/widgets/confirm_dialog.dart';
-import 'establishment_modules_dialog.dart';
 
 /// Page de gestion des Établissements (Super Admin) — Reproduction exacte de establishments.js
 class EstablishmentsPage extends StatefulWidget {
@@ -88,21 +87,6 @@ class _EstablishmentsPageState extends State<EstablishmentsPage> {
         }),
       ],
     );
-  }
-
-  Future<void> _openModulesDialog(
-      BuildContext context, EstablishmentModel establishment) async {
-    await showDialog<void>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Modules disponibles'),
-        content: EstablishmentModulesDialog(
-          establishmentId: establishment.id,
-          establishmentName: establishment.name,
-        ),
-      ),
-    );
-    if (mounted) await _refreshFilters();
   }
 
   @override
@@ -1177,14 +1161,6 @@ class _EstablishmentsPageState extends State<EstablishmentsPage> {
                                   onPressed: () {
                                     _openAdminModal(context, e);
                                   },
-                                ),
-                                IconButton(
-                                  key: Key('modules-${e.id}'),
-                                  icon: const Icon(Icons.extension_outlined,
-                                      size: 18),
-                                  tooltip: 'Gérer les modules',
-                                  onPressed: () =>
-                                      _openModulesDialog(context, e),
                                 ),
                                 IconButton(
                                   icon: Icon(
