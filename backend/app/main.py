@@ -3344,9 +3344,12 @@ async def add_security_headers(request: Request, call_next):
 
 @app.on_event("startup")
 def startup():
-    # Startup prepares the schema only. Privileged identities and business
-    # data must be restored or provisioned through an explicit operation.
+    # Build the ORM-declared base schema first, then apply the repository's
+    # versioned SQL migrations. Some operational tables and constraints live
+    # only in backend/migrations and are not represented by ORM metadata.
     Base.metadata.create_all(engine)
+    from .migration_runner import apply_pending_migrations
+    apply_pending_migrations(engine)
 
 @app.get("/health")
 @app.get("/api/v1/health")
