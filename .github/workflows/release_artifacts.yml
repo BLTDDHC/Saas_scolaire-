@@ -54,10 +54,23 @@ jobs:
       - name: Package Windows application
         shell: pwsh
         run: Compress-Archive -Path "build/windows/x64/runner/Release/*" -DestinationPath "MAYELE_plus_windows_x64.zip" -Force
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup -y --no-progress
+      - name: Build Windows installer EXE
+        shell: pwsh
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "installer\mayele_plus.iss"
+          Copy-Item "installer\output\MAYELE_Plus_Setup.exe" "MAYELE_Plus_Setup.exe" -Force
       - uses: actions/upload-artifact@v4
         with:
           name: MAYELE-plus-Windows-x64
           path: MAYELE_plus_windows_x64.zip
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MAYELE-plus-Windows-Installer
+          path: MAYELE_Plus_Setup.exe
           if-no-files-found: error
 
   ios:
