@@ -98,6 +98,42 @@ class AuthenticationGuards(unittest.TestCase):
         )
         self.assertEqual(login.email, "user@example.invalid")
 
+    def test_admin_profile_photo_is_persisted_in_database(self):
+        admin = self.user(
+            email=f"profile-{uuid.uuid4()}@example.invalid",
+            role="admin",
+            school_id=str(self.tenant.id),
+        )
+        current = m.Principal(
+            id=str(admin.id),
+            role="admin",
+            school_id=str(self.tenant.id),
+        )
+        raw = b"persistent-profile-photo"
+        body = m.StudentPhotoUpdateInput(
+            name="profile.png",
+            mimeType="image/png",
+            contentBase64=m.base64.b64encode(raw).decode("ascii"),
+        )
+
+        m.update_own_profile_photo(body, current=current, session=self.s)
+        self.s.expire_all()
+
+        row = self.s.get(
+            m.Resource,
+            {"kind": "user-profile-photos", "id": str(admin.id)},
+        )
+        self.assertIsNotNone(row)
+        self.assertEqual(
+            m.base64.b64decode(row.payload["contentBase64"]),
+            raw,
+        )
+        self.assertNotIn("path", row.payload)
+
+        response = m.get_own_profile_photo(current=current, session=self.s)
+        self.assertEqual(response.body, raw)
+        self.assertEqual(response.media_type, "image/png")
+
     def test_password_length_accepts_eight_and_rejects_seven(self):
         with self.assertRaises(HTTPException) as too_short:
             m.validate_new_password("Aa1!bbb")
