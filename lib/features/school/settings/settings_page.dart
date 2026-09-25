@@ -12,6 +12,7 @@ import '../../../shared/widgets/app_form_field.dart';
 import '../../../shared/widgets/app_toast.dart';
 import '../../../shared/widgets/workspace_header.dart';
 import '../../auth/change_password_dialog.dart';
+import '../shared/user_profile_avatar.dart';
 import 'calendar_settings_card.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -147,11 +148,20 @@ class _SettingsPageState extends State<SettingsPage> {
           title: 'Mon Profil Utilisateur',
           child: ListTile(
             contentPadding: EdgeInsets.zero,
-            leading: CircleAvatar(
-                backgroundColor: AppColors.avatarColorFor(user?.name ?? 'User'),
-                child: Text(user?.initials ?? 'U',
-                    style: const TextStyle(
-                        color: Colors.white, fontWeight: FontWeight.bold))),
+            leading: user != null &&
+                    const {UserRole.admin, UserRole.superadmin}
+                        .contains(user.role)
+                ? UserProfileAvatar(
+                    initials: user.initials,
+                    radius: 20,
+                  )
+                : CircleAvatar(
+                    backgroundColor:
+                        AppColors.avatarColorFor(user?.name ?? 'User'),
+                    child: Text(user?.initials ?? 'U',
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold))),
             title: Text(user?.name ?? '',
                 style: const TextStyle(fontWeight: FontWeight.bold)),
             subtitle: Text('${user?.email ?? ''} • ${user?.roleName ?? ''}'),
