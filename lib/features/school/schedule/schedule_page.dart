@@ -192,9 +192,9 @@ class _SchedulePageState extends State<SchedulePage> {
       return;
     }
 
-    var subjectId = existing?['subjectId']?.toString();
-    if (subjectId == null ||
-        !availableSubjects.any((subject) => subject.id == subjectId)) {
+    String subjectId =
+        existing?['subjectId']?.toString() ?? availableSubjects.first.id;
+    if (!availableSubjects.any((subject) => subject.id == subjectId)) {
       subjectId = availableSubjects.first.id;
     }
 
@@ -207,9 +207,9 @@ class _SchedulePageState extends State<SchedulePage> {
       return;
     }
 
-    var teacherId = existing?['teacherId']?.toString();
-    if (teacherId == null ||
-        !availableTeachers.any((teacher) => teacher.id == teacherId)) {
+    String teacherId =
+        existing?['teacherId']?.toString() ?? availableTeachers.first.id;
+    if (!availableTeachers.any((teacher) => teacher.id == teacherId)) {
       teacherId = availableTeachers.first.id;
     }
     var weekday = (existing?['weekday'] as num?)?.toInt() ?? 1;
