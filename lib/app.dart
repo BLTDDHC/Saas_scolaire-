@@ -7,7 +7,7 @@ import 'features/auth/required_password_change_page.dart';
 import 'features/superadmin/superadmin_dashboard.dart';
 import 'features/school/school_shell.dart';
 
-/// Application principale EduPro — avec réactivité au Store et au Thème
+/// Application principale MAYELE + — avec réactivité au Store et au Thème
 class EduProApp extends StatelessWidget {
   const EduProApp({super.key});
 
@@ -26,7 +26,7 @@ class EduProApp extends StatelessWidget {
                     const CircularProgressIndicator(),
                     const SizedBox(height: 16),
                     const Text(
-                      'Chargement d\'EduPro SaaS...',
+                      'Chargement de MAYELE +...',
                       style: const TextStyle(fontFamily: 'Inter', fontSize: 14),
                     ),
                   ],
@@ -48,7 +48,7 @@ class EduProApp extends StatelessWidget {
         }
 
         return MaterialApp(
-          title: 'EduPro — SaaS Scolaire',
+          title: 'MAYELE + — Gestion scolaire',
           debugShowCheckedModeBanner: false,
           theme: AppTheme.light(),
           darkTheme: AppTheme.dark(),
