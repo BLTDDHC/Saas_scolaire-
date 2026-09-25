@@ -1403,6 +1403,7 @@ class _StudentsPageState extends State<StudentsPage> {
       if (_levelId != null && item.levelId != _levelId) return false;
       return true;
     }).toList();
+    final isCompactLayout = MediaQuery.sizeOf(context).width < 600;
 
     return WorkspacePage(
       title: 'Élèves et inscriptions',
@@ -1424,36 +1425,112 @@ class _StudentsPageState extends State<StudentsPage> {
           AppCard(
             title: 'Préinscrits (${_preEnrollments.length})',
             child: Column(
-              children: _preEnrollments
-                  .map((item) => ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: const CircleAvatar(
-                          child: Icon(Icons.hourglass_top_rounded),
-                        ),
-                        title: Text(item['studentName']?.toString() ?? 'Élève'),
-                        subtitle: Text(
-                          '${item['desiredClassName'] ?? 'Classe non renseignée'} · '
-                          '${item['registrationKind'] == 'reenrollment' ? 'Réinscription' : 'Inscription'}',
-                        ),
-                        trailing: Wrap(spacing: AppSpacing.s2, children: [
-                          IconButton(
-                            tooltip: 'Modifier la préinscription',
-                            onPressed: () => _openPreEnrollmentForm(
-                              registrationKind:
-                                  item['registrationKind']?.toString() ??
-                                      'registration',
-                              existingPreEnrollment: item,
+              children: _preEnrollments.map((item) {
+                final studentName =
+                    item['studentName']?.toString() ?? 'Élève';
+                final subtitle =
+                    '${item['desiredClassName'] ?? 'Classe non renseignée'} · '
+                    '${item['registrationKind'] == 'reenrollment' ? 'Réinscription' : 'Inscription'}';
+
+                if (isCompactLayout) {
+                  return Container(
+                    key: ValueKey(
+                        'pre-enrollment-mobile-${item['id'] ?? studentName}'),
+                    width: double.infinity,
+                    margin: const EdgeInsets.only(bottom: AppSpacing.s3),
+                    padding: const EdgeInsets.all(AppSpacing.s3),
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                          color: Theme.of(context).dividerColor),
+                      borderRadius: BorderRadius.circular(AppRadius.md),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const CircleAvatar(
+                              child: Icon(Icons.hourglass_top_rounded),
                             ),
-                            icon: const Icon(Icons.edit_outlined),
-                          ),
-                          FilledButton.icon(
-                            onPressed: () => _finalizePreEnrollment(item),
-                            icon: const Icon(Icons.how_to_reg_rounded),
-                            label: const Text('Inscrire maintenant'),
-                          ),
-                        ]),
-                      ))
-                  .toList(),
+                            const SizedBox(width: AppSpacing.s3),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    studentName,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w700),
+                                  ),
+                                  const SizedBox(height: AppSpacing.s1),
+                                  Text(subtitle, softWrap: true),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: AppSpacing.s3),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: () => _openPreEnrollmentForm(
+                                  registrationKind:
+                                      item['registrationKind']?.toString() ??
+                                          'registration',
+                                  existingPreEnrollment: item,
+                                ),
+                                icon: const Icon(Icons.edit_outlined),
+                                label: const Text('Modifier'),
+                              ),
+                            ),
+                            const SizedBox(width: AppSpacing.s2),
+                            Expanded(
+                              child: FilledButton.icon(
+                                onPressed: () => _finalizePreEnrollment(item),
+                                icon: const Icon(Icons.how_to_reg_rounded),
+                                label: const Text(
+                                  'Inscrire',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
+                return ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const CircleAvatar(
+                    child: Icon(Icons.hourglass_top_rounded),
+                  ),
+                  title: Text(studentName),
+                  subtitle: Text(subtitle),
+                  trailing: Wrap(spacing: AppSpacing.s2, children: [
+                    IconButton(
+                      tooltip: 'Modifier la préinscription',
+                      onPressed: () => _openPreEnrollmentForm(
+                        registrationKind:
+                            item['registrationKind']?.toString() ??
+                                'registration',
+                        existingPreEnrollment: item,
+                      ),
+                      icon: const Icon(Icons.edit_outlined),
+                    ),
+                    FilledButton.icon(
+                      onPressed: () => _finalizePreEnrollment(item),
+                      icon: const Icon(Icons.how_to_reg_rounded),
+                      label: const Text('Inscrire maintenant'),
+                    ),
+                  ]),
+                );
+              }).toList(),
             ),
           ),
           const SizedBox(height: AppSpacing.s5),
@@ -1467,7 +1544,7 @@ class _StudentsPageState extends State<StudentsPage> {
                   prefixIcon: Icons.search,
                   onChanged: (value) => setState(() => _search = value))),
           SizedBox(
-              width: 190,
+              width: isCompactLayout ? double.infinity : 190,
               child: DropdownButtonFormField<String?>(
                   isExpanded: true,
                   initialValue: _cycleId,
@@ -1486,7 +1563,7 @@ class _StudentsPageState extends State<StudentsPage> {
                     _load();
                   })),
           SizedBox(
-              width: 190,
+              width: isCompactLayout ? double.infinity : 190,
               child: DropdownButtonFormField<String?>(
                   isExpanded: true,
                   initialValue: _levelId,
@@ -1504,7 +1581,7 @@ class _StudentsPageState extends State<StudentsPage> {
                     _load();
                   })),
           SizedBox(
-              width: 190,
+              width: isCompactLayout ? double.infinity : 190,
               child: DropdownButtonFormField<String?>(
                   isExpanded: true,
                   initialValue: _classId,
