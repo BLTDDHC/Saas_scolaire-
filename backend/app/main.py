@@ -2190,9 +2190,16 @@ def user_json(user: User, session: Session | None = None) -> dict[str, Any]:
     ).where(
         SchoolDirectionCycle.direction_id == direction.id
     ).order_by(SchoolCycle.sort_order, SchoolCycle.name)).all()) if session and direction else []
+    teacher_id = None
+    if session and user.role == "teacher":
+        teacher_id = session.scalar(select(Teacher.id).where(
+            Teacher.user_id == user.id,
+            Teacher.status == "active",
+        ))
     return {"id": str(user.id), "name": user.name, "email": user.email, "role": user.role,
             "roleName": user.role, "initials": "SA" if user.role == "superadmin" else None,
             "schoolId": public_school_id(session, user.school_id) if session else str(user.school_id) if user.school_id else None, "status": user.status, "passwordSet": user.password_set,
+            "teacherId": str(teacher_id) if teacher_id else None,
             "mustChangePassword": must_change_password(session, user) if session else False,
             "directionId": str(direction.id) if direction else None,
             "direction": ({"id": str(direction.id), "name": direction.name,
