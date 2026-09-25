@@ -1309,8 +1309,8 @@ class StudentPreEnrollmentInput(BaseModel):
     @model_validator(mode="after")
     def validate_candidate(self):
         if self.student_id is None:
-            self.first_name = (self.first_name or "").strip()
-            self.last_name = (self.last_name or "").strip()
+            self.first_name = normalize_given_name(self.first_name or "")
+            self.last_name = normalize_family_name(self.last_name or "")
             if not self.first_name or not self.last_name:
                 raise ValueError("Le nom et le prénom sont obligatoires")
             if self.registration_kind == "reenrollment":
@@ -1331,10 +1331,11 @@ class StudentPreEnrollmentUpdateInput(BaseModel):
         default=None, alias="schoolRegime"
     )
 
-    @field_validator("first_name", "last_name", mode="before")
-    @classmethod
-    def trim_name(cls, value: Any) -> Any:
-        return value.strip() if isinstance(value, str) else value
+    @model_validator(mode="after")
+    def normalize_candidate_name(self):
+        self.first_name = normalize_given_name(self.first_name)
+        self.last_name = normalize_family_name(self.last_name)
+        return self
 
 class StudentPreEnrollmentApprovalInput(BaseModel):
     school_regime: Literal['part_time', 'full_time'] | None = Field(
