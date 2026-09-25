@@ -136,6 +136,127 @@ class AuthenticationGuards(unittest.TestCase):
         self.assertEqual(response.body, raw)
         self.assertEqual(response.media_type, "image/png")
 
+    def test_teacher_identity_is_exposed_and_grade_entry_uses_relational_assignment(self):
+        teacher = self.teachers[0]
+        user = self.s.get(m.User, teacher.user_id)
+        payload = m.user_json(user, self.s)
+        self.assertEqual(payload["teacherId"], str(teacher.id))
+
+        affectation = self.s.scalar(m.select(m.Affectation).where(
+            m.Affectation.teacher_id == teacher.id,
+            m.Affectation.class_id == self.cl.id,
+            m.Affectation.status == "active",
+        ))
+        self.assertIsNotNone(affectation)
+        evaluation = self.add(m.Evaluation(
+            establishment_id=self.tenant.id,
+            class_id=self.cl.id,
+            subject_id=affectation.subject_id,
+            academic_year_id=self.year.id,
+            academic_period_id=self.periods[0].id,
+            affectation_id=affectation.id,
+            name="Devoir 1 - saisie enseignant",
+            type="devoir",
+            exam_code="devoir_1",
+            period=self.periods[0].code,
+            max_value=20,
+            status="draft",
+            created_by=user.id,
+        ))
+        body = m.GradeBatchInput(entries=[
+            {
+                "studentId": self.students[0].id,
+                "value": 14,
+                "presence": "present",
+            },
+            {
+                "studentId": self.students[1].id,
+                "value": 16,
+                "presence": "present",
+            },
+        ])
+        rows = m.save_evaluation_grades(
+            evaluation.id,
+            body,
+            current=self.principals[0],
+            session=self.s,
+        )
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(
+            self.s.scalar(m.select(m.func.count()).select_from(m.Grade).where(
+                m.Grade.evaluation_id == evaluation.id
+            )),
+            2,
+        )
+
+    def test_primary_monthly_compositions_are_cycle_and_trimester_scoped(self):
+        primary_cycle = self.add(m.SchoolCycle(
+            establishment_id=self.tenant.id,
+            code="PRIMAIRE",
+            name="Primaire",
+            status="active",
+        ))
+        primary_level = self.add(m.SchoolLevel(
+            establishment_id=self.tenant.id,
+            cycle_id=primary_cycle.id,
+            code="CP1",
+            name="CP1",
+            status="active",
+        ))
+        primary_class = self.add(m.SchoolClass(
+            establishment_id=self.tenant.id,
+            academic_year_id=self.year.id,
+            cycle_id=primary_cycle.id,
+            school_level_id=primary_level.id,
+            name="CP1 A",
+            status="active",
+        ))
+
+        m.validate_program_type_for_class(
+            primary_class,
+            "composition",
+            "composition_octobre",
+            self.s,
+        )
+        m.validate_monthly_composition_period(
+            self.periods[0], "composition_octobre"
+        )
+        with self.assertRaises(HTTPException) as wrong_trimester:
+            m.validate_monthly_composition_period(
+                self.periods[1], "composition_octobre"
+            )
+        self.assertEqual(wrong_trimester.exception.status_code, 422)
+
+        with self.assertRaises(HTTPException) as wrong_cycle:
+            m.validate_program_type_for_class(
+                self.cl,
+                "composition",
+                "composition_octobre",
+                self.s,
+            )
+        self.assertEqual(wrong_cycle.exception.status_code, 422)
+
+    def test_school_period_route_rejects_month_periods(self):
+        current = m.Principal(
+            id=str(uuid.uuid4()),
+            role="admin",
+            school_id=str(self.tenant.id),
+        )
+        with self.assertRaises(HTTPException) as invalid:
+            m.create_academic_period(
+                m.AcademicPeriodInput(
+                    academicYearId=self.year.id,
+                    code="OCT",
+                    name="Octobre",
+                    periodType="month",
+                    sortOrder=1,
+                ),
+                current=current,
+                session=self.s,
+            )
+        self.assertEqual(invalid.exception.status_code, 422)
+        self.assertIn("trois trimestres", invalid.exception.detail)
+
     def test_password_length_accepts_eight_and_rejects_seven(self):
         with self.assertRaises(HTTPException) as too_short:
             m.validate_new_password("Aa1!bbb")
