@@ -295,7 +295,7 @@ class _SubjectsPageState extends State<SubjectsPage> {
                         ),
                         DataCell(
                           AppBadge(
-                            label: s.status == 'active' ? 'Active' : 'Inactive',
+                            label: s.status == 'active' ? 'Actif' : 'Inactif',
                             variant: s.status == 'active'
                                 ? AppBadgeVariant.success
                                 : AppBadgeVariant.secondary,
