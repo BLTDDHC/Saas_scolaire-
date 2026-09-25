@@ -116,6 +116,38 @@ void main() {
       expect(primaryTable.rows.every((row) => row.length == 7), isTrue);
     });
 
+    test('primary bulletin keeps monthly compositions distinct from trimester composition', () {
+      final table = bulletinPrimaryCycleTable([
+        {
+          'subjectName': 'Mathématiques',
+          'subjectAverage': 8,
+          'evaluations': [
+            {
+              'evaluation': 'Composition du mois d’Octobre',
+              'type': 'composition',
+              'examCode': 'composition_octobre',
+              'value': 7,
+            },
+            {
+              'evaluation': 'Composition du mois de Novembre',
+              'type': 'composition',
+              'examCode': 'composition_novembre',
+              'value': 8,
+            },
+            {
+              'evaluation': 'Composition du 1er trimestre',
+              'type': 'composition',
+              'examCode': 'composition',
+              'value': 9,
+            },
+          ],
+        }
+      ], '1er trimestre');
+      expect(table.rows.first[2], '7');
+      expect(table.rows.first[3], '8');
+      expect(table.rows.first[4], '9');
+    });
+
     test(
         'lycee official payload maps the required columns and saves a named PDF',
         () async {
