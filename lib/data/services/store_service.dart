@@ -2255,6 +2255,52 @@ class StoreService extends ChangeNotifier {
     return updated;
   }
 
+  Future<void> refreshTeacherWorkspaceRemote() async {
+    if (_currentUser?.role != UserRole.teacher) return;
+    final workspace = await _repository.teacherWorkspace();
+
+    List<Map<String, dynamic>> rows(String key) =>
+        List<Map<String, dynamic>>.from(
+          ((workspace[key] as List?) ?? const [])
+              .map((item) => Map<String, dynamic>.from(item as Map)),
+        );
+
+    if (workspace['establishment'] is Map) {
+      final establishment = EstablishmentModel.fromJson(
+          Map<String, dynamic>.from(workspace['establishment'] as Map));
+      final index =
+          _establishments.indexWhere((item) => item.id == establishment.id);
+      if (index >= 0) {
+        _establishments[index] = establishment;
+      } else {
+        _establishments.add(establishment);
+      }
+    }
+    if (workspace['teacher'] is Map) {
+      _teachers = [
+        TeacherModel.fromJson(
+            Map<String, dynamic>.from(workspace['teacher'] as Map))
+      ];
+    }
+    _academicYears = rows('academicYears').map(AcademicYearModel.fromJson).toList();
+    _schoolCycles = rows('cycles').map(SchoolCycleModel.fromJson).toList();
+    _schoolLevels = rows('schoolLevels').map(SchoolLevelModel.fromJson).toList();
+    _classes = rows('classes').map(ClassModel.fromJson).toList();
+    _subjects = rows('subjects').map(SubjectModel.fromJson).toList();
+    _affectations = rows('affectations').map(AffectationModel.fromJson).toList();
+    _students = rows('students').map(StudentModel.fromJson).toList();
+
+    if (_selectedAcademicYearId == null ||
+        !_academicYears.any((year) => year.id == _selectedAcademicYearId)) {
+      _selectedAcademicYearId = getActiveAcademicYear()?.id;
+    }
+    if (_selectedAcademicYearId != null) {
+      await _storage.set('selectedAcademicYearId', _selectedAcademicYearId!);
+    }
+    await _saveAllAsync();
+    notifyListeners();
+  }
+
   Future<void> refreshAffectationsRemote({String? academicYearId}) async {
     _affectations =
         (await _repository.affectations(academicYearId: academicYearId))
