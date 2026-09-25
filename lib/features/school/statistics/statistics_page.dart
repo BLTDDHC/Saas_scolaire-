@@ -26,6 +26,7 @@ class _StatisticsPageState extends State<StatisticsPage> {
   String? _classId;
   String? _periodId;
   String? _subjectId;
+  String? _eventCode;
   String? _loadedYearId;
   Future<Map<String, dynamic>>? _request;
   Map<String, dynamic>? _snapshot;
@@ -43,6 +44,7 @@ class _StatisticsPageState extends State<StatisticsPage> {
       classId: _classId,
       periodId: _periodId,
       subjectId: _subjectId,
+      eventCode: _eventCode,
     );
     _request = request;
     _snapshot = null;
@@ -134,6 +136,7 @@ class _StatisticsPageState extends State<StatisticsPage> {
     final yearId = store.getSelectedAcademicYearId();
     if (_request == null || yearId != _loadedYearId) {
       _periodId = null;
+      _eventCode = null;
       _load(store);
       _loadPeriods(store, yearId);
     }
@@ -160,6 +163,10 @@ class _StatisticsPageState extends State<StatisticsPage> {
         .toList();
     final subjects =
         store.getSubjects().where((item) => item.status == 'active').toList();
+    final eventOptions = List<Map<String, dynamic>>.from(
+      (((_snapshot?['filters'] as Map?)?['events'] as List?) ?? const [])
+          .map((item) => Map<String, dynamic>.from(item as Map)),
+    );
 
     return WorkspacePage(
       title: 'Statistiques & analyses',
@@ -195,6 +202,7 @@ class _StatisticsPageState extends State<StatisticsPage> {
                     _cycleId = value;
                     _levelId = null;
                     _classId = null;
+                    _eventCode = null;
                     _filtersDirty = true;
                   });
                 },
@@ -223,6 +231,7 @@ class _StatisticsPageState extends State<StatisticsPage> {
                   setState(() {
                     _levelId = value;
                     _classId = null;
+                    _eventCode = null;
                     _filtersDirty = true;
                   });
                 },
@@ -249,6 +258,7 @@ class _StatisticsPageState extends State<StatisticsPage> {
                 onChanged: (value) {
                   setState(() {
                     _classId = value;
+                    _eventCode = null;
                     _filtersDirty = true;
                   });
                 },
@@ -274,6 +284,7 @@ class _StatisticsPageState extends State<StatisticsPage> {
                 ],
                 onChanged: (value) => setState(() {
                   _periodId = value;
+                  _eventCode = null;
                   _filtersDirty = true;
                 }),
               ),
@@ -296,10 +307,39 @@ class _StatisticsPageState extends State<StatisticsPage> {
                 ],
                 onChanged: (value) => setState(() {
                   _subjectId = value;
+                  _eventCode = null;
                   _filtersDirty = true;
                 }),
               ),
             ),
+            if (eventOptions.isNotEmpty)
+              SizedBox(
+                width: 230,
+                child: DropdownButtonFormField<String?>(
+                  key: ValueKey(
+                      'statistics-event-${_eventCode ?? 'all'}-${eventOptions.length}'),
+                  initialValue: eventOptions
+                          .any((item) => item['code'] == _eventCode)
+                      ? _eventCode
+                      : null,
+                  isExpanded: true,
+                  decoration:
+                      const InputDecoration(labelText: 'Type / examen'),
+                  items: [
+                    const DropdownMenuItem<String?>(
+                        value: null, child: Text('Tous les résultats')),
+                    ...eventOptions.map((item) => DropdownMenuItem<String?>(
+                          value: '${item['code']}',
+                          child: Text('${item['name']}',
+                              overflow: TextOverflow.ellipsis),
+                        )),
+                  ],
+                  onChanged: (value) => setState(() {
+                    _eventCode = value;
+                    _filtersDirty = true;
+                  }),
+                ),
+              ),
             FilledButton.icon(
               onPressed: _filtersDirty ? () => _applyFilters(store) : null,
               icon: const Icon(Icons.filter_alt_outlined),
@@ -333,28 +373,92 @@ class _StatisticsPageState extends State<StatisticsPage> {
 /// retain the previous value when its future changes; checking the connection
 /// state first guarantees that stale KPI values are never shown as if they
 /// belonged to the newly selected filters.
-class StatisticsSnapshotView extends StatelessWidget {
+class StatisticsSnapshotView extends StatefulWidget {
   const StatisticsSnapshotView({super.key, required this.request});
 
   final Future<Map<String, dynamic>> request;
 
   @override
-  Widget build(BuildContext context) => FutureBuilder<Map<String, dynamic>>(
-        future: request,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
-            return const WorkspaceLoadingState(
-              label: 'Mise à jour des analyses…',
-            );
-          }
-          if (snapshot.hasError || !snapshot.hasData) {
-            return const WorkspaceErrorState(
-              message: 'Impossible de charger les statistiques.',
-            );
-          }
-          return _StatisticsContent(data: snapshot.data!);
-        },
+  State<StatisticsSnapshotView> createState() => _StatisticsSnapshotViewState();
+}
+
+class _StatisticsSnapshotViewState extends State<StatisticsSnapshotView> {
+  Map<String, dynamic>? _data;
+  Object? _error;
+  bool _loading = true;
+  int _generation = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _bind(widget.request);
+  }
+
+  @override
+  void didUpdateWidget(covariant StatisticsSnapshotView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.request, widget.request)) {
+      _data = null;
+      _error = null;
+      _loading = true;
+      _bind(widget.request);
+    }
+  }
+
+  void _bind(Future<Map<String, dynamic>> request) {
+    final generation = ++_generation;
+    request.then((data) {
+      if (!mounted || generation != _generation) return;
+      setState(() {
+        _data = data;
+        _error = null;
+        _loading = false;
+      });
+    }, onError: (Object error, StackTrace stackTrace) {
+      if (!mounted || generation != _generation) return;
+      setState(() {
+        _data = null;
+        _error = error;
+        _loading = false;
+      });
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const WorkspaceLoadingState(
+        label: 'Mise à jour des analyses…',
       );
+    }
+    if (_error != null || _data == null) {
+      return const WorkspaceErrorState(
+        message: 'Impossible de charger les statistiques.',
+      );
+    }
+    final data = _data!;
+    return TweenAnimationBuilder<double>(
+      key: ValueKey('${data['snapshotGeneratedAt'] ?? data.hashCode}'),
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOutCubic,
+      builder: (context, value, child) => Opacity(
+        opacity: value,
+        child: Transform.translate(
+          offset: Offset(0, 8 * (1 - value)),
+          child: child,
+        ),
+      ),
+      child: _StatisticsContent(data: data),
+    );
+  }
+}
+
+String _statisticsPercent(Object? raw) {
+  if (raw is! num) return 'Non calculé';
+  final value = raw.toDouble();
+  final decimals = value == value.roundToDouble() ? 1 : 2;
+  return '${value.toStringAsFixed(decimals)} %';
 }
 
 class _StatisticsContent extends StatelessWidget {
@@ -370,10 +474,6 @@ class _StatisticsContent extends StatelessWidget {
     );
     final byClass = List<Map<String, dynamic>>.from(
       (data['byClass'] as List? ?? const [])
-          .map((item) => Map<String, dynamic>.from(item as Map)),
-    );
-    final byCycle = List<Map<String, dynamic>>.from(
-      (data['byCycle'] as List? ?? const [])
           .map((item) => Map<String, dynamic>.from(item as Map)),
     );
     final byLevel = List<Map<String, dynamic>>.from(
@@ -416,9 +516,6 @@ class _StatisticsContent extends StatelessWidget {
         : null;
     final decisions = Map<String, dynamic>.from(
         data['decisions'] as Map? ?? const <String, dynamic>{});
-    final teacherStatistics = Map<String, dynamic>.from(
-        data['teacherStatistics'] as Map? ?? const <String, dynamic>{});
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -429,117 +526,64 @@ class _StatisticsContent extends StatelessWidget {
           mobileColumns: 1,
           children: [
             _Metric(
-              label: 'Élèves',
+              label: 'Total élèves',
               value: '${data['studentCount'] ?? 0}',
-              icon: Icons.school_outlined,
+              icon: Icons.groups_2_outlined,
               color: AppColors.info600,
-            ),
-            _Metric(
-              label: 'Résultats officiels analysés',
-              value: '${data['officialStudentCount'] ?? 0}',
-              icon: Icons.verified_outlined,
-              color: AppColors.success600,
-            ),
-            _Metric(
-              label: 'Moyenne générale',
-              value: data['overallAverage'] == null
-                  ? 'Non calculée'
-                  : '${data['overallAverage']} / 20',
-              icon: Icons.analytics_outlined,
-              color: AppColors.primary600,
-            ),
-            _Metric(
-              label: 'Taux de présence',
-              value: data['attendanceRate'] == null
-                  ? 'Non calculé'
-                  : '${data['attendanceRate']} %',
-              icon: Icons.how_to_reg_outlined,
-              color: AppColors.success600,
-            ),
-            _Metric(
-              label: 'Enseignants actifs du périmètre',
-              value: '${data['teacherCount'] ?? 0}',
-              icon: Icons.co_present_outlined,
-              color: AppColors.info600,
-            ),
-            _Metric(
-              label: 'Classes actives',
-              value: '${data['classCount'] ?? 0}',
-              icon: Icons.meeting_room_outlined,
-              color: AppColors.primary600,
-            ),
-            _Metric(
-              label: 'Créneaux de cours planifiés',
-              value: '${teacherStatistics['plannedCourses'] ?? 0}',
-              icon: Icons.calendar_month_outlined,
-              color: AppColors.info600,
-            ),
-            _Metric(
-              label: 'Appels de cours verrouillés',
-              value: '${teacherStatistics['completedCourses'] ?? 0}',
-              icon: Icons.fact_check_outlined,
-              color: AppColors.success600,
             ),
             _Metric(
               label: 'Taux de réussite',
-              value: data['successRate'] == null
-                  ? 'Non calculé'
-                  : '${data['successRate']} %',
-              icon: Icons.trending_up_outlined,
+              value: _statisticsPercent(data['successRate']),
+              icon: Icons.trending_up_rounded,
               color: AppColors.success600,
             ),
             _Metric(
-              label: 'Taux d’échec',
-              value: data['failureRate'] == null
-                  ? 'Non calculé'
-                  : '${data['failureRate']} %',
-              icon: Icons.trending_down_outlined,
-              color: AppColors.danger600,
-            ),
-            _Metric(
-              label: 'Moyenne maximale',
-              value: data['highestAverage'] == null
-                  ? 'Non calculée'
-                  : '${data['highestAverage']} / 20',
-              icon: Icons.arrow_upward_rounded,
+              label: 'Taux de présence',
+              value: _statisticsPercent(data['attendanceRate']),
+              icon: Icons.calendar_month_outlined,
               color: AppColors.success600,
             ),
-            _Metric(
-              label: 'Moyenne minimale',
-              value: data['lowestAverage'] == null
-                  ? 'Non calculée'
-                  : '${data['lowestAverage']} / 20',
-              icon: Icons.arrow_downward_rounded,
-              color: AppColors.warning600,
-            ),
-            _Metric(
-              label: 'Médiane',
-              value: data['medianAverage'] == null
-                  ? 'Non calculée'
-                  : '${data['medianAverage']} / 20',
-              icon: Icons.horizontal_rule_rounded,
-              color: AppColors.info600,
-            ),
-            _Metric(
-              label: 'Écart-type',
-              value: data['standardDeviation'] == null
-                  ? 'Non calculé'
-                  : '${data['standardDeviation']}',
-              icon: Icons.scatter_plot_outlined,
-              color: AppColors.secondary600,
-            ),
+            if (finance != null)
+              _Metric(
+                label: 'Recettes encaissées',
+                value: '${finance['paid'] ?? 0} FCFA',
+                icon: Icons.account_balance_wallet_outlined,
+                color: AppColors.primary600,
+              )
+            else
+              _Metric(
+                label: 'Moyenne générale',
+                value: data['overallAverage'] == null
+                    ? 'Non calculée'
+                    : '${data['overallAverage']} / 20',
+                icon: Icons.analytics_outlined,
+                color: AppColors.primary600,
+              ),
           ],
         ),
-        if (evolution.isNotEmpty) ...[
+        if (evolution.isNotEmpty || byLevel.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.s6),
-          _LineChartCard(
-            key: const Key('statistics-evolution-chart'),
-            title: 'Évolution trimestrielle',
-            subtitle:
-                'Périodes trimestrielles officielles, dans l’ordre configuré',
-            rows: evolution,
-            labelKey: 'period',
-            valueKey: 'average20',
+          ResponsiveGrid(
+            desktopColumns: 2,
+            tabletColumns: 1,
+            mobileColumns: 1,
+            children: [
+              if (evolution.isNotEmpty)
+                _LineChartCard(
+                  key: const Key('statistics-evolution-chart'),
+                  title: 'Évolution des résultats',
+                  subtitle:
+                      'Série officielle compatible avec les filtres actuellement appliqués',
+                  rows: evolution,
+                  labelKey: 'period',
+                  valueKey: 'average20',
+                ),
+              if (byLevel.isNotEmpty)
+                _LevelDistributionCard(
+                  key: const Key('statistics-level-distribution'),
+                  rows: byLevel,
+                ),
+            ],
           ),
         ],
         if (monthlyEvolution.isNotEmpty) ...[
@@ -582,49 +626,21 @@ class _StatisticsContent extends StatelessWidget {
             ],
           ),
         ],
-        if (insights.isNotEmpty || alerts.isNotEmpty) ...[
+        if (insights.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.s6),
-          ResponsiveGrid(
-            desktopColumns: 2,
-            tabletColumns: 1,
-            mobileColumns: 1,
-            children: [
-              AppCard(
-                title: 'Ce qu’il faut retenir',
-                child: insights.isEmpty
-                    ? const Text('Aucun insight disponible pour ce périmètre.')
-                    : Column(
-                        children: insights
-                            .map((item) => ListTile(
-                                  contentPadding: EdgeInsets.zero,
-                                  leading: const Icon(
-                                      Icons.auto_awesome_outlined,
-                                      color: AppColors.primary600),
-                                  title: Text('${item['title'] ?? 'Analyse'}'),
-                                  subtitle: Text('${item['message'] ?? ''}'),
-                                ))
-                            .toList(),
-                      ),
-              ),
-              AppCard(
-                title: 'Points d’attention',
-                child: alerts.isEmpty
-                    ? const Text(
-                        'Aucune alerte calculée sur les données officielles.')
-                    : Column(
-                        children: alerts
-                            .map((item) => ListTile(
-                                  contentPadding: EdgeInsets.zero,
-                                  leading: const Icon(
-                                      Icons.warning_amber_rounded,
-                                      color: AppColors.warning600),
-                                  title: Text('${item['title'] ?? 'Alerte'}'),
-                                  subtitle: Text('${item['message'] ?? ''}'),
-                                ))
-                            .toList(),
-                      ),
-              ),
-            ],
+          AppCard(
+            title: 'Ce qu’il faut retenir',
+            child: Column(
+              children: insights
+                  .map((item) => ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.auto_awesome_outlined,
+                            color: AppColors.primary600),
+                        title: Text('${item['title'] ?? 'Analyse'}'),
+                        subtitle: Text('${item['message'] ?? ''}'),
+                      ))
+                  .toList(),
+            ),
           ),
         ],
         const SizedBox(height: AppSpacing.s6),
@@ -640,30 +656,38 @@ class _StatisticsContent extends StatelessWidget {
           tabletColumns: 1,
           mobileColumns: 1,
           children: [
-            _AverageBarsCard(
-              title: 'Moyenne par cycle',
-              subtitle: 'Comparaison normalisée sur 20',
-              rows: byCycle,
-              labelKey: 'cycle',
-              valueKey: 'average20',
-            ),
-            _AverageBarsCard(
-              title: 'Moyenne par niveau',
-              subtitle: 'Comparaison des niveaux du périmètre sélectionné',
-              rows: byLevel,
-              labelKey: 'level',
-              valueKey: 'average20',
-            ),
             _VerticalBarsCard(
               key: const Key('statistics-class-bars'),
-              title: 'Moyenne par classe',
+              title: 'Résultats moyens par classe',
               subtitle:
                   ((data['appliedFilters'] as Map?)?['periodId'] == null)
                       ? 'Dernier trimestre officiel disponible'
-                      : 'Période officielle sélectionnée',
+                      : 'Période / résultat sélectionné',
               rows: byClass,
               labelKey: 'className',
               valueKey: 'average20',
+            ),
+            _ClassRankingCard(
+              key: const Key('statistics-class-ranking'),
+              rows: byClass,
+            ),
+            AppCard(
+              title: 'Alertes et notifications',
+              child: alerts.isEmpty
+                  ? const Text(
+                      'Aucune alerte calculée sur les données officielles.')
+                  : Column(
+                      children: alerts
+                          .map((item) => ListTile(
+                                contentPadding: EdgeInsets.zero,
+                                leading: const Icon(
+                                    Icons.notifications_active_outlined,
+                                    color: AppColors.warning600),
+                                title: Text('${item['title'] ?? 'Alerte'}'),
+                                subtitle: Text('${item['message'] ?? ''}'),
+                              ))
+                          .toList(),
+                    ),
             ),
           ],
         ),
@@ -799,6 +823,117 @@ class _StatisticsContent extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+class _LevelDistributionCard extends StatelessWidget {
+  const _LevelDistributionCard({super.key, required this.rows});
+
+  final List<Map<String, dynamic>> rows;
+
+  @override
+  Widget build(BuildContext context) {
+    final visible = rows.where((row) =>
+        ((row['studentCount'] as num?)?.toInt() ?? 0) > 0).toList();
+    final total = visible.fold<int>(
+      0,
+      (sum, row) => sum + ((row['studentCount'] as num?)?.toInt() ?? 0),
+    );
+    return AppCard(
+      title: 'Répartition des élèves par niveau',
+      subtitle:
+          'Uniquement les niveaux du cycle et du périmètre actuellement autorisés',
+      child: visible.isEmpty
+          ? const Text('Aucun effectif disponible pour ce périmètre.')
+          : Column(
+              children: visible.map((row) {
+                final count = (row['studentCount'] as num?)?.toInt() ?? 0;
+                final ratio = total == 0 ? 0.0 : count / total;
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: AppSpacing.s3),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text('${row['level'] ?? 'Niveau'}',
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w600)),
+                          ),
+                          Text('$count'),
+                        ],
+                      ),
+                      const SizedBox(height: AppSpacing.s1),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(20),
+                        child: TweenAnimationBuilder<double>(
+                          tween: Tween(begin: 0, end: ratio),
+                          duration: const Duration(milliseconds: 320),
+                          curve: Curves.easeOutCubic,
+                          builder: (context, value, _) =>
+                              LinearProgressIndicator(
+                            value: value,
+                            minHeight: 9,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+    );
+  }
+}
+
+class _ClassRankingCard extends StatelessWidget {
+  const _ClassRankingCard({super.key, required this.rows});
+
+  final List<Map<String, dynamic>> rows;
+
+  @override
+  Widget build(BuildContext context) {
+    final ranked = List<Map<String, dynamic>>.from(rows)
+      ..sort((left, right) {
+        final byAverage =
+            ((right['average20'] as num?)?.toDouble() ?? -1).compareTo(
+          (left['average20'] as num?)?.toDouble() ?? -1,
+        );
+        if (byAverage != 0) return byAverage;
+        return '${left['className'] ?? ''}'
+            .compareTo('${right['className'] ?? ''}');
+      });
+    final visible = ranked.take(5).toList();
+    return AppCard(
+      title: 'Classement des classes',
+      subtitle: 'Basé uniquement sur les résultats officiels du filtre actif',
+      child: visible.isEmpty
+          ? const Text('Aucun classement officiel disponible.')
+          : Column(
+              children: [
+                for (var index = 0; index < visible.length; index++)
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                    leading: CircleAvatar(
+                      radius: 16,
+                      child: Text('${index + 1}'),
+                    ),
+                    title: Text('${visible[index]['className'] ?? 'Classe'}'),
+                    subtitle: Text(
+                      visible[index]['successRate'] == null
+                          ? 'Réussite : —'
+                          : 'Réussite : ${visible[index]['successRate']} %',
+                    ),
+                    trailing: Text(
+                      '${visible[index]['average20'] ?? '—'} / 20',
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+              ],
+            ),
     );
   }
 }
@@ -1171,30 +1306,39 @@ class _Metric extends StatelessWidget {
   final Color color;
 
   @override
-  Widget build(BuildContext context) => AppCard(
-        child: Row(
-          children: [
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: .1),
-                borderRadius: BorderRadius.circular(AppRadius.md),
+  Widget build(BuildContext context) => TweenAnimationBuilder<double>(
+        tween: Tween(begin: .96, end: 1),
+        duration: const Duration(milliseconds: 240),
+        curve: Curves.easeOutCubic,
+        builder: (context, scale, child) => Opacity(
+          opacity: ((scale - .96) / .04).clamp(0, 1),
+          child: Transform.scale(scale: scale, child: child),
+        ),
+        child: AppCard(
+          child: Row(
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: .1),
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                ),
+                child: Icon(icon, color: color, size: 22),
               ),
-              child: Icon(icon, color: color, size: 21),
-            ),
-            const SizedBox(width: AppSpacing.s3),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(label, style: Theme.of(context).textTheme.bodySmall),
-                  const SizedBox(height: AppSpacing.s1),
-                  Text(value, style: AppTypography.heading3()),
-                ],
+              const SizedBox(width: AppSpacing.s3),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(label, style: Theme.of(context).textTheme.bodySmall),
+                    const SizedBox(height: AppSpacing.s1),
+                    Text(value, style: AppTypography.heading3()),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       );
 }

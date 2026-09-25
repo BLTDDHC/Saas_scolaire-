@@ -15,7 +15,7 @@ import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/app_empty_state.dart';
 import '../../../shared/widgets/app_form_field.dart';
 import '../../../shared/widgets/app_modal.dart';
-import '../../../shared/widgets/app_page_header.dart';
+import '../../../shared/widgets/workspace_header.dart';
 import '../../../shared/widgets/app_toast.dart';
 import '../../../shared/widgets/confirm_dialog.dart';
 import '../../../shared/widgets/responsive_grid.dart';
@@ -546,26 +546,19 @@ class _TeachersPageState extends State<TeachersPage> {
           (t.subject != null && t.subject!.toLowerCase().contains(q));
     }).toList();
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(AppSpacing.s6),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          AppPageHeader(
-            title: 'Enseignants',
-            subtitle:
-                '${teachers.length} enseignant(s) enregistré(s) · $activeTeacherCount actif(s)',
-            actions: [
-              AppButton(
-                label: 'Nouvel enseignant',
-                icon: Icons.add_rounded,
-                variant: AppButtonVariant.primary,
-                onPressed: () => _openAddModal(context),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.s6),
-
+    return WorkspacePage(
+      title: 'Enseignants',
+      subtitle:
+          '${teachers.length} enseignant(s) enregistré(s) · $activeTeacherCount actif(s)',
+      actions: [
+        AppButton(
+          label: 'Nouvel enseignant',
+          icon: Icons.add_rounded,
+          variant: AppButtonVariant.primary,
+          onPressed: () => _openAddModal(context),
+        ),
+      ],
+      children: [
           // Recherche
           ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 440),
@@ -746,8 +739,7 @@ class _TeachersPageState extends State<TeachersPage> {
                 ),
               ),
             ),
-        ],
-      ),
+      ],
     );
   }
 }

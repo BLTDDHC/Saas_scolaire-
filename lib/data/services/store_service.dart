@@ -103,6 +103,7 @@ class StoreService extends ChangeNotifier {
   bool _remoteSyncScheduled = false;
   bool _remoteSyncInFlight = false;
   bool _remoteSyncPending = false;
+  bool _remoteSyncHadFailure = false;
   final Map<String, int> _studentPhotoRevisions = {};
 
   // Annual bulletin lock map: key = '<studentId>_<academicYearId>' => true
@@ -117,6 +118,9 @@ class StoreService extends ChangeNotifier {
   String? get passwordChangeError => _passwordChangeError;
   String? get loginError => _loginError;
   String? get sessionWarning => _sessionWarning;
+  bool get remoteSyncInFlight => _remoteSyncInFlight;
+  bool get remoteSyncPending => _remoteSyncPending;
+  bool get remoteSyncHadFailure => _remoteSyncHadFailure;
 
   int studentPhotoRevision(String studentId) =>
       _studentPhotoRevisions[studentId] ?? 0;
@@ -392,10 +396,12 @@ class StoreService extends ChangeNotifier {
     }
     _remoteSyncPending = false;
     _remoteSyncInFlight = true;
+    notifyListeners();
     try {
       await _syncRemoteState();
     } finally {
       _remoteSyncInFlight = false;
+      notifyListeners();
       if (_remoteSyncPending && _currentUser != null) _scheduleRemoteSync();
     }
   }
@@ -987,6 +993,7 @@ class StoreService extends ChangeNotifier {
   }
 
   Future<void> _syncRemoteState() async {
+    var hadFailure = false;
     final collections = <String, List<dynamic>>{
       'establishments': List.of(_establishments),
       'subscriptions': List.of(_subscriptions),
@@ -1025,15 +1032,22 @@ class StoreService extends ChangeNotifier {
         current.add(id);
         try {
           await _repository.create(entry.key, payload);
-        } on ApiException {/* retried on next mutation */}
+        } on ApiException {
+          hadFailure = true;
+          /* retried on next mutation */
+        }
       }
       for (final id in (_remoteIds[entry.key] ?? {}).difference(current)) {
         try {
           await _repository.delete(entry.key, id);
-        } on ApiException {/* access or network failure */}
+        } on ApiException {
+          hadFailure = true;
+          /* access or network failure */
+        }
       }
       _remoteIds[entry.key] = current;
     }
+    _remoteSyncHadFailure = hadFailure;
   }
 
   void _createRemote(String kind, Map<String, dynamic> payload) =>
@@ -1047,6 +1061,9 @@ class StoreService extends ChangeNotifier {
     try {
       await operation;
     } on Exception {
+      _remoteSyncHadFailure = true;
+      _remoteSyncPending = true;
+      notifyListeners();
       // Local mutations remain cached and the next authenticated sync retries.
     }
   }
@@ -1247,7 +1264,8 @@ class StoreService extends ChangeNotifier {
           String? levelId,
           String? classId,
           String? periodId,
-          String? subjectId}) =>
+          String? subjectId,
+          String? eventCode}) =>
       _repository.statistics(
           schoolId: schoolId,
           academicYearId: academicYearId,
@@ -1255,7 +1273,8 @@ class StoreService extends ChangeNotifier {
           levelId: levelId,
           classId: classId,
           periodId: periodId,
-          subjectId: subjectId);
+          subjectId: subjectId,
+          eventCode: eventCode);
 
   Future<EstablishmentModel> loadCurrentEstablishment() async {
     final establishment =

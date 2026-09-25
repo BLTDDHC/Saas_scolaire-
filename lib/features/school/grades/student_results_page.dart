@@ -10,6 +10,13 @@ import '../../../shared/widgets/responsive_grid.dart';
 import '../../../shared/widgets/app_toast.dart';
 import '../../../shared/widgets/workspace_header.dart';
 
+String _resultNumber(Object? raw) {
+  if (raw is! num) return '—';
+  final value = raw.toDouble();
+  final oneDecimal = (value * 10).roundToDouble() == value * 10;
+  return value.toStringAsFixed(oneDecimal ? 1 : 2);
+}
+
 Widget _planRestriction(BuildContext context, ApiException error) => AppCard(
       title: 'Résultats publiés',
       child: Column(
@@ -52,6 +59,8 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
   String? _periodFilter;
   String? _subjectFilter;
   String? _typeFilter;
+  bool _showResults = false;
+  String? _resultSelection;
 
   @override
   void didChangeDependencies() {
@@ -69,6 +78,8 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
       _periodFilter = null;
       _subjectFilter = null;
       _typeFilter = null;
+      _showResults = false;
+      _resultSelection = null;
     }
   }
 
@@ -152,22 +163,102 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
             final sortedPeriods = periodOptions.toList()..sort();
             final sortedSubjects = subjectOptions.toList()..sort();
             final sortedTypes = typeOptions.toList()..sort();
+            final resultOptions = <({String value, String label})>[];
+            for (final year in years) {
+              for (final rawPeriod in (year['periods'] as List? ?? const [])) {
+                final period = Map<String, dynamic>.from(rawPeriod as Map);
+                final periodName = '${period['period'] ?? ''}'.trim();
+                if (periodName.isNotEmpty) {
+                  resultOptions.add((value: 'period|$periodName', label: periodName));
+                }
+                for (final rawExam in (period['exams'] as List? ?? const [])) {
+                  final exam = Map<String, dynamic>.from(rawExam as Map);
+                  final code = '${exam['code'] ?? ''}'.trim();
+                  if (code.isEmpty || periodName.isEmpty) continue;
+                  resultOptions.add((
+                    value: 'exam|$periodName|$code',
+                    label: '${exam['name'] ?? _evaluationTypeLabel(code)}',
+                  ));
+                }
+              }
+            }
+            final uniqueResultOptions = <String, ({String value, String label})>{};
+            for (final option in resultOptions) {
+              uniqueResultOptions.putIfAbsent(option.value, () => option);
+            }
+            final selectableResults = uniqueResultOptions.values.toList();
 
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if ('${data['studentName'] ?? ''}'.isNotEmpty) ...[
-                  Text(
-                    '${data['studentName']}',
-                    style: Theme.of(context).textTheme.titleMedium,
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(_showResults ? 'Résultats' : 'Notes',
+                              style: Theme.of(context).textTheme.headlineSmall),
+                          const SizedBox(height: AppSpacing.s1),
+                          Text(
+                            _showResults
+                                ? 'Résultats officiels : choisissez une période ou une évaluation spécifique.'
+                                : 'Notes réellement soumises par les enseignants.',
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                          if ('${data['studentName'] ?? ''}'.isNotEmpty) ...[
+                            const SizedBox(height: AppSpacing.s2),
+                            Text('${data['studentName']}',
+                                style: Theme.of(context).textTheme.titleMedium),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.s3),
+                    FilledButton.tonalIcon(
+                      key: const Key('student-results-toggle'),
+                      onPressed: () => setState(() {
+                        _showResults = !_showResults;
+                        if (!_showResults) _resultSelection = null;
+                      }),
+                      icon: Icon(_showResults
+                          ? Icons.note_alt_outlined
+                          : Icons.analytics_outlined),
+                      label: Text(_showResults ? 'Voir les notes' : 'Voir les résultats'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.s4),
+                if (_showResults) ...[
+                  AppCard(
+                    title: 'Période / résultat',
+                    subtitle: 'Une sélection affiche uniquement le résultat correspondant.',
+                    child: DropdownButtonFormField<String>(
+                      key: const Key('student-result-selector'),
+                      isExpanded: true,
+                      initialValue: selectableResults.any((item) => item.value == _resultSelection)
+                          ? _resultSelection
+                          : null,
+                      decoration: const InputDecoration(
+                          labelText: 'Sélectionner une période / résultat'),
+                      items: selectableResults
+                          .map((item) => DropdownMenuItem(
+                                value: item.value,
+                                child: Text(item.label, overflow: TextOverflow.ellipsis),
+                              ))
+                          .toList(),
+                      onChanged: (value) => setState(() => _resultSelection = value),
+                    ),
                   ),
                   const SizedBox(height: AppSpacing.s4),
                 ],
-                if (sortedPeriods.isNotEmpty ||
-                    sortedSubjects.isNotEmpty ||
-                    sortedTypes.isNotEmpty) ...[
+                if (!_showResults &&
+                    (sortedPeriods.isNotEmpty ||
+                        sortedSubjects.isNotEmpty ||
+                        sortedTypes.isNotEmpty)) ...[
                   AppCard(
-                    title: 'Filtres',
+                    title: 'Filtres des notes',
                     child: Wrap(
                       spacing: AppSpacing.s3,
                       runSpacing: AppSpacing.s3,
@@ -232,15 +323,15 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
                   ),
                   const SizedBox(height: AppSpacing.s4),
                 ],
-                ...years.map(_yearCard),
+                ...years.map((year) => _yearCard(year, showResults: _showResults)),
               ],
             );
           },
         );
     if (widget.embedded) return content;
     return WorkspacePage(
-      title: 'Notes et résultats',
-      subtitle: 'Vos notes, moyennes et classements officiellement publiés',
+      title: 'Notes',
+      subtitle: 'Notes soumises par les enseignants, avec accès séparé aux résultats officiels',
       actions: [
         IconButton.filledTonal(
           tooltip: 'Actualiser les résultats',
@@ -252,7 +343,7 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
     );
   }
 
-  Widget _yearCard(Map<String, dynamic> year) {
+  Widget _yearCard(Map<String, dynamic> year, {required bool showResults}) {
     final registration = Map<String, dynamic>.from(
       year['registration'] as Map? ?? const <String, dynamic>{},
     );
@@ -291,6 +382,12 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
         final bySubject =
             '${left['subject']}'.compareTo('${right['subject']}');
         if (bySubject != 0) return bySubject;
+        final leftType =
+            '${left['examCode'] ?? left['evaluationType'] ?? ''}';
+        final rightType =
+            '${right['examCode'] ?? right['evaluationType'] ?? ''}';
+        final byType = leftType.compareTo(rightType);
+        if (byType != 0) return byType;
         return '${left['date']}'.compareTo('${right['date']}');
       });
     return Padding(
@@ -306,24 +403,57 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (notes.isNotEmpty) ...[
-              _submittedNotesTable(notes),
-              const SizedBox(height: AppSpacing.s4),
+            if (!showResults) ...[
+              if (notes.isNotEmpty)
+                _submittedNotesTable(notes)
+              else
+                const Text('Aucune note soumise ne correspond aux filtres sélectionnés.'),
+            ] else ...[
+              if (_resultSelection == null)
+                const AppEmptyState(
+                  iconData: Icons.analytics_outlined,
+                  title: 'Choisissez un résultat.',
+                  message: 'Sélectionnez une période ou une évaluation spécifique pour afficher uniquement le résultat correspondant.',
+                )
+              else
+                _selectedResultCard(periods, registration),
             ],
-            if (periods.isNotEmpty) ...[
-              _evolutionSection(periods),
-              const SizedBox(height: AppSpacing.s4),
-              ...periods.map((period) => _periodCard(period, registration)),
-            ] else if (notes.isEmpty)
-              const Text('Aucune donnée ne correspond aux filtres sélectionnés.'),
           ],
         ),
       ),
     );
   }
 
+  Widget _selectedResultCard(
+      List<Map<String, dynamic>> periods, Map<String, dynamic> registration) {
+    final selected = _resultSelection;
+    if (selected == null) return const SizedBox.shrink();
+    final parts = selected.split('|');
+    if (parts.length < 2) return const SizedBox.shrink();
+    final periodName = parts[1];
+    final matches = periods.where((item) => '${item['period']}' == periodName).toList();
+    if (matches.isEmpty) {
+      return const Text('Le résultat sélectionné n’est plus disponible.');
+    }
+    final period = matches.first;
+    if (parts.first == 'exam' && parts.length >= 3) {
+      final code = parts[2];
+      final exams = List<Map<String, dynamic>>.from(
+        (period['exams'] as List? ?? const [])
+            .map((item) => Map<String, dynamic>.from(item as Map)),
+      );
+      final selectedExams = exams.where((item) => '${item['code']}' == code).toList();
+      if (selectedExams.isEmpty) {
+        return const Text('Aucun résultat officiel disponible pour cette évaluation.');
+      }
+      return _examCard(selectedExams.first, registration);
+    }
+    return _periodCard(period, registration, includeExams: false);
+  }
+
   Widget _periodCard(
-      Map<String, dynamic> period, Map<String, dynamic> registration) {
+      Map<String, dynamic> period, Map<String, dynamic> registration,
+      {bool includeExams = true}) {
     var subjects = List<Map<String, dynamic>>.from(
       (period['subjects'] as List? ?? const [])
           .map((item) => Map<String, dynamic>.from(item as Map)),
@@ -373,9 +503,10 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
     return Material(
       type: MaterialType.transparency,
       child: ExpansionTile(
+        initiallyExpanded: !includeExams,
         tilePadding: EdgeInsets.zero,
         title: Text('${period['period'] ?? 'Période'}'),
-        subtitle: Text('Moyenne : ${period['average'] ?? '—'} / '
+        subtitle: Text('Moyenne : ${_resultNumber(period['average'])} / '
             '${period['averageScale'] ?? 20} · Rang : ${period['rank'] ?? '—'} · '
             'Mention : ${period['mention'] ?? _mention(period)}'),
         children: [
@@ -386,7 +517,7 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
               tabletColumns: 3,
               children: [
                 _resultMetric('Moyenne générale',
-                    '${period['average'] ?? '—'} / ${period['averageScale'] ?? 20}'),
+                    '${_resultNumber(period['average'])} / ${period['averageScale'] ?? 20}'),
                 _resultMetric('Rang', '${period['rank'] ?? '—'}'),
                 _resultMetric(
                     'Mention', '${period['mention'] ?? _mention(period)}'),
@@ -434,7 +565,8 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
                     .toList(),
               ),
             ),
-          ...exams.map((exam) => _examCard(exam, registration)),
+          if (includeExams)
+            ...exams.map((exam) => _examCard(exam, registration)),
           if (rankingCount > 0)
             Align(
               alignment: Alignment.centerLeft,
@@ -463,6 +595,7 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
         'bepc_blanc': 'BEPC Blanc',
         'bac_test': 'BAC Test',
         'bac_blanc': 'BAC Blanc',
+        'devoir_departemental': 'Devoir départemental',
         'test': 'Test',
         'exam': 'Examen',
         'exam_blanc': 'Examen blanc',
@@ -505,65 +638,6 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
           ),
         ),
       );
-
-  Widget _evolutionSection(List<Map<String, dynamic>> periods) {
-    final groups = <String, List<Map<String, dynamic>>>{};
-    for (final period in periods) {
-      if (period['average'] == null) continue;
-      final type = '${period['periodType'] ?? 'custom'}';
-      groups.putIfAbsent(type, () => []).add(period);
-    }
-    final charts = <Widget>[];
-    for (final entry in groups.entries) {
-      if (entry.value.length < 2) continue;
-      charts.add(_ResultTrendCard(
-        title: switch (entry.key) {
-          'trimester' => 'Évolution trimestrielle',
-          'month' => 'Évolution mensuelle',
-          _ => 'Évolution par période',
-        },
-        rows: entry.value,
-      ));
-    }
-
-    if (_subjectFilter != null) {
-      final subjectRows = <Map<String, dynamic>>[];
-      for (final period in periods) {
-        final matches = (period['subjects'] as List? ?? const [])
-            .map((item) => Map<String, dynamic>.from(item as Map))
-            .where((item) => item['subject']?.toString() == _subjectFilter)
-            .toList();
-        final subject = matches.isEmpty ? null : matches.first;
-        if (subject != null && subject['average'] != null) {
-          subjectRows.add({
-            'period': period['period'],
-            'average': subject['average'],
-            'averageScale': period['averageScale'],
-          });
-        }
-      }
-      if (subjectRows.length >= 2) {
-        charts.add(_ResultTrendCard(
-          title: 'Évolution — $_subjectFilter',
-          rows: subjectRows,
-        ));
-      }
-    }
-    if (charts.isEmpty) return const SizedBox.shrink();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Évolution',
-            style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: AppSpacing.s3),
-        ResponsiveGrid(
-          desktopColumns: 2,
-          tabletColumns: 1,
-          children: charts,
-        ),
-      ],
-    );
-  }
 
   bool _isLycee(Map<String, dynamic> registration) =>
       '${registration['cycleCode'] ?? registration['cycle']}'
@@ -617,7 +691,7 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
     return AppCard(
       title: '${exam['name'] ?? 'Examen'}',
       subtitle:
-          'Moyenne : ${exam['average'] ?? '—'} · Rang : ${exam['rank'] ?? '—'}',
+          'Moyenne : ${_resultNumber(exam['average'])} · Rang : ${exam['rank'] ?? '—'}',
       child: ResponsiveDataTable(
         child: DataTable(
           columns: [
@@ -650,96 +724,6 @@ class _StudentResultsPageState extends State<StudentResultsPage> {
   }
 }
 
-
-class _ResultTrendCard extends StatelessWidget {
-  const _ResultTrendCard({
-    required this.title,
-    required this.rows,
-  });
-
-  final String title;
-  final List<Map<String, dynamic>> rows;
-
-  @override
-  Widget build(BuildContext context) {
-    final points = rows.map((row) {
-      final average = (row['average'] as num?)?.toDouble() ?? 0;
-      final scale = (row['averageScale'] as num?)?.toDouble() ?? 20;
-      return scale <= 0 ? 0.0 : (average / scale).clamp(0.0, 1.0);
-    }).toList();
-    final color = Theme.of(context).colorScheme.primary;
-    return AppCard(
-      title: title,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            height: 150,
-            width: double.infinity,
-            child: CustomPaint(
-              painter: _ResultTrendPainter(points: points, color: color),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.s2),
-          Wrap(
-            spacing: AppSpacing.s3,
-            runSpacing: AppSpacing.s2,
-            children: rows.map((row) => Text(
-              '${row['period'] ?? 'Période'} : ${row['average'] ?? '—'} / ${row['averageScale'] ?? 20}',
-              style: Theme.of(context).textTheme.bodySmall,
-            )).toList(),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ResultTrendPainter extends CustomPainter {
-  const _ResultTrendPainter({
-    required this.points,
-    required this.color,
-  });
-
-  final List<double> points;
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (points.isEmpty) return;
-    final gridPaint = Paint()
-      ..color = color.withValues(alpha: .12)
-      ..strokeWidth = 1;
-    for (var index = 0; index <= 4; index++) {
-      final y = size.height * index / 4;
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
-    }
-
-    final linePaint = Paint()
-      ..color = color
-      ..strokeWidth = 2.5
-      ..style = PaintingStyle.stroke;
-    final dotPaint = Paint()..color = color;
-    final path = Path();
-    for (var index = 0; index < points.length; index++) {
-      final x = points.length == 1
-          ? size.width / 2
-          : size.width * index / (points.length - 1);
-      final y = size.height - (points[index] * size.height);
-      if (index == 0) {
-        path.moveTo(x, y);
-      } else {
-        path.lineTo(x, y);
-      }
-      canvas.drawCircle(Offset(x, y), 4, dotPaint);
-    }
-    if (points.length > 1) canvas.drawPath(path, linePaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant _ResultTrendPainter oldDelegate) =>
-      oldDelegate.points != points || oldDelegate.color != color;
-}
 
 /// Consultation parent limitée aux enfants explicitement liés à son compte.
 class ParentResultsPage extends StatefulWidget {
@@ -788,8 +772,8 @@ class _ParentResultsPageState extends State<ParentResultsPage> {
 
   @override
   Widget build(BuildContext context) => WorkspacePage(
-        title: 'Notes des enfants',
-        subtitle: 'Résultats publiés des enfants rattachés à votre compte',
+        title: 'Notes et résultats des enfants',
+        subtitle: 'Notes soumises et résultats officiels séparés pour l’enfant sélectionné',
         children: [
           FutureBuilder<List<Map<String, dynamic>>>(
             future: _childrenRequest,

@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
-import '../../../core/utils/responsive_utils.dart';
 import '../../../data/datasources/api_client.dart';
 import '../../../data/models/class_model.dart';
 import '../../../data/models/affectation_model.dart';
@@ -15,7 +14,7 @@ import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/app_empty_state.dart';
 import '../../../shared/widgets/app_form_field.dart';
 import '../../../shared/widgets/app_modal.dart';
-import '../../../shared/widgets/app_page_header.dart';
+import '../../../shared/widgets/workspace_header.dart';
 import '../../../shared/widgets/app_toast.dart';
 import '../../../shared/widgets/confirm_dialog.dart';
 import '../../../shared/widgets/responsive_grid.dart';
@@ -920,43 +919,36 @@ class _ClassesPageState extends State<ClassesPage> {
         return false;
       return true;
     }).toList();
-    final isMobile = ContextUtils.isMobile(context);
-    return SingleChildScrollView(
-      padding: EdgeInsets.all(isMobile ? AppSpacing.s4 : AppSpacing.s6),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        AppPageHeader(
-          title: 'Classes',
-          subtitle: 'Structure : année → cycle → niveau → classe',
-          actions: [
-            AppButton(
-                label: 'Nouveau niveau',
-                icon: Icons.layers_outlined,
-                variant: AppButtonVariant.secondary,
-                onPressed: () => _openStandardLevelEditor()),
-            AppButton(
-                label: 'Nouvelle serie',
-                icon: Icons.account_tree_outlined,
-                variant: AppButtonVariant.secondary,
-                onPressed: () => _openSeriesEditor()),
-            AppButton(
-                label: 'Nouvelle classe',
-                icon: Icons.add_rounded,
-                onPressed: selectedYear == null ? null : () => _openEditor()),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.s5),
+    return WorkspacePage(
+      title: 'Classes',
+      subtitle: 'Structure : année → cycle → niveau → classe',
+      actions: [
+        AppButton(
+            label: 'Nouveau niveau',
+            icon: Icons.layers_outlined,
+            variant: AppButtonVariant.secondary,
+            onPressed: () => _openStandardLevelEditor()),
+        AppButton(
+            label: 'Nouvelle série',
+            icon: Icons.account_tree_outlined,
+            variant: AppButtonVariant.secondary,
+            onPressed: () => _openSeriesEditor()),
+        AppButton(
+            label: 'Nouvelle classe',
+            icon: Icons.add_rounded,
+            onPressed: selectedYear == null ? null : () => _openEditor()),
+      ],
+      children: [
         if (_loading)
-          const Center(
-              child: CircularProgressIndicator(key: Key('classes-loading')))
+          const WorkspaceLoadingState(
+            key: Key('classes-loading'),
+            label: 'Chargement de l’organisation académique…',
+          )
         else if (_error != null)
-          AppCard(
-              child: Column(children: [
-            const Text('Impossible de charger l’organisation académique.'),
-            const SizedBox(height: AppSpacing.s2),
-            Text(_error!, textAlign: TextAlign.center),
-            const SizedBox(height: AppSpacing.s3),
-            AppButton(label: 'Réessayer', onPressed: _load),
-          ]))
+          WorkspaceErrorState(
+            message: 'Impossible de charger l’organisation académique.',
+            onRetry: _load,
+          )
         else ...[
           Wrap(spacing: AppSpacing.s3, runSpacing: AppSpacing.s3, children: [
             ConstrainedBox(
@@ -1051,7 +1043,7 @@ class _ClassesPageState extends State<ClassesPage> {
                             ])))
                     .toList()),
         ],
-      ]),
+      ],
     );
   }
 }

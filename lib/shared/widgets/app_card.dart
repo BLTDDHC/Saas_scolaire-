@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
+import '../../core/theme/app_shadows.dart';
 
 /// Card EduPro — reproduction de components.css (.card)
 class AppCard extends StatelessWidget {
@@ -54,9 +55,7 @@ class AppCard extends StatelessWidget {
               isDark ? AppColors.darkBorderColor : AppColors.lightBorderColor,
           width: 0.5,
         ),
-        // Les cartes structurent l'information sans donner à chaque bloc une
-        // profondeur décorative. L'état interactif reste porté par InkWell.
-        boxShadow: const [],
+        boxShadow: isDark ? AppShadows.darkSm : AppShadows.sm,
       ),
       padding: padding ?? const EdgeInsets.all(AppSpacing.s4),
       child: Material(

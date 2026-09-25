@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../core/constants/establishment_types.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
+import '../../core/theme/app_shadows.dart';
 import '../../core/utils/school_module_access.dart';
 import '../../data/services/store_service.dart';
 import '../../features/auth/change_password_dialog.dart';
@@ -327,7 +328,9 @@ class _SidebarTileState extends State<_SidebarTile> {
         cursor: SystemMouseCursors.click,
         child: GestureDetector(
           onTap: widget.onTap,
-          child: Container(
+          child: AnimatedContainer(
+            duration: AppDurations.fast,
+            curve: Curves.easeOutCubic,
             padding: EdgeInsets.symmetric(
               horizontal: widget.isCollapsed ? AppSpacing.s2 : AppSpacing.s3,
               vertical: AppSpacing.s2 + 2,
@@ -339,6 +342,9 @@ class _SidebarTileState extends State<_SidebarTile> {
                   ? const Border(
                       left: BorderSide(color: AppColors.primary600, width: 3))
                   : null,
+              boxShadow: widget.isSelected
+                  ? (isDark ? AppShadows.darkXs : AppShadows.xs)
+                  : const <BoxShadow>[],
             ),
             child: Row(
               mainAxisAlignment: widget.isCollapsed

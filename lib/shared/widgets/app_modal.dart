@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
+import '../../core/theme/app_shadows.dart';
 import '../../core/theme/app_typography.dart';
 
 /// Fenêtre Modale EduPro — Reproduction exacte de components.css (.modal) avec adaptation mobile
@@ -78,12 +79,14 @@ class AppModal extends StatelessWidget {
           ),
           decoration: BoxDecoration(
             color: isDark ? AppColors.darkBgCard : AppColors.lightBgCard,
-            borderRadius: BorderRadius.circular(AppRadius.lg),
+            borderRadius: BorderRadius.circular(AppRadius.xl),
             border: Border.all(
               color: isDark
                   ? AppColors.darkBorderColor
                   : AppColors.lightBorderColor,
+              width: .8,
             ),
+            boxShadow: isDark ? AppShadows.darkLg : AppShadows.xl,
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,

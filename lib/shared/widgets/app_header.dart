@@ -142,6 +142,18 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
             SizedBox(width: isMobile ? 4 : AppSpacing.s4),
           ],
 
+          if (!isMobile &&
+              (store.remoteSyncInFlight ||
+                  store.remoteSyncPending ||
+                  store.remoteSyncHadFailure)) ...[
+            _SyncStatusBadge(
+              inFlight: store.remoteSyncInFlight,
+              pending: store.remoteSyncPending,
+              failed: store.remoteSyncHadFailure,
+            ),
+            const SizedBox(width: AppSpacing.s2),
+          ],
+
           Builder(builder: (context) {
             final unread = store.getNotifications().where((item) => !item.read).length;
             return IconButton(
@@ -531,6 +543,81 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
     name.dispose();
     email.dispose();
   }
+
+class _SyncStatusBadge extends StatelessWidget {
+  const _SyncStatusBadge({
+    required this.inFlight,
+    required this.pending,
+    required this.failed,
+  });
+
+  final bool inFlight;
+  final bool pending;
+  final bool failed;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final label = inFlight
+        ? 'Synchronisation en cours…'
+        : failed
+            ? 'Synchronisation interrompue'
+            : 'Synchronisation en attente';
+    final color = failed
+        ? AppColors.warning600
+        : inFlight
+            ? AppColors.info600
+            : AppColors.gray500;
+    return Tooltip(
+      message: failed
+          ? 'Certaines données locales n’ont pas encore pu être envoyées. Une nouvelle tentative sera faite lors de la prochaine synchronisation.'
+          : label,
+      child: Container(
+        key: const Key('remote-sync-status'),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.s2,
+          vertical: AppSpacing.s1,
+        ),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: isDark ? .16 : .08),
+          borderRadius: BorderRadius.circular(AppRadius.full),
+          border: Border.all(color: color.withValues(alpha: .24)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (inFlight)
+              SizedBox(
+                width: 12,
+                height: 12,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: color,
+                ),
+              )
+            else
+              Icon(
+                failed
+                    ? Icons.sync_problem_rounded
+                    : Icons.schedule_rounded,
+                size: 14,
+                color: color,
+              ),
+            const SizedBox(width: AppSpacing.s1),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: color,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 class _ProfileLine extends StatelessWidget {
   const _ProfileLine({required this.label, this.value});

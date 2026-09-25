@@ -348,5 +348,78 @@ class MissionCompletionTests(unittest.TestCase):
         self.assertTrue(result["snapshotGeneratedAt"])
 
 
+    def test_statistics_can_target_one_special_evaluation_event(self):
+        affectation = self.s.scalar(m.select(m.Affectation).where(
+            m.Affectation.class_id == self.cl.id,
+        ))
+        self.add(m.Evaluation(
+            establishment_id=self.tenant.id,
+            academic_year_id=self.year.id,
+            academic_period_id=self.periods[0].id,
+            class_id=self.cl.id,
+            subject_id=affectation.subject_id,
+            affectation_id=affectation.id,
+            name="Devoir départemental",
+            type="exam",
+            exam_code="devoir_departemental",
+            period=self.periods[0].code,
+            max_value=20,
+            status="submitted",
+            created_by=m.uuid.UUID(self.principals[0].id),
+        ))
+        self.add(m.ResultCalculation(
+            establishment_id=self.tenant.id,
+            academic_year_id=self.year.id,
+            class_id=self.cl.id,
+            academic_period_id=self.periods[0].id,
+            status="official",
+            payload={
+                "calculationRuleVersion": m.RESULT_CALCULATION_RULE_VERSION,
+                "students": [{
+                    "studentId": str(self.students[0].id),
+                    "studentName": "Élève général",
+                    "average": 6,
+                    "subjects": [],
+                }],
+                "eventResults": {
+                    "devoir_departemental": {
+                        "students": [{
+                            "studentId": str(self.students[0].id),
+                            "studentName": "Élève départemental",
+                            "average": 16,
+                            "subjects": [{
+                                "subjectId": str(affectation.subject_id),
+                                "subject": "Matière départementale",
+                                "average": 16,
+                            }],
+                        }],
+                    },
+                },
+            },
+            source_updated_at=m.datetime.now(m.timezone.utc),
+            calculated_at=m.datetime.now(m.timezone.utc),
+        ))
+
+        result = m.statistics(
+            academic_year_id=str(self.year.id),
+            class_id=str(self.cl.id),
+            period_id=str(self.periods[0].id),
+            event_code="devoir_departemental",
+            current=self._school_admin(),
+            session=self.s,
+        )
+
+        self.assertEqual(result["overallAverage"], 16)
+        self.assertEqual(result["successRate"], 100)
+        self.assertEqual(
+            result["appliedFilters"]["eventCode"],
+            "devoir_departemental",
+        )
+        self.assertIn(
+            {"code": "devoir_departemental", "name": "Devoir départemental"},
+            result["filters"]["events"],
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

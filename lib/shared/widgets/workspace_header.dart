@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_spacing.dart';
 import 'app_page_header.dart';
 import 'app_empty_state.dart';
+import 'app_card.dart';
 
 /// A consistent, wrapping heading for desktop workspaces and narrow windows.
 class WorkspaceHeader extends StatelessWidget {
@@ -90,19 +91,49 @@ class WorkspaceLoadingState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: AppSpacing.s10),
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.s8),
         child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const SizedBox(
-                width: 28,
-                height: 28,
-                child: CircularProgressIndicator(strokeWidth: 2.5),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 460),
+            child: AppCard(
+              child: Row(
+                children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .primaryContainer
+                          .withValues(alpha: .72),
+                      borderRadius: BorderRadius.circular(AppRadius.lg),
+                    ),
+                    alignment: Alignment.center,
+                    child: const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2.2),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.s4),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(label,
+                            style: Theme.of(context).textTheme.titleSmall),
+                        const SizedBox(height: AppSpacing.s2),
+                        const ClipRRect(
+                          borderRadius:
+                              BorderRadius.all(Radius.circular(AppRadius.full)),
+                          child: LinearProgressIndicator(minHeight: 4),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: AppSpacing.s3),
-              Text(label, style: Theme.of(context).textTheme.bodySmall),
-            ],
+            ),
           ),
         ),
       );
