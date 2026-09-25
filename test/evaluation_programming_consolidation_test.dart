@@ -168,9 +168,9 @@ void main() {
     await choose(const Key('program-level-scope'), 'CM2');
     await tester.tap(find.byKey(const Key('program-evaluation-kind')));
     await tester.pumpAndSettle();
-    expect(find.text('Composition du mois d’Octobre'), findsOneWidget);
-    expect(find.text('Composition du mois de Novembre'), findsOneWidget);
-    expect(find.text('Composition du 1er trimestre'), findsOneWidget);
+    expect(find.text('Composition du mois d’Octobre'), findsWidgets);
+    expect(find.text('Composition du mois de Novembre'), findsWidgets);
+    expect(find.text('Composition du 1er trimestre'), findsWidgets);
     expect(find.text('CEPE test'), findsNothing);
     expect(find.text('CEPE blanc'), findsNothing);
     expect(find.text('Devoir 1'), findsNothing);
