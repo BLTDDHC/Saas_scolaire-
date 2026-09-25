@@ -1525,6 +1525,9 @@ class EvaluationProgramInput(BaseModel):
     type: Literal['devoir', 'composition', 'test', 'exam', 'exam_blanc']
     exam_code: Literal[
         'devoir_1', 'devoir_2', 'composition',
+        'composition_octobre', 'composition_novembre',
+        'composition_janvier', 'composition_fevrier',
+        'composition_avril', 'composition_mai',
         'cepe_test', 'cepe_blanc', 'bepc_test', 'bepc_blanc',
         'bac_test', 'bac_blanc', 'devoir_departemental'
     ] | None = Field(default=None, alias='examCode')
@@ -6836,6 +6839,48 @@ def evaluation_program_json(item: EvaluationProgram, session: Session) -> dict[s
         "createdAt": item.created_at.isoformat(),
     }
 
+PRIMARY_MONTHLY_COMPOSITION_CODES = {
+    'composition_octobre',
+    'composition_novembre',
+    'composition_janvier',
+    'composition_fevrier',
+    'composition_avril',
+    'composition_mai',
+}
+
+PRIMARY_MONTHLY_CODES_BY_TRIMESTER = {
+    1: {'composition_octobre', 'composition_novembre'},
+    2: {'composition_janvier', 'composition_fevrier'},
+    3: {'composition_avril', 'composition_mai'},
+}
+
+
+def trimester_number(period: AcademicPeriod) -> int | None:
+    identity = f"{period.code or ''} {period.name or ''}".lower()
+    if period.sort_order in {1, 2, 3}:
+        return int(period.sort_order)
+    if re.search(r'(^|\D)(1|t1)(\D|$)', identity) or '1er' in identity:
+        return 1
+    if re.search(r'(^|\D)(2|t2)(\D|$)', identity) or '2e' in identity or '2ème' in identity:
+        return 2
+    if re.search(r'(^|\D)(3|t3)(\D|$)', identity) or '3e' in identity or '3ème' in identity:
+        return 3
+    return None
+
+
+def validate_monthly_composition_period(
+    period: AcademicPeriod, exam_code: str | None
+) -> None:
+    if exam_code not in PRIMARY_MONTHLY_COMPOSITION_CODES:
+        return
+    trimester = trimester_number(period)
+    if trimester is None or exam_code not in PRIMARY_MONTHLY_CODES_BY_TRIMESTER[trimester]:
+        raise HTTPException(
+            422,
+            "Cette composition mensuelle n'appartient pas au trimestre sélectionné",
+        )
+
+
 def validate_program_type_for_class(
     school_class: SchoolClass,
     evaluation_type: str,
@@ -6846,6 +6891,13 @@ def validate_program_type_for_class(
     level = session.get(SchoolLevel, school_class.school_level_id)
     cycle_code = (cycle.code if cycle else "").upper()
     level_code = (level.code if level else "").upper()
+    if exam_code in PRIMARY_MONTHLY_COMPOSITION_CODES:
+        if cycle_code not in {"MATERNELLE", "PRIMAIRE"} or evaluation_type != "composition":
+            raise HTTPException(
+                422,
+                "Les compositions mensuelles sont réservées à la maternelle et au primaire",
+            )
+        return
     if exam_code in {None, 'devoir_1', 'devoir_2', 'composition'}:
         if exam_code in {'devoir_1', 'devoir_2'} and evaluation_type != 'devoir':
             raise HTTPException(422, "Le type ne correspond pas à l'évaluation sélectionnée")
@@ -7050,6 +7102,7 @@ def list_academic_periods(
     rows = session.scalars(select(AcademicPeriod).where(
         AcademicPeriod.establishment_id == database_id,
         AcademicPeriod.academic_year_id == academic_year_id,
+        AcademicPeriod.period_type == 'trimester',
         AcademicPeriod.status != 'archived',
     ).order_by(AcademicPeriod.sort_order, AcademicPeriod.code)).all()
     return [academic_period_json(item, session) for item in rows]
@@ -7066,6 +7119,11 @@ def create_academic_period(
         raise HTTPException(422, "Annee scolaire introuvable")
     if year.establishment_id != database_id:
         raise HTTPException(403, "Annee inter-etablissement interdite")
+    if body.period_type != 'trimester' or body.parent_period_id is not None:
+        raise HTTPException(
+            422,
+            "Les seules périodes scolaires autorisées sont les trois trimestres",
+        )
     if body.parent_period_id:
         parent = session.get(AcademicPeriod, body.parent_period_id)
         if (not parent or parent.establishment_id != database_id
@@ -7136,6 +7194,9 @@ def create_evaluation_program(
         raise HTTPException(422, "Période pédagogique introuvable")
     if period.establishment_id != database_id:
         raise HTTPException(403, "Période inter-établissement interdite")
+    if period.period_type != 'trimester':
+        raise HTTPException(422, "Une évaluation doit être rattachée à un trimestre")
+    validate_monthly_composition_period(period, body.exam_code)
     classes = [session.get(SchoolClass, class_id) for class_id in body.class_ids]
     if any(item is None for item in classes):
         raise HTTPException(422, "Une classe sélectionnée est introuvable")
@@ -7947,7 +8008,13 @@ def school_submission_status(
 KNOWN_EVALUATION_EVENTS = {
     'devoir_1': 'Devoir 1',
     'devoir_2': 'Devoir 2',
-    'composition': 'Composition',
+    'composition': 'Composition du trimestre',
+    'composition_octobre': 'Composition du mois d’Octobre',
+    'composition_novembre': 'Composition du mois de Novembre',
+    'composition_janvier': 'Composition du mois de Janvier',
+    'composition_fevrier': 'Composition du mois de Février',
+    'composition_avril': 'Composition du mois d’Avril',
+    'composition_mai': 'Composition du mois de Mai',
     'cepe_test': 'CEPE test',
     'cepe_blanc': 'CEPE blanc',
     'bepc_test': 'BEPC test',
@@ -14834,6 +14901,11 @@ def update_academic_period(period_id: uuid.UUID, body: AcademicPeriodInput,
     if item.establishment_id != database_id:
         raise HTTPException(403, 'Acces inter-etablissement interdit')
     ensure_year_tenant(body.academic_year_id, database_id, session)
+    if body.period_type != 'trimester' or body.parent_period_id is not None:
+        raise HTTPException(
+            422,
+            'Les seules périodes scolaires autorisées sont les trois trimestres',
+        )
     if body.parent_period_id:
         parent = session.get(AcademicPeriod, body.parent_period_id)
         if (not parent or parent.id == item.id
