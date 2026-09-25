@@ -11,8 +11,8 @@ const bulletinLyceeHeaders = [
   'Matière',
   'Devoir 1',
   'Devoir 2',
-  'Composition',
   'MC',
+  'Composition',
   'Moyenne',
   'Coefficient',
   'Point',
@@ -185,8 +185,8 @@ Future<pw.Document> buildTrimesterPdfFromData(Map<String, dynamic> data) async {
       final devoirs = (s['devoirs'] as List<dynamic>?) ?? const [];
       row.add(_number(devoirs.isNotEmpty ? devoirs[0] : null));
       row.add(_number(devoirs.length > 1 ? devoirs[1] : null));
-      row.add(_number(s['composition']));
       row.add(_number(s['mc']));
+      row.add(_number(s['composition']));
       row.add(_number(s['subjectAverage']));
       row.add(_number(s['coefficient']));
       row.add(_number(s['point']));
