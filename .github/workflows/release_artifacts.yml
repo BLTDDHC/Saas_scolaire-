@@ -27,6 +27,8 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
+      - name: Generate application icons
+        run: dart run flutter_launcher_icons
       - name: Build release APK
         run: flutter build apk --release --dart-define=API_BASE_URL=${{ env.API_BASE_URL }}
       - name: Rename APK
@@ -48,6 +50,8 @@ jobs:
           cache: true
       - run: flutter config --enable-windows-desktop
       - run: flutter pub get
+      - name: Generate application icons
+        run: dart run flutter_launcher_icons
       - name: Build Windows release
         shell: pwsh
         run: flutter build windows --release --dart-define=API_BASE_URL=${{ env.API_BASE_URL }}
@@ -84,6 +88,8 @@ jobs:
           cache: true
       - run: flutter config --enable-macos-desktop
       - run: flutter pub get
+      - name: Generate application icons
+        run: dart run flutter_launcher_icons
       - name: Build macOS release
         run: flutter build macos --release --dart-define=API_BASE_URL=${{ env.API_BASE_URL }}
       - name: Package macOS application
