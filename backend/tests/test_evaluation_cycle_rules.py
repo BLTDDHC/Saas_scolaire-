@@ -11,6 +11,7 @@ import test_behavior_foundations as fixtures
 
 class EvaluationCycleRulesRegression(unittest.TestCase):
     add = fixtures.BehaviorFoundations.add
+    assign = fixtures.BehaviorFoundations.assign
     cleanup = fixtures.BehaviorFoundations.cleanup
 
     def setUp(self):
