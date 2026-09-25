@@ -6423,6 +6423,24 @@ def subject_is_enabled_for_class(
     )
 
 
+def subject_is_explicitly_configured_for_class(
+    session: Session,
+    school_class: SchoolClass,
+    subject_id: uuid.UUID,
+) -> bool:
+    """Require an active level/series assignment for timetable operations."""
+    if not school_class.school_level_id:
+        return False
+    return session.scalar(select(SubjectLevelSetting.id).where(
+        SubjectLevelSetting.establishment_id == school_class.establishment_id,
+        SubjectLevelSetting.academic_year_id == school_class.academic_year_id,
+        SubjectLevelSetting.school_level_id == school_class.school_level_id,
+        SubjectLevelSetting.series_id == school_class.series_id,
+        SubjectLevelSetting.subject_id == subject_id,
+        SubjectLevelSetting.status == "active",
+    ).limit(1)) is not None
+
+
 def subject_grading_scale_for_class(
     session: Session,
     school_class: SchoolClass,
@@ -6474,7 +6492,13 @@ def list_affectations(
     session: Session = Depends(db),
 ):
     _, database_id = school_scope(current, session, school_id, required=True)
-    statement = select(Affectation).where(Affectation.establishment_id == database_id)
+    # Operational lists must expose only active assignments. Inactive rows are
+    # kept in PostgreSQL for pedagogical/history references, but must never
+    # reappear in the UI after a user deletes an assignment.
+    statement = select(Affectation).where(
+        Affectation.establishment_id == database_id,
+        Affectation.status == "active",
+    )
     allowed = direction_cycle_scope(current)
     if allowed is not None:
         statement = statement.join(
@@ -9617,6 +9641,15 @@ def list_schedule(
         ScheduleEntry.establishment_id == database_id,
         ScheduleEntry.academic_year_id == academic_year_id,
         ScheduleEntry.status == "active",
+        # A course tied to an assignment that has since been removed must not
+        # remain operational after reload. The schedule row stays in the DB for
+        # history, while the active view follows the assignment source of truth.
+        ScheduleEntry.affectation_id.in_(
+            select(Affectation.id).where(
+                Affectation.establishment_id == database_id,
+                Affectation.status == "active",
+            )
+        ),
     )
     allowed = direction_cycle_scope(current)
     if allowed is not None:
@@ -9699,6 +9732,13 @@ def create_schedule_entry(
         raise HTTPException(422, "Matiere ou enseignant introuvable")
     if subject.establishment_id != database_id or teacher.establishment_id != database_id:
         raise HTTPException(403, "Reference inter-etablissement interdite")
+    if not subject_is_explicitly_configured_for_class(
+        session, school_class, subject.id
+    ):
+        raise HTTPException(
+            422,
+            "Cette matière n'est pas assignée au niveau ou à la série de cette classe",
+        )
     affectation = session.scalar(select(Affectation).where(
         Affectation.establishment_id == database_id,
         Affectation.class_id == school_class.id,
@@ -14884,6 +14924,13 @@ def update_schedule_entry(entry_id: uuid.UUID, body: ScheduleEntryInput,
         raise HTTPException(422, 'Matiere ou enseignant introuvable')
     if subject.establishment_id != database_id or teacher.establishment_id != database_id:
         raise HTTPException(403, 'Reference inter-etablissement interdite')
+    if not subject_is_explicitly_configured_for_class(
+        session, school_class, subject.id
+    ):
+        raise HTTPException(
+            422,
+            "Cette matière n'est pas assignée au niveau ou à la série de cette classe",
+        )
     affectation = session.scalar(select(Affectation).where(
         Affectation.establishment_id == database_id,
         Affectation.class_id == school_class.id,
