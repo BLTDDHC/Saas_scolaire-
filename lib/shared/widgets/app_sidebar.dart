@@ -9,7 +9,7 @@ import '../../data/services/store_service.dart';
 import '../../features/auth/change_password_dialog.dart';
 import '../../navigation/nav_items.dart';
 
-/// Sidebar adaptative EduPro — Reproduction exacte de layout.css (.sidebar)
+/// Sidebar adaptative MAYELE + — Reproduction exacte de layout.css (.sidebar)
 class AppSidebar extends StatelessWidget {
   final String activePageId;
   final ValueChanged<String> onPageSelected;
@@ -114,7 +114,7 @@ class AppSidebar extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text(
-                          'EduPro',
+                          'MAYELE +',
                           style: TextStyle(
                             fontFamily: 'Inter',
                             fontSize: 16,
@@ -123,7 +123,7 @@ class AppSidebar extends StatelessWidget {
                           ),
                         ),
                         Text(
-                          school?.type ?? 'SaaS Scolaire',
+                          school?.type ?? 'Gestion scolaire',
                           style: TextStyle(
                             fontSize: 11,
                             color: isDark
