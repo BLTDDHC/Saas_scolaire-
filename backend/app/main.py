@@ -9732,13 +9732,6 @@ def create_schedule_entry(
         raise HTTPException(422, "Matiere ou enseignant introuvable")
     if subject.establishment_id != database_id or teacher.establishment_id != database_id:
         raise HTTPException(403, "Reference inter-etablissement interdite")
-    if not subject_is_explicitly_configured_for_class(
-        session, school_class, subject.id
-    ):
-        raise HTTPException(
-            422,
-            "Cette matière n'est pas assignée au niveau ou à la série de cette classe",
-        )
     affectation = session.scalar(select(Affectation).where(
         Affectation.establishment_id == database_id,
         Affectation.class_id == school_class.id,
@@ -14924,13 +14917,6 @@ def update_schedule_entry(entry_id: uuid.UUID, body: ScheduleEntryInput,
         raise HTTPException(422, 'Matiere ou enseignant introuvable')
     if subject.establishment_id != database_id or teacher.establishment_id != database_id:
         raise HTTPException(403, 'Reference inter-etablissement interdite')
-    if not subject_is_explicitly_configured_for_class(
-        session, school_class, subject.id
-    ):
-        raise HTTPException(
-            422,
-            "Cette matière n'est pas assignée au niveau ou à la série de cette classe",
-        )
     affectation = session.scalar(select(Affectation).where(
         Affectation.establishment_id == database_id,
         Affectation.class_id == school_class.id,
