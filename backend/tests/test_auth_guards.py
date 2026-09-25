@@ -155,6 +155,87 @@ class AuthenticationGuards(unittest.TestCase):
             "tuteur",
         )
 
+    def test_guardian_is_reused_for_multiple_children_but_same_link_is_rejected(self):
+        guardian_body = m.GuardianInput(
+            firstName="Damas",
+            lastName="Bouako",
+            phone="06 777 88 99",
+            email="guardian.multi.rollback@example.invalid",
+            address="Brazzaville",
+            profession="Parent",
+        )
+        current = m.Principal(id=str(uuid.uuid4()), role="superadmin")
+
+        first_response = m.Response()
+        first = m.create_guardian(
+            guardian_body,
+            first_response,
+            str(self.tenant.id),
+            current,
+            self.s,
+        )
+        self.assertEqual(first_response.status_code, 200)
+        guardian_id = uuid.UUID(first["id"])
+
+        second_response = m.Response()
+        second = m.create_guardian(
+            guardian_body,
+            second_response,
+            str(self.tenant.id),
+            current,
+            self.s,
+        )
+        self.assertEqual(second_response.status_code, 200)
+        self.assertEqual(second["id"], first["id"])
+        self.assertEqual(
+            self.s.scalar(m.select(m.func.count()).select_from(m.Guardian).where(
+                m.Guardian.establishment_id == self.tenant.id,
+                m.Guardian.person_id == uuid.UUID(first["personId"]),
+            )),
+            1,
+        )
+
+        m.link_student_guardian(
+            self.students[0].id,
+            m.StudentGuardianLinkInput(
+                guardianId=guardian_id,
+                relationship="parent",
+                isPrimary=True,
+            ),
+            current,
+            self.s,
+        )
+        m.link_student_guardian(
+            self.students[1].id,
+            m.StudentGuardianLinkInput(
+                guardianId=guardian_id,
+                relationship="parent",
+                isPrimary=True,
+            ),
+            current,
+            self.s,
+        )
+        self.assertEqual(
+            self.s.scalar(m.select(m.func.count()).select_from(m.StudentGuardian).where(
+                m.StudentGuardian.guardian_id == guardian_id
+            )),
+            2,
+        )
+
+        with self.assertRaises(HTTPException) as duplicate:
+            m.link_student_guardian(
+                self.students[0].id,
+                m.StudentGuardianLinkInput(
+                    guardianId=guardian_id,
+                    relationship="parent",
+                    isPrimary=True,
+                ),
+                current,
+                self.s,
+            )
+        self.assertEqual(duplicate.exception.status_code, 409)
+        self.assertIn("déjà associé", duplicate.exception.detail)
+
     def test_academic_year_update_persists_name_and_dates_in_its_tenant(self):
         updated = m.update_academic_year(
             self.year.id,
