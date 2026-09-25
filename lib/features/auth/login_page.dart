@@ -214,7 +214,7 @@ class _BrandMark extends StatelessWidget {
               borderRadius: BorderRadius.circular(AppRadius.md),
             ),
             child: Text(
-              'E',
+              'M+',
               style: TextStyle(
                 color: compact ? Colors.white : AppColors.primary700,
                 fontSize: 21,
@@ -224,7 +224,7 @@ class _BrandMark extends StatelessWidget {
           ),
           const SizedBox(width: AppSpacing.s3),
           Text(
-            'EduPro',
+            'MAYELE +',
             style: TextStyle(
               color: compact
                   ? Theme.of(context).colorScheme.onSurface
