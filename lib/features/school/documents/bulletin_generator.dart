@@ -412,8 +412,8 @@ class _BulletinGeneratorState extends State<BulletinGenerator> {
         DataColumn(label: Text('Matière')),
         DataColumn(label: Text('Devoir 1')),
         DataColumn(label: Text('Devoir 2')),
-        DataColumn(label: Text('Composition')),
         DataColumn(label: Text('MC')),
+        DataColumn(label: Text('Composition')),
         DataColumn(label: Text('Moyenne')),
         DataColumn(label: Text('Coefficient')),
         DataColumn(label: Text('Point')),
@@ -449,8 +449,8 @@ class _BulletinGeneratorState extends State<BulletinGenerator> {
         DataCell(Text(s['subjectName'] ?? '')),
         DataCell(Text(value(devo.isNotEmpty ? devo[0] : null))),
         DataCell(Text(value(devo.length > 1 ? devo[1] : null))),
-        DataCell(Text(value(s['composition']))),
         DataCell(Text(value(s['mc']))),
+        DataCell(Text(value(s['composition']))),
         DataCell(Text(value(s['subjectAverage']))),
         DataCell(Text(value(s['coefficient']))),
         DataCell(Text(value(s['point']))),
@@ -513,9 +513,9 @@ class _BulletinGeneratorState extends State<BulletinGenerator> {
         final values = subject['devoirs'] as List<dynamic>? ?? const [];
         return values.length > 1 ? values[1] : null;
       }))),
+      DataCell(total(_sumColumn(subjects, (subject) => subject['mc']))),
       DataCell(
           total(_sumColumn(subjects, (subject) => subject['composition']))),
-      DataCell(total(_sumColumn(subjects, (subject) => subject['mc']))),
       DataCell(
           total(_sumColumn(subjects, (subject) => subject['subjectAverage']))),
       DataCell(
