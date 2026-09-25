@@ -5,6 +5,8 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/utils/responsive_utils.dart';
 import '../../../data/models/class_model.dart';
+import '../../../data/models/subject_model.dart';
+import '../../../data/models/teacher_model.dart';
 import '../../../data/services/store_service.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/app_card.dart';
@@ -119,19 +121,97 @@ class _SchedulePageState extends State<SchedulePage> {
   Future<void> _openCreate(BuildContext context,
       [Map<String, dynamic>? existing]) async {
     final store = context.read<StoreService>();
-    final classes = store.getClassesByYear(store.getSelectedAcademicYearId());
-    final teachers = store.getTeachers();
-    final subjects = store.getSubjects();
-    if (classes.isEmpty || teachers.isEmpty || subjects.isEmpty) {
-      AppToast.warning(context,
-          'Une classe, un enseignant et une matière sont obligatoires.');
+    final selectedYearId = store.getSelectedAcademicYearId();
+    final classes = store.getClassesByYear(selectedYearId);
+    final allTeachers = store.getTeachers();
+    final allSubjects = store.getSubjectsByYear(selectedYearId);
+    final affectations = store.getAffectations()
+        .where((item) =>
+            item.academicYearId == selectedYearId &&
+            item.classId != null &&
+            item.subjectId != null)
+        .toList();
+
+    List<SubjectModel> subjectsForClass(String selectedClassId) {
+      final schoolClass = classes.firstWhere((item) => item.id == selectedClassId);
+      final levelId = schoolClass.structuredLevelId ?? schoolClass.levelId;
+      if (levelId == null || levelId.isEmpty) return const <SubjectModel>[];
+
+      final assignedSubjectIds = affectations
+          .where((item) => item.classId == selectedClassId)
+          .map((item) => item.subjectId)
+          .whereType<String>()
+          .toSet();
+
+      return allSubjects.where((subject) {
+        if (!assignedSubjectIds.contains(subject.id)) return false;
+        return subject.levelSettings.any((setting) {
+          final settingLevelId = setting['schoolLevelId']?.toString();
+          final settingYearId = setting['academicYearId']?.toString();
+          final settingSeriesId = setting['seriesId']?.toString();
+          final settingStatus = setting['status']?.toString() ?? 'active';
+          final sameSeries = (schoolClass.seriesId == null ||
+                  schoolClass.seriesId!.isEmpty)
+              ? settingSeriesId == null || settingSeriesId.isEmpty
+              : settingSeriesId == schoolClass.seriesId;
+          return settingStatus == 'active' &&
+              settingLevelId == levelId &&
+              settingYearId == selectedYearId &&
+              sameSeries;
+        });
+      }).toList();
+    }
+
+    List<TeacherModel> teachersForClassSubject(
+        String selectedClassId, String selectedSubjectId) {
+      final teacherIds = affectations
+          .where((item) =>
+              item.classId == selectedClassId &&
+              item.subjectId == selectedSubjectId)
+          .map((item) => item.teacherId)
+          .toSet();
+      return allTeachers
+          .where((teacher) => teacherIds.contains(teacher.id))
+          .toList();
+    }
+
+    if (classes.isEmpty) {
+      AppToast.warning(context, 'Aucune classe n’est disponible.');
       return;
     }
+
     var classId = existing?['classId']?.toString() ??
         _selectedClassId ??
         classes.first.id;
-    var teacherId = existing?['teacherId']?.toString() ?? teachers.first.id;
-    var subjectId = existing?['subjectId']?.toString() ?? subjects.first.id;
+    var availableSubjects = subjectsForClass(classId);
+    if (availableSubjects.isEmpty) {
+      AppToast.warning(
+        context,
+        'Aucune matière active n’est assignée au niveau/série de cette classe avec une affectation enseignant.',
+      );
+      return;
+    }
+
+    var subjectId = existing?['subjectId']?.toString();
+    if (subjectId == null ||
+        !availableSubjects.any((subject) => subject.id == subjectId)) {
+      subjectId = availableSubjects.first.id;
+    }
+
+    var availableTeachers = teachersForClassSubject(classId, subjectId);
+    if (availableTeachers.isEmpty) {
+      AppToast.warning(
+        context,
+        'Aucun enseignant actif n’est affecté à cette matière dans cette classe.',
+      );
+      return;
+    }
+
+    var teacherId = existing?['teacherId']?.toString();
+    if (teacherId == null ||
+        !availableTeachers.any((teacher) => teacher.id == teacherId)) {
+      teacherId = availableTeachers.first.id;
+    }
     var weekday = (existing?['weekday'] as num?)?.toInt() ?? 1;
     final start = TextEditingController(
         text: existing?['startTime']?.toString() ?? '08:00');
@@ -156,14 +236,29 @@ class _SchedulePageState extends State<SchedulePage> {
                         .map((c) =>
                             DropdownMenuItem(value: c.id, child: Text(c.name)))
                         .toList(),
-                    onChanged: (v) =>
-                        setModalState(() => classId = v ?? classId),
+                    onChanged: (v) {
+                      if (v == null) return;
+                      setModalState(() {
+                        classId = v;
+                        availableSubjects = subjectsForClass(classId);
+                        if (availableSubjects.isNotEmpty) {
+                          subjectId = availableSubjects.first.id;
+                          availableTeachers =
+                              teachersForClassSubject(classId, subjectId);
+                          if (availableTeachers.isNotEmpty) {
+                            teacherId = availableTeachers.first.id;
+                          }
+                        } else {
+                          availableTeachers = <TeacherModel>[];
+                        }
+                      });
+                    },
                   ),
                   const SizedBox(height: AppSpacing.s3),
                   AppSelectField<String>(
                     label: 'Enseignant',
                     value: teacherId,
-                    items: teachers
+                    items: availableTeachers
                         .map((t) => DropdownMenuItem(
                             value: t.id, child: Text(t.fullName)))
                         .toList(),
@@ -174,12 +269,21 @@ class _SchedulePageState extends State<SchedulePage> {
                   AppSelectField<String>(
                     label: 'Matière',
                     value: subjectId,
-                    items: subjects
+                    items: availableSubjects
                         .map((s) =>
                             DropdownMenuItem(value: s.id, child: Text(s.name)))
                         .toList(),
-                    onChanged: (v) =>
-                        setModalState(() => subjectId = v ?? subjectId),
+                    onChanged: (v) {
+                      if (v == null) return;
+                      setModalState(() {
+                        subjectId = v;
+                        availableTeachers =
+                            teachersForClassSubject(classId, subjectId);
+                        if (availableTeachers.isNotEmpty) {
+                          teacherId = availableTeachers.first.id;
+                        }
+                      });
+                    },
                   ),
                   const SizedBox(height: AppSpacing.s3),
                   AppSelectField<int>(
@@ -210,6 +314,13 @@ class _SchedulePageState extends State<SchedulePage> {
         AppButton(
             label: 'Enregistrer',
             onPressed: () async {
+              if (availableSubjects.isEmpty || availableTeachers.isEmpty) {
+                AppToast.warning(
+                  context,
+                  'Sélectionnez une classe disposant d’une matière configurée et d’un enseignant affecté.',
+                );
+                return;
+              }
               try {
                 final payload = <String, dynamic>{
                   'classId': classId,
