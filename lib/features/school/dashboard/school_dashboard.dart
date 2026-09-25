@@ -91,37 +91,32 @@ class _SchoolDashboardState extends State<SchoolDashboard> {
             DateTime.tryParse(right.createdAt ?? '') ?? DateTime(1970);
         return rightDate.compareTo(leftDate);
       });
-    final isMobile = ContextUtils.isMobile(context);
-    return SingleChildScrollView(
-      padding: EdgeInsets.all(isMobile ? AppSpacing.s4 : AppSpacing.s6),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        WorkspaceHeader(
-            title: 'Tableau de bord',
-            subtitle: 'Indicateurs de l’année scolaire sélectionnée',
-            actions: [
-              OutlinedButton.icon(
-                  onPressed: _retry,
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('Actualiser'))
-            ]),
-        const SizedBox(height: AppSpacing.s6),
+    return WorkspacePage(
+      title: 'Tableau de bord',
+      subtitle: 'Indicateurs de l’année scolaire sélectionnée',
+      actions: [
+        AppButton(
+          label: 'Actualiser',
+          icon: Icons.refresh_rounded,
+          variant: AppButtonVariant.secondary,
+          onPressed: _retry,
+        ),
+      ],
+      children: [
         FutureBuilder<Map<String, dynamic>>(
           future: _summary,
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const SizedBox(
-                  height: 130,
-                  child: Center(
-                      child: CircularProgressIndicator(
-                          key: Key('dashboard-statistics-loading'))));
+              return const WorkspaceLoadingState(
+                key: Key('dashboard-statistics-loading'),
+                label: 'Chargement des indicateurs…',
+              );
             }
             if (snapshot.hasError || !snapshot.hasData) {
-              return AppCard(
-                  child: Column(children: [
-                const Text('Impossible de charger les statistiques.'),
-                const SizedBox(height: AppSpacing.s3),
-                AppButton(label: 'Réessayer', onPressed: _retry),
-              ]));
+              return WorkspaceErrorState(
+                message: 'Impossible de charger les statistiques.',
+                onRetry: _retry,
+              );
             }
             final data = snapshot.data!;
             if (data['__legacyTestContract'] == true) {
@@ -264,7 +259,7 @@ class _SchoolDashboardState extends State<SchoolDashboard> {
                         ),
                       ),
                   ])),
-      ]),
+      ],
     );
   }
 }
