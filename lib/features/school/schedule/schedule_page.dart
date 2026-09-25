@@ -132,50 +132,48 @@ class _SchedulePageState extends State<SchedulePage> {
             item.subjectId != null)
         .toList();
 
-    List<SubjectModel> subjectsForClass(String selectedClassId) {
-      final schoolClass = classes.firstWhere((item) => item.id == selectedClassId);
+    bool subjectIsConfiguredForClass(
+        String selectedClassId, SubjectModel subject) {
+      final schoolClass =
+          classes.firstWhere((item) => item.id == selectedClassId);
       final levelId = schoolClass.structuredLevelId ?? schoolClass.levelId;
-      if (levelId == null || levelId.isEmpty) return const <SubjectModel>[];
+      if (levelId == null || levelId.isEmpty) return false;
+      return subject.levelSettings.any((setting) {
+        final settingLevelId = setting['schoolLevelId']?.toString();
+        final settingYearId = setting['academicYearId']?.toString();
+        final settingSeriesId = setting['seriesId']?.toString();
+        final settingStatus = setting['status']?.toString() ?? 'active';
+        final sameSeries =
+            (schoolClass.seriesId == null || schoolClass.seriesId!.isEmpty)
+                ? settingSeriesId == null || settingSeriesId.isEmpty
+                : settingSeriesId == schoolClass.seriesId;
+        return settingStatus == 'active' &&
+            settingLevelId == levelId &&
+            settingYearId == selectedYearId &&
+            sameSeries;
+      });
+    }
 
-      final activeTeacherIds = allTeachers.map((item) => item.id).toSet();
+    List<SubjectModel> subjectsForClassTeacher(
+        String selectedClassId, String selectedTeacherId) {
       final assignedSubjectIds = affectations
           .where((item) =>
               item.classId == selectedClassId &&
-              activeTeacherIds.contains(item.teacherId))
+              item.teacherId == selectedTeacherId)
           .map((item) => item.subjectId)
           .whereType<String>()
           .toSet();
-
-      return allSubjects.where((subject) {
-        if (!assignedSubjectIds.contains(subject.id)) return false;
-        return subject.levelSettings.any((setting) {
-          final settingLevelId = setting['schoolLevelId']?.toString();
-          final settingYearId = setting['academicYearId']?.toString();
-          final settingSeriesId = setting['seriesId']?.toString();
-          final settingStatus = setting['status']?.toString() ?? 'active';
-          final sameSeries = (schoolClass.seriesId == null ||
-                  schoolClass.seriesId!.isEmpty)
-              ? settingSeriesId == null || settingSeriesId.isEmpty
-              : settingSeriesId == schoolClass.seriesId;
-          return settingStatus == 'active' &&
-              settingLevelId == levelId &&
-              settingYearId == selectedYearId &&
-              sameSeries;
-        });
-      }).toList();
+      return allSubjects
+          .where((subject) =>
+              assignedSubjectIds.contains(subject.id) &&
+              subjectIsConfiguredForClass(selectedClassId, subject))
+          .toList();
     }
 
-    List<TeacherModel> teachersForClassSubject(
-        String selectedClassId, String selectedSubjectId) {
-      final teacherIds = affectations
-          .where((item) =>
-              item.classId == selectedClassId &&
-              item.subjectId == selectedSubjectId)
-          .map((item) => item.teacherId)
-          .toSet();
-      return allTeachers
-          .where((teacher) => teacherIds.contains(teacher.id))
-          .toList();
+    List<TeacherModel> teachersForClass(String selectedClassId) {
+      return allTeachers.where((teacher) {
+        return subjectsForClassTeacher(selectedClassId, teacher.id).isNotEmpty;
+      }).toList();
     }
 
     if (classes.isEmpty) {
@@ -183,11 +181,11 @@ class _SchedulePageState extends State<SchedulePage> {
       return;
     }
     final eligibleClasses =
-        classes.where((item) => subjectsForClass(item.id).isNotEmpty).toList();
+        classes.where((item) => teachersForClass(item.id).isNotEmpty).toList();
     if (eligibleClasses.isEmpty) {
       AppToast.warning(
         context,
-        'Aucune classe ne possède à la fois une matière assignée à son niveau/série et un enseignant affecté.',
+        'Aucune classe ne possède une affectation enseignant/matière active.',
       );
       return;
     }
@@ -198,26 +196,12 @@ class _SchedulePageState extends State<SchedulePage> {
     if (!eligibleClasses.any((item) => item.id == classId)) {
       classId = eligibleClasses.first.id;
     }
-    var availableSubjects = subjectsForClass(classId);
-    if (availableSubjects.isEmpty) {
-      AppToast.warning(
-        context,
-        'Aucune matière active n’est assignée au niveau/série de cette classe avec une affectation enseignant.',
-      );
-      return;
-    }
 
-    String subjectId =
-        existing?['subjectId']?.toString() ?? availableSubjects.first.id;
-    if (!availableSubjects.any((subject) => subject.id == subjectId)) {
-      subjectId = availableSubjects.first.id;
-    }
-
-    var availableTeachers = teachersForClassSubject(classId, subjectId);
+    var availableTeachers = teachersForClass(classId);
     if (availableTeachers.isEmpty) {
       AppToast.warning(
         context,
-        'Aucun enseignant actif n’est affecté à cette matière dans cette classe.',
+        'Aucun enseignant actif n’est affecté à cette classe.',
       );
       return;
     }
@@ -226,6 +210,21 @@ class _SchedulePageState extends State<SchedulePage> {
         existing?['teacherId']?.toString() ?? availableTeachers.first.id;
     if (!availableTeachers.any((teacher) => teacher.id == teacherId)) {
       teacherId = availableTeachers.first.id;
+    }
+
+    var availableSubjects = subjectsForClassTeacher(classId, teacherId);
+    if (availableSubjects.isEmpty) {
+      AppToast.warning(
+        context,
+        'Aucune matière active n’est affectée à cet enseignant dans cette classe.',
+      );
+      return;
+    }
+
+    String subjectId =
+        existing?['subjectId']?.toString() ?? availableSubjects.first.id;
+    if (!availableSubjects.any((subject) => subject.id == subjectId)) {
+      subjectId = availableSubjects.first.id;
     }
     var weekday = (existing?['weekday'] as num?)?.toInt() ?? 1;
     final start = TextEditingController(
@@ -255,16 +254,16 @@ class _SchedulePageState extends State<SchedulePage> {
                       if (v == null) return;
                       setModalState(() {
                         classId = v;
-                        availableSubjects = subjectsForClass(classId);
-                        if (availableSubjects.isNotEmpty) {
-                          subjectId = availableSubjects.first.id;
-                          availableTeachers =
-                              teachersForClassSubject(classId, subjectId);
-                          if (availableTeachers.isNotEmpty) {
-                            teacherId = availableTeachers.first.id;
+                        availableTeachers = teachersForClass(classId);
+                        if (availableTeachers.isNotEmpty) {
+                          teacherId = availableTeachers.first.id;
+                          availableSubjects =
+                              subjectsForClassTeacher(classId, teacherId);
+                          if (availableSubjects.isNotEmpty) {
+                            subjectId = availableSubjects.first.id;
                           }
                         } else {
-                          availableTeachers = <TeacherModel>[];
+                          availableSubjects = <SubjectModel>[];
                         }
                       });
                     },
@@ -277,8 +276,17 @@ class _SchedulePageState extends State<SchedulePage> {
                         .map((t) => DropdownMenuItem(
                             value: t.id, child: Text(t.fullName)))
                         .toList(),
-                    onChanged: (v) =>
-                        setModalState(() => teacherId = v ?? teacherId),
+                    onChanged: (v) {
+                      if (v == null) return;
+                      setModalState(() {
+                        teacherId = v;
+                        availableSubjects =
+                            subjectsForClassTeacher(classId, teacherId);
+                        if (availableSubjects.isNotEmpty) {
+                          subjectId = availableSubjects.first.id;
+                        }
+                      });
+                    },
                   ),
                   const SizedBox(height: AppSpacing.s3),
                   AppSelectField<String>(
@@ -290,14 +298,7 @@ class _SchedulePageState extends State<SchedulePage> {
                         .toList(),
                     onChanged: (v) {
                       if (v == null) return;
-                      setModalState(() {
-                        subjectId = v;
-                        availableTeachers =
-                            teachersForClassSubject(classId, subjectId);
-                        if (availableTeachers.isNotEmpty) {
-                          teacherId = availableTeachers.first.id;
-                        }
-                      });
+                      setModalState(() => subjectId = v);
                     },
                   ),
                   const SizedBox(height: AppSpacing.s3),
