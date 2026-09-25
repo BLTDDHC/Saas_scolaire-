@@ -180,11 +180,23 @@ void main() {
     await tester.tap(find.byKey(const Key('plan-feature-students')));
     await tester.tap(find.byKey(const Key('plan-feature-grades')));
     await tester.tap(find.byKey(const Key('plan-feature-documents')));
+    await tester.ensureVisible(
+        find.byKey(const Key('plan-capability-parents.access')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('plan-capability-parents.access')));
+    await tester.ensureVisible(
+        find.byKey(const Key('plan-capability-grades.publish_teacher')));
+    await tester.pumpAndSettle();
     await tester.tap(
         find.byKey(const Key('plan-capability-grades.publish_teacher')));
+    await tester.ensureVisible(
+        find.byKey(const Key('plan-capability-grades.publish_parent')));
+    await tester.pumpAndSettle();
     await tester.tap(
         find.byKey(const Key('plan-capability-grades.publish_parent')));
+    await tester.ensureVisible(
+        find.byKey(const Key('plan-capability-documents.advanced_search')));
+    await tester.pumpAndSettle();
     await tester.tap(
         find.byKey(const Key('plan-capability-documents.advanced_search')));
     await tester.tap(find.byKey(const Key('plan-save')));
