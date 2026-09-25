@@ -144,7 +144,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
             const SizedBox(width: AppSpacing.s2),
             Expanded(
               child: Text(
-                isMobile ? 'Super Admin' : 'EduPro Super Admin',
+                isMobile ? 'Super Admin' : 'MAYELE + Super Admin',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
