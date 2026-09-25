@@ -14,7 +14,7 @@ import 'app_button.dart';
 import 'app_modal.dart';
 import 'app_toast.dart';
 
-/// Header principal EduPro — Reproduction exacte de layout.css avec adaptation mobile
+/// Header principal MAYELE + — Reproduction exacte de layout.css avec adaptation mobile
 class AppHeader extends StatelessWidget implements PreferredSizeWidget {
   final VoidCallback? onMenuToggle;
 
@@ -74,7 +74,7 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
             child: Text(
               user?.directionName?.isNotEmpty == true
                   ? '${school?.name ?? user?.establishment ?? 'Établissement'} — ${user!.directionName}'
-                  : school?.name ?? 'EduPro SaaS',
+                  : school?.name ?? 'MAYELE +',
               style: TextStyle(
                 fontFamily: 'Inter',
                 fontSize: isMobile ? 13 : 15,
