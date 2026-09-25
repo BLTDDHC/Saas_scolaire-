@@ -412,7 +412,7 @@ void main() {
         isTrue);
   });
 
-  testWidgets('modules action opens the backend-backed configuration',
+  testWidgets('l action manuelle Gérer les modules a disparu',
       (tester) async {
     tester.view.physicalSize = const Size(1800, 1000);
     tester.view.devicePixelRatio = 1;
@@ -422,31 +422,9 @@ void main() {
     await tester.pumpWidget(app(backend));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byTooltip('Gérer les modules').first);
-    await tester.pumpAndSettle();
-    expect(find.text('Modules disponibles'), findsOneWidget);
-    expect(find.text('Élèves'), findsOneWidget);
-    expect(
-        tester
-            .widget<CheckboxListTile>(find.byKey(const Key('module-students')))
-            .value,
-        isTrue);
-
-    await tester.tap(find.byKey(const Key('module-teachers')));
-    await tester.tap(find.byKey(const Key('modules-save')));
-    await tester.pumpAndSettle();
-    expect(backend.moduleState, ['students', 'teachers']);
-    await tester.tap(find.text('Fermer'));
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.byTooltip('Gérer les modules').first);
-    await tester.pumpAndSettle();
-    expect(backend.moduleGetCalls, 2);
-    expect(
-        tester
-            .widget<CheckboxListTile>(find.byKey(const Key('module-teachers')))
-            .value,
-        isTrue);
+    expect(find.byTooltip('Gérer les modules'), findsNothing);
+    expect(find.byKey(const Key('modules-1')), findsNothing);
+    expect(backend.moduleGetCalls, 0);
   });
 
   test('StoreService envoie les cycles sans institution_type', () async {
