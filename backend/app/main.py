@@ -1944,7 +1944,7 @@ class AcademicPeriodInput(BaseModel):
         if self.start_date and self.end_date and self.start_date > self.end_date:
             raise ValueError('La date de début doit précéder la date de fin')
         self.code = self.code.strip().upper() if self.code else None
-        self.name = self.name.strip()
+        self.name = normalize_display_label(self.name)
         return self
 
 class EvaluationInput(BaseModel):
