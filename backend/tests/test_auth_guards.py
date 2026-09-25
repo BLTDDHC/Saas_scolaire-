@@ -51,6 +51,53 @@ class AuthenticationGuards(unittest.TestCase):
             password_set=True,
         ))
 
+    def test_non_auth_text_casing_is_normalized_at_api_boundary(self):
+        student = m.StudentIdentityInput(
+            firstName="  jEAN pIERRE  ",
+            lastName="  bouako  ",
+            birthDate="2010-01-02",
+            nationality="  congolaise  ",
+            address="Brazzaville",
+        )
+        self.assertEqual(student.first_name, "Jean pierre")
+        self.assertEqual(student.last_name, "BOUAKO")
+        self.assertEqual(student.nationality, "Congolaise")
+
+        teacher = m.TeacherInput(
+            firstName="  mARIE  ",
+            lastName="  dupont  ",
+            email="  PROF@EXAMPLE.INVALID  ",
+        )
+        self.assertEqual(teacher.first_name, "Marie")
+        self.assertEqual(teacher.last_name, "DUPONT")
+        self.assertEqual(teacher.email, "prof@example.invalid")
+
+        guardian = m.GuardianInput(
+            firstName="  pAUL  ",
+            lastName="  mbemba  ",
+            phone="+242060000099",
+            address="Brazzaville",
+            profession="Parent",
+        )
+        self.assertEqual(guardian.first_name, "Paul")
+        self.assertEqual(guardian.last_name, "MBEMBA")
+
+        period = m.AcademicPeriodInput(
+            academicYearId=self.year.id,
+            code=" oct ",
+            name="  OCTOBRE  ",
+            periodType="month",
+        )
+        self.assertEqual(period.code, "OCT")
+        self.assertEqual(period.name, "Octobre")
+
+        # Authentication identifiers keep their dedicated normalization rules.
+        login = m.LoginInput(
+            email="  USER@EXAMPLE.INVALID  ",
+            password="Password!1",
+        )
+        self.assertEqual(login.email, "user@example.invalid")
+
     def test_password_length_accepts_eight_and_rejects_seven(self):
         with self.assertRaises(HTTPException) as too_short:
             m.validate_new_password("Aa1!bbb")
