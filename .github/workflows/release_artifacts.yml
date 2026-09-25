@@ -73,30 +73,6 @@ jobs:
           path: MAYELE_Plus_Setup.exe
           if-no-files-found: error
 
-  ios:
-    name: iOS unsigned IPA
-    runs-on: macos-15
-    steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          cache: true
-      - run: flutter pub get
-      - name: Build iOS without code signing
-        run: flutter build ios --release --no-codesign --dart-define=API_BASE_URL=${{ env.API_BASE_URL }}
-      - name: Package unsigned IPA
-        run: |
-          rm -rf Payload
-          mkdir Payload
-          cp -R build/ios/iphoneos/Runner.app Payload/
-          /usr/bin/zip -qry MAYELE_plus_ios_unsigned.ipa Payload
-      - uses: actions/upload-artifact@v4
-        with:
-          name: MAYELE-plus-iOS-unsigned
-          path: MAYELE_plus_ios_unsigned.ipa
-          if-no-files-found: error
-
   macos:
     name: macOS Desktop
     runs-on: macos-15
