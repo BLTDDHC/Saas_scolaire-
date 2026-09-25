@@ -7385,9 +7385,17 @@ def list_evaluations(
     if current.role == "teacher":
         if not current.teacher_id:
             return []
-        statement = statement.where(Evaluation.affectation_id.in_(
+        teacher_id = uuid.UUID(current.teacher_id)
+        # The current pedagogical assignment is the source of truth. Historical
+        # evaluation rows may still point to an older/inactive affectation after
+        # an assignment was replaced during deployment or administration. Match
+        # on teacher + class + subject instead of trusting only affectation_id.
+        statement = statement.where(exists(
             select(Affectation.id).where(
-                Affectation.teacher_id == uuid.UUID(current.teacher_id),
+                Affectation.establishment_id == database_id,
+                Affectation.teacher_id == teacher_id,
+                Affectation.class_id == Evaluation.class_id,
+                Affectation.subject_id == Evaluation.subject_id,
                 Affectation.status == "active",
             )
         ))
@@ -8288,12 +8296,62 @@ def subject_context_weight(session: Session, school_class: SchoolClass, subject_
         )
     return float(coefficient)
 
+def primary_trimester_composition_events(
+    period: AcademicPeriod | None,
+) -> tuple[str, ...]:
+    """Canonical ordinary evaluations for Maternelle/Primaire.
+
+    Pedagogical periods remain T1/T2/T3. Each trimester contains two monthly
+    compositions plus the trimester composition; months are event codes, not
+    academic periods.
+    """
+    if period is None or period.period_type != 'trimester':
+        return ('composition',)
+    trimester = trimester_number(period)
+    monthly = PRIMARY_MONTHLY_CODES_BY_TRIMESTER.get(trimester or 0, set())
+    return (*sorted(monthly), 'composition')
+
+
 def evaluation_policy_for_class(
     session: Session,
     school_class: SchoolClass,
     evaluations: list[Evaluation],
     target_period: AcademicPeriod | None = None,
 ) -> tuple[list[Evaluation], list[dict[str, Any]]]:
+    cycle = session.get(SchoolCycle, school_class.cycle_id)
+    cycle_code = (cycle.code if cycle else '').upper()
+
+    # Maternelle/Primaire use a fixed trimester model:
+    # month 1 composition + month 2 composition + trimester composition.
+    # This must override older EvaluationRule rows that may still say
+    # "1 composition", otherwise imported databases calculate too early.
+    if cycle_code in {'MATERNELLE', 'PRIMAIRE'}:
+        required_codes = primary_trimester_composition_events(target_period)
+        by_code: dict[str, list[Evaluation]] = {
+            code: [
+                item for item in evaluations
+                if normalized_evaluation_event(item) == code
+            ]
+            for code in required_codes
+        }
+        missing = [
+            {
+                'evaluationType': 'composition',
+                'eventCode': code,
+                'expected': 1,
+                'actual': len(by_code[code]),
+                'labels': [KNOWN_EVALUATION_EVENTS.get(code, code)],
+            }
+            for code in required_codes
+            if not by_code[code]
+        ]
+        if missing:
+            return [], missing
+        selected: list[Evaluation] = []
+        for code in required_codes:
+            selected.extend(by_code[code])
+        return selected, []
+
     rules = session.scalars(select(EvaluationRule).where(
         EvaluationRule.establishment_id == school_class.establishment_id,
         EvaluationRule.academic_year_id == school_class.academic_year_id,
@@ -8307,29 +8365,11 @@ def evaluation_policy_for_class(
         and (rule.series_id is None or rule.series_id == school_class.series_id)
     ]
     if not applicable:
-        cycle = session.get(SchoolCycle, school_class.cycle_id)
         level = session.get(SchoolLevel, school_class.school_level_id)
-        cycle_code = (cycle.code if cycle else '').upper()
         level_code = (level.code if level else '').upper()
         required: dict[str, int] = {}
         contributing_types: set[str] = set()
-        if cycle_code in {'MATERNELLE', 'PRIMAIRE'}:
-            # Par défaut, les examens blancs restent complémentaires. Une
-            # règle pédagogique explicite peut seule les rendre contributifs.
-            contributing_types = {'composition'}
-            if target_period and target_period.period_type == 'trimester':
-                child_count = session.scalar(select(func.count(AcademicPeriod.id)).where(
-                    AcademicPeriod.establishment_id == school_class.establishment_id,
-                    AcademicPeriod.academic_year_id == school_class.academic_year_id,
-                    AcademicPeriod.parent_period_id == target_period.id,
-                    AcademicPeriod.status == 'active',
-                )) or 0
-                # Les examens officiels blancs sont complémentaires : ils ne
-                # remplacent jamais les compositions normales du trimestre.
-                required['composition'] = int(child_count) + 1
-            else:
-                required['composition'] = 1
-        elif cycle_code in {'COLLEGE', 'LYCEE'}:
+        if cycle_code in {'COLLEGE', 'LYCEE'}:
             contributing_types = {'devoir', 'composition'}
             if target_period is None or target_period.period_type == 'trimester':
                 required = {'devoir': 2, 'composition': 1}
@@ -11148,7 +11188,10 @@ def ensure_base_establishment_configuration(
             series_id=None,
             evaluation_type=evaluation_type,
             label=label,
-            expected_count=1,
+            expected_count=(
+                3 if cycle.code.upper() in {"MATERNELLE", "PRIMAIRE"}
+                and evaluation_type == "composition" else 1
+            ),
             contributes_to_average=contributes,
             is_required=required,
             sort_order=sort_order,
@@ -14593,6 +14636,7 @@ def student_results(student_id: uuid.UUID, academic_year_id: uuid.UUID,
     periods = session.scalars(select(AcademicPeriod).where(
         AcademicPeriod.establishment_id == student.establishment_id,
         AcademicPeriod.academic_year_id == academic_year_id,
+        AcademicPeriod.period_type == 'trimester',
         AcademicPeriod.status == 'active'
     ).order_by(AcademicPeriod.sort_order, AcademicPeriod.code)).all()
     payload = []
