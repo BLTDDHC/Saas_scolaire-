@@ -132,43 +132,6 @@ class _PlansPageState extends State<PlansPage> {
     String searchQuery = '';
     String? formError;
     bool submitting = false;
-    const essentialModules = {
-      'students',
-      'teachers',
-      'classes',
-      'subjects',
-      'affectations',
-      'academic_years',
-      'grades',
-      'attendance',
-      'finance',
-    };
-    const professionalModules = {
-      ...essentialModules,
-      'schedule',
-      'assignments',
-      'documents',
-      'statistics',
-    };
-    const professionalCapabilities = {
-      'grades.publish_teacher',
-      'grades.publish_parent',
-      'parents.access',
-      'documents.advanced_search',
-    };
-    void applyPreset(Set<String> modules, Set<String> capabilities) {
-      final availableModules =
-          _moduleCatalog.map((item) => item['id'].toString()).toSet();
-      final availableCapabilities =
-          capabilityCatalog.map((item) => item['id'].toString()).toSet();
-      selectedFeatures
-        ..clear()
-        ..addAll(modules.where(availableModules.contains));
-      selectedCapabilities
-        ..clear()
-        ..addAll(capabilities.where(availableCapabilities.contains));
-    }
-
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
@@ -235,37 +198,7 @@ class _PlansPageState extends State<PlansPage> {
                 const Text('Fonctionnalités incluses',
                     style: TextStyle(fontWeight: FontWeight.bold)),
                 const Text(
-                    'Utilisez un socle commercial, puis ajustez chaque élément si nécessaire.'),
-                const SizedBox(height: AppSpacing.s2),
-                Wrap(
-                  spacing: AppSpacing.s2,
-                  runSpacing: AppSpacing.s2,
-                  children: [
-                    OutlinedButton(
-                      key: const Key('plan-preset-essential'),
-                      onPressed: () => setDialogState(() =>
-                          applyPreset(essentialModules, const <String>{})),
-                      child: const Text('Appliquer Essentiel'),
-                    ),
-                    OutlinedButton(
-                      key: const Key('plan-preset-professional'),
-                      onPressed: () => setDialogState(() => applyPreset(
-                          professionalModules, professionalCapabilities)),
-                      child: const Text('Appliquer Professionnel'),
-                    ),
-                    OutlinedButton(
-                      key: const Key('plan-preset-premium'),
-                      onPressed: () => setDialogState(() => applyPreset(
-                          _moduleCatalog
-                              .map((item) => item['id'].toString())
-                              .toSet(),
-                          capabilityCatalog
-                              .map((item) => item['id'].toString())
-                              .toSet())),
-                      child: const Text('Appliquer Premium / Entreprise'),
-                    ),
-                  ],
-                ),
+                    'Le catalogue ci-dessous provient du backend. Sélectionnez uniquement les modules réellement inclus dans cette offre.'),
                 const SizedBox(height: AppSpacing.s2),
                 TextField(
                   key: const Key('plan-feature-search'),
