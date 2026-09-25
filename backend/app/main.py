@@ -26,7 +26,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.staticfiles import StaticFiles
 from passlib.context import CryptContext
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
-from sqlalchemy import Boolean, Date, DateTime, Float, Integer, JSON, Numeric, String, Text, Time, create_engine, func, or_, select, text
+from sqlalchemy import Boolean, Date, DateTime, Float, Integer, JSON, Numeric, String, Text, Time, create_engine, exists, func, or_, select, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
