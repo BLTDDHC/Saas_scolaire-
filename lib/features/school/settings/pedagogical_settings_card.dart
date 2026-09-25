@@ -57,170 +57,149 @@ class _PedagogicalSettingsCardState extends State<PedagogicalSettingsCard> {
     StoreService store, [
     Map<String, dynamic>? existing,
   ]) async {
-    final name = TextEditingController(text: existing?['name']?.toString());
+    const canonicalPeriods = <({String code, String name, int order})>[
+      (code: 'T1', name: '1er trimestre', order: 1),
+      (code: 'T2', name: '2e trimestre', order: 2),
+      (code: 'T3', name: '3e trimestre', order: 3),
+    ];
+    final existingCode = existing?['code']?.toString().toUpperCase();
+    var selectedCode = canonicalPeriods
+        .where((item) => item.code == existingCode)
+        .map((item) => item.code)
+        .firstOrNull;
+    selectedCode ??= canonicalPeriods
+        .where((candidate) => !_periods.any((item) =>
+            item['id'] != existing?['id'] &&
+            item['code']?.toString().toUpperCase() == candidate.code))
+        .map((item) => item.code)
+        .firstOrNull;
+    if (selectedCode == null) {
+      AppToast.warning(context, 'Les trois trimestres sont déjà configurés.');
+      return;
+    }
+
     DateTime? startDate =
         AppDateUtils.parse(existing?['startDate']?.toString());
     DateTime? endDate = AppDateUtils.parse(existing?['endDate']?.toString());
-    var type = existing?['periodType']?.toString() ?? 'trimester';
-    String? parentPeriodId = existing?['parentPeriodId']?.toString();
-    var sortOrder =
-        (existing?['sortOrder'] as num?)?.toInt() ?? _periods.length;
     var saving = false;
     final saved = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: Text(
-            existing == null ? 'Nouvelle période' : 'Modifier la période',
-          ),
-          content: SizedBox(
-            width: 520,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: name,
-                    decoration: const InputDecoration(labelText: 'Nom *'),
-                  ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    isExpanded: true,
-                    initialValue: type,
-                    decoration: const InputDecoration(labelText: 'Type *'),
-                    items: const [
-                      DropdownMenuItem(
-                        value: 'trimester',
-                        child: Text('Trimestre'),
-                      ),
-                      DropdownMenuItem(
-                        value: 'month',
-                        child: Text('Mois / période mensuelle'),
-                      ),
-                      DropdownMenuItem(
-                        value: 'custom',
-                        child: Text('Période personnalisée'),
-                      ),
-                    ],
-                    onChanged: (value) => setDialogState(() {
-                      type = value ?? type;
-                      if (type == 'trimester') parentPeriodId = null;
-                    }),
-                  ),
-                  if (type != 'trimester') ...[
-                    const SizedBox(height: 12),
+        builder: (context, setDialogState) {
+          final selected = canonicalPeriods
+              .firstWhere((item) => item.code == selectedCode);
+          final available = canonicalPeriods.where((candidate) =>
+              candidate.code == selectedCode ||
+              !_periods.any((item) =>
+                  item['id'] != existing?['id'] &&
+                  item['code']?.toString().toUpperCase() == candidate.code));
+          return AlertDialog(
+            title: Text(
+              existing == null ? 'Ajouter un trimestre' : 'Modifier le trimestre',
+            ),
+            content: SizedBox(
+              width: 520,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
                     DropdownButtonFormField<String>(
                       isExpanded: true,
-                      initialValue: parentPeriodId,
-                      decoration: const InputDecoration(
-                        labelText: 'Trimestre de rattachement *',
-                      ),
-                      items: _periods
-                          .where(
-                            (item) =>
-                                item['periodType'] == 'trimester' &&
-                                item['id'] != existing?['id'],
-                          )
-                          .map(
-                            (item) => DropdownMenuItem<String>(
-                              value: item['id']?.toString(),
-                              child: Text('${item['name']}'),
-                            ),
-                          )
+                      initialValue: selectedCode,
+                      decoration:
+                          const InputDecoration(labelText: 'Trimestre *'),
+                      items: available
+                          .map((item) => DropdownMenuItem(
+                                value: item.code,
+                                child: Text(item.name),
+                              ))
                           .toList(),
+                      onChanged: existing != null
+                          ? null
+                          : (value) => setDialogState(
+                                () => selectedCode = value ?? selectedCode,
+                              ),
+                    ),
+                    const SizedBox(height: 12),
+                    AppDateField(
+                      label: 'Début',
+                      value: startDate,
                       onChanged: (value) =>
-                          setDialogState(() => parentPeriodId = value),
+                          setDialogState(() => startDate = value),
+                    ),
+                    const SizedBox(height: 12),
+                    AppDateField(
+                      label: 'Fin',
+                      value: endDate,
+                      onChanged: (value) =>
+                          setDialogState(() => endDate = value),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Les compositions mensuelles sont des évaluations du trimestre, pas des périodes scolaires.',
+                      style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ],
-                  const SizedBox(height: 12),
-                  AppDateField(
-                    label: 'Début',
-                    value: startDate,
-                    onChanged: (value) =>
-                        setDialogState(() => startDate = value),
-                  ),
-                  const SizedBox(height: 12),
-                  AppDateField(
-                    label: 'Fin',
-                    value: endDate,
-                    onChanged: (value) => setDialogState(() => endDate = value),
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    initialValue: '$sortOrder',
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: 'Ordre'),
-                    onChanged: (value) =>
-                        sortOrder = int.tryParse(value) ?? sortOrder,
-                  ),
-                ],
+                ),
               ),
             ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: saving ? null : () => Navigator.pop(context, false),
-              child: const Text('Annuler'),
-            ),
-            FilledButton(
-              onPressed: saving
-                  ? null
-                  : () async {
-                      if (name.text.trim().isEmpty ||
-                          (type != 'trimester' && parentPeriodId == null)) {
-                        AppToast.error(
-                            context, 'Veuillez compléter les champs requis.');
-                        return;
-                      }
-                      if (startDate != null &&
-                          endDate != null &&
-                          endDate!.isBefore(startDate!)) {
-                        AppToast.error(context,
-                            'La date de fin doit suivre la date de début.');
-                        return;
-                      }
-                      setDialogState(() => saving = true);
-                      final payload = <String, dynamic>{
-                        'academicYearId': _loadedYearId,
-                        if (existing?['code'] != null)
-                          'code': existing!['code'],
-                        'name': name.text.trim(),
-                        'periodType': type,
-                        if (parentPeriodId != null)
-                          'parentPeriodId': parentPeriodId,
-                        'sortOrder': sortOrder,
-                        if (startDate != null)
-                          'startDate': AppDateUtils.toIso(startDate!),
-                        if (endDate != null)
-                          'endDate': AppDateUtils.toIso(endDate!),
-                      };
-                      try {
-                        if (existing == null) {
-                          await store.createAcademicPeriodRemote(payload);
-                        } else {
-                          await store.updateAcademicPeriodRemote(
-                            existing['id'].toString(),
-                            payload,
-                          );
-                        }
-                        if (context.mounted) Navigator.pop(context, true);
-                      } catch (error) {
-                        if (context.mounted) {
+            actions: [
+              TextButton(
+                onPressed: saving ? null : () => Navigator.pop(context, false),
+                child: const Text('Annuler'),
+              ),
+              FilledButton(
+                onPressed: saving
+                    ? null
+                    : () async {
+                        if (startDate != null &&
+                            endDate != null &&
+                            endDate!.isBefore(startDate!)) {
                           AppToast.error(
                             context,
-                            'Sauvegarde refusée : $error',
+                            'La date de fin doit suivre la date de début.',
                           );
-                          setDialogState(() => saving = false);
+                          return;
                         }
-                      }
-                    },
-              child: Text(saving ? 'Sauvegarde…' : 'Sauvegarder'),
-            ),
-          ],
-        ),
+                        setDialogState(() => saving = true);
+                        final payload = <String, dynamic>{
+                          'academicYearId': _loadedYearId,
+                          'code': selected.code,
+                          'name': selected.name,
+                          'periodType': 'trimester',
+                          'sortOrder': selected.order,
+                          if (startDate != null)
+                            'startDate': AppDateUtils.toIso(startDate!),
+                          if (endDate != null)
+                            'endDate': AppDateUtils.toIso(endDate!),
+                        };
+                        try {
+                          if (existing == null) {
+                            await store.createAcademicPeriodRemote(payload);
+                          } else {
+                            await store.updateAcademicPeriodRemote(
+                              existing['id'].toString(),
+                              payload,
+                            );
+                          }
+                          if (context.mounted) Navigator.pop(context, true);
+                        } catch (error) {
+                          if (context.mounted) {
+                            AppToast.error(
+                              context,
+                              'Sauvegarde refusée : $error',
+                            );
+                            setDialogState(() => saving = false);
+                          }
+                        }
+                      },
+                child: Text(saving ? 'Sauvegarde…' : 'Sauvegarder'),
+              ),
+            ],
+          );
+        },
       ),
     );
-    name.dispose();
     if (saved == true && mounted) await _load(store);
   }
 
@@ -249,7 +228,7 @@ class _PedagogicalSettingsCardState extends State<PedagogicalSettingsCard> {
 
     return AppCard(
       title: 'Paramétrage pédagogique',
-      subtitle: 'Périodes pédagogiques de l’année scolaire sélectionnée.',
+      subtitle: 'Uniquement les 1er, 2e et 3e trimestres de l’année scolaire.',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -277,7 +256,7 @@ class _PedagogicalSettingsCardState extends State<PedagogicalSettingsCard> {
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
               AppButton(
-                label: 'Ajouter',
+                label: 'Ajouter un trimestre',
                 icon: Icons.add,
                 size: AppButtonSize.small,
                 onPressed: () => _editPeriod(store),
@@ -297,7 +276,6 @@ class _PedagogicalSettingsCardState extends State<PedagogicalSettingsCard> {
               contentPadding: EdgeInsets.zero,
               title: Text('${item['name']}'),
               subtitle: Text(
-                '${item['periodType']} · '
                 '${AppDateUtils.formatNumeric(item['startDate']?.toString())} '
                 '→ ${AppDateUtils.formatNumeric(item['endDate']?.toString())}',
               ),
