@@ -26,7 +26,7 @@ class ApiClient {
       // FastAPI. Local Flutter development keeps the historical backend port.
       return isLocalDevelopment ? 'http://localhost:8000' : current.origin;
     }
-    return 'http://10.0.2.2:8000';
+    // Mobile/desktop release builds must never fall back to localhost.\n    // Developers can still override this URL with --dart-define=API_BASE_URL=...\n    return 'https://saas-scolaire-staging-api.onrender.com';
   }
 
   void setToken(String? token) => _token = token;
