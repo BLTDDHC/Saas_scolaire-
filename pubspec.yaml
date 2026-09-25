@@ -27,9 +27,29 @@ dev_dependencies:
     sdk: flutter
   flutter_lints: ^3.0.0
   test: ^1.24.0
+  flutter_launcher_icons: ^0.14.3
 
 flutter:
   uses-material-design: true
   assets:
     - assets/fonts/Roboto-Regular.ttf
     - assets/fonts/Roboto-Medium.ttf
+
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: assets/branding/mayele_icon.png
+  adaptive_icon_background: "#071B29"
+  adaptive_icon_foreground: assets/branding/mayele_icon.png
+  web:
+    generate: true
+    image_path: assets/branding/mayele_icon.png
+    background_color: "#071B29"
+    theme_color: "#071B29"
+  windows:
+    generate: true
+    image_path: assets/branding/mayele_icon.png
+    icon_size: 256
+  macos:
+    generate: true
+    image_path: assets/branding/mayele_icon.png
