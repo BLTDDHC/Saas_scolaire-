@@ -86,10 +86,20 @@ Map<String, dynamic> trimesterPdfDataFromOfficialSource({
               '${grade['evaluation']}'.toLowerCase().contains('devoir'))
           .toList()
         ..sort((a, b) => '${a['evaluation']}'.compareTo('${b['evaluation']}'));
+      bool isMonthlyComposition(Map<String, dynamic> grade) {
+        final code = '${grade['examCode'] ?? ''}'.toLowerCase();
+        final label = '${grade['evaluation'] ?? ''}'.toLowerCase();
+        return code.startsWith('composition_') ||
+            const ['octobre', 'novembre', 'janvier', 'février', 'fevrier', 'avril', 'mai']
+                .any(label.contains);
+      }
+
       final compositions = grades
           .where((grade) =>
-              grade['type'] == 'composition' ||
-              '${grade['evaluation']}'.toLowerCase().contains('composition'))
+              !isMonthlyComposition(grade) &&
+              (grade['examCode'] == 'composition' ||
+                  grade['type'] == 'composition' ||
+                  '${grade['evaluation']}'.toLowerCase().contains('composition')))
           .toList();
       final devoirValues = devoirs
           .map((grade) => grade['value'])
@@ -766,12 +776,18 @@ pw.Widget _pageFooter(pw.Context context) => pw.Padding(
     final used = <int>{};
     Object? monthlyValue(int monthIndex) {
       final month = displayedMonths[monthIndex].toLowerCase();
+      final normalizedMonth = month
+          .replaceAll('é', 'e')
+          .replaceAll('è', 'e')
+          .replaceAll('ê', 'e');
+      final expectedCode = 'composition_$normalizedMonth';
       var index = -1;
       for (var candidate = 0; candidate < evaluations.length; candidate++) {
+        final evaluation = evaluations[candidate];
+        final code = '${evaluation['examCode'] ?? ''}'.toLowerCase();
+        final label = '${evaluation['evaluation'] ?? ''}'.toLowerCase();
         if (!used.contains(candidate) &&
-            '${evaluations[candidate]['evaluation'] ?? ''}'
-                .toLowerCase()
-                .contains(month)) {
+            (code == expectedCode || label.contains(month))) {
           index = candidate;
           break;
         }
@@ -795,12 +811,20 @@ pw.Widget _pageFooter(pw.Context context) => pw.Padding(
 
     final first = monthlyValue(0);
     final second = monthlyValue(1);
-    final compositionIndex = evaluations.indexWhere((evaluation) {
-      final label = '${evaluation['evaluation'] ?? ''}'.toLowerCase();
-      return evaluation['type'] == 'composition' ||
-          label.contains('composition') ||
-          label.contains(displayedMonths[2].toLowerCase());
-    });
+    var compositionIndex = evaluations.indexWhere((evaluation) =>
+        '${evaluation['examCode'] ?? ''}'.toLowerCase() == 'composition');
+    if (compositionIndex < 0) {
+      compositionIndex = evaluations.indexWhere((evaluation) {
+        final code = '${evaluation['examCode'] ?? ''}'.toLowerCase();
+        final label = '${evaluation['evaluation'] ?? ''}'.toLowerCase();
+        final isMonthly = code.startsWith('composition_') ||
+            const ['octobre', 'novembre', 'janvier', 'février', 'fevrier', 'avril', 'mai']
+                .any(label.contains);
+        return !isMonthly &&
+            (evaluation['type'] == 'composition' ||
+                label.contains('composition'));
+      });
+    }
     final composition =
         compositionIndex < 0 ? null : evaluations[compositionIndex]['value'];
     final average = subject['subjectAverage'];
