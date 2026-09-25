@@ -210,57 +210,32 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   }
 
   Widget _buildDashboardOverview(bool isMobile) {
-    return SingleChildScrollView(
-      padding: EdgeInsets.all(isMobile ? AppSpacing.s4 : AppSpacing.s6),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          WorkspaceHeader(
-            title: 'Vue d’ensemble',
-            subtitle: 'Indicateurs consolidés de la plateforme',
-            actions: [
-              OutlinedButton.icon(
-                onPressed: _loadDashboard,
-                icon: const Icon(Icons.refresh_rounded),
-                label: const Text('Actualiser'),
-              ),
-            ],
-          ),
-          if (_dashboardLoading)
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.all(AppSpacing.s8),
-                child: CircularProgressIndicator(
-                  key: Key('superadmin-dashboard-loading'),
-                ),
-              ),
-            )
-          else if (_dashboardError != null)
-            AppCard(
-              key: const Key('superadmin-dashboard-error'),
-              child: Column(
-                children: [
-                  const Icon(Icons.cloud_off_rounded,
-                      color: AppColors.danger500),
-                  const SizedBox(height: AppSpacing.s3),
-                  Text(
-                    _dashboardError!,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(color: AppColors.danger500),
-                  ),
-                  const SizedBox(height: AppSpacing.s3),
-                  AppButton(
-                    label: 'Réessayer',
-                    icon: Icons.refresh_rounded,
-                    onPressed: _loadDashboard,
-                  ),
-                ],
-              ),
-            )
-          else
-            _buildDashboardSuccess(isMobile),
-        ],
-      ),
+    return WorkspacePage(
+      title: 'Vue d’ensemble',
+      subtitle: 'Indicateurs consolidés de la plateforme',
+      actions: [
+        AppButton(
+          label: 'Actualiser',
+          icon: Icons.refresh_rounded,
+          variant: AppButtonVariant.secondary,
+          onPressed: _loadDashboard,
+        ),
+      ],
+      children: [
+        if (_dashboardLoading)
+          const WorkspaceLoadingState(
+            key: Key('superadmin-dashboard-loading'),
+            label: 'Chargement des indicateurs de plateforme…',
+          )
+        else if (_dashboardError != null)
+          WorkspaceErrorState(
+            key: const Key('superadmin-dashboard-error'),
+            message: 'Impossible de charger les indicateurs de plateforme.',
+            onRetry: _loadDashboard,
+          )
+        else
+          _buildDashboardSuccess(isMobile),
+      ],
     );
   }
 
