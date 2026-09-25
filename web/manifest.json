@@ -1,11 +1,11 @@
 {
-    "name": "edupro_flutter_web",
-    "short_name": "edupro_flutter_web",
+    "name": "MAYELE +",
+    "short_name": "MAYELE +",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "MAYELE + — plateforme de gestion scolaire.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
