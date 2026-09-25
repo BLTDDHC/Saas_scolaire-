@@ -307,7 +307,7 @@ class _CanonicalGradesPageState extends State<CanonicalGradesPage> {
       const {
         'devoir_1': 'Devoir 1',
         'devoir_2': 'Devoir 2',
-        'composition': 'Composition du trimestre',
+        'composition': 'Composition',
         'composition_octobre': 'Composition du mois d’Octobre',
         'composition_novembre': 'Composition du mois de Novembre',
         'composition_janvier': 'Composition du mois de Janvier',
