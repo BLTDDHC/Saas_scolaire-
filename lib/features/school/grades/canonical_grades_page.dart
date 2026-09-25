@@ -85,19 +85,26 @@ class _CanonicalGradesPageState extends State<CanonicalGradesPage> {
   }
 
   Future<void> _load(StoreService store) async {
-    final yearId = store.getSelectedAcademicYearId();
-    if (yearId == null || yearId.isEmpty) {
-      setState(() {
-        _error = 'Sélectionnez une année scolaire.';
-        _loading = false;
-      });
-      return;
-    }
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
+      if (store.currentUser?.role == UserRole.teacher) {
+        // An administrator can change assignments/program evaluations while
+        // the teacher session stays open. Refresh the teacher workspace first
+        // so class/subject selectors never depend on stale local cache.
+        await store.refreshTeacherWorkspaceRemote();
+      }
+      final yearId = store.getSelectedAcademicYearId();
+      if (yearId == null || yearId.isEmpty) {
+        if (!mounted) return;
+        setState(() {
+          _error = 'Sélectionnez une année scolaire.';
+          _loading = false;
+        });
+        return;
+      }
       final periods = await store.academicPeriodsRemote(yearId);
       final series = store.currentUser?.role == UserRole.teacher
           ? const <Map<String, dynamic>>[]
