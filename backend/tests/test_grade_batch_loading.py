@@ -53,6 +53,24 @@ class GradeBatchLoading(unittest.TestCase):
         self.assertEqual(batch, detail)
         self.assertEqual(len(batch), len(self.students))
 
+    def test_teacher_batch_survives_assignment_replacement(self):
+        old_affectation = self.affectation
+        old_affectation.status = "inactive"
+        replacement = self.add(m.Affectation(
+            establishment_id=self.tenant.id,
+            teacher_id=self.teachers[0].id,
+            class_id=self.cl.id,
+            subject_id=old_affectation.subject_id,
+            status="active",
+        ))
+        self.s.flush()
+
+        rows = m.list_school_grades(
+            self.year.id, None, self.principals[0], self.s
+        )
+        self.assertEqual(len(rows), len(self.students))
+        self.assertNotEqual(replacement.id, old_affectation.id)
+
     def test_direction_and_teacher_scope_are_preserved(self):
         denied = self.admin.model_copy(
             update={'direction_cycle_ids': [str(uuid.uuid4())]}
