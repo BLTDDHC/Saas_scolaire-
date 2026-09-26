@@ -129,4 +129,81 @@ void main() {
     expect(avatar.backgroundImage, isA<MemoryImage>());
     expect(photoRequests, 1);
   });
+
+  testWidgets(
+      'un import photo en masse rafraîchit immédiatement un avatar déjà affiché',
+      (tester) async {
+    var imported = false;
+    var photoRequests = 0;
+    final api = ApiClient(client: MockClient((request) async {
+      if (request.url.path == '/api/v1/school/students/student-1/photo') {
+        photoRequests++;
+        if (!imported) {
+          return http.Response('{}', 404,
+              headers: {'content-type': 'application/json'});
+        }
+        return http.Response.bytes(base64Decode(transparentPng), 200,
+            headers: {'content-type': 'image/png'});
+      }
+      if (request.method == 'POST' &&
+          request.url.path == '/api/v1/school/students/photos/import') {
+        imported = true;
+        return http.Response(
+          jsonEncode({
+            'processed': 1,
+            'items': [
+              {
+                'name': '1.png',
+                'status': 'associated',
+                'studentId': 'student-1',
+                'studentName': 'ÉLÈVE Test',
+              }
+            ],
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }
+      return http.Response('{}', 404,
+          headers: {'content-type': 'application/json'});
+    }));
+    final store = StoreService(api: api);
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider.value(
+        value: store,
+        child: const MaterialApp(
+          home: Scaffold(
+            body: StudentPhotoAvatar(
+              studentId: 'student-1',
+              initials: 'ET',
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    var avatar = tester.widget<CircleAvatar>(find.byType(CircleAvatar));
+    expect(avatar.backgroundImage, isNull);
+    expect(photoRequests, 1);
+
+    await store.importStudentPhotosRemote(
+      academicYearId: 'year-1',
+      cycleId: 'cycle-1',
+      files: const [
+        {
+          'name': '1.png',
+          'mimeType': 'image/png',
+          'contentBase64': transparentPng,
+        }
+      ],
+    );
+    await tester.pumpAndSettle();
+
+    avatar = tester.widget<CircleAvatar>(find.byType(CircleAvatar));
+    expect(avatar.backgroundImage, isA<MemoryImage>());
+    expect(photoRequests, 2);
+  });
+
 }
