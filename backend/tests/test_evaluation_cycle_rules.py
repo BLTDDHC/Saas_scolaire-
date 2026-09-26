@@ -134,6 +134,37 @@ class EvaluationCycleRulesRegression(unittest.TestCase):
             {"composition_octobre", "composition_novembre", "composition"},
         )
 
+    def test_primary_rejects_devoirs_and_college_lycee_keep_them(self):
+        primary = self.add(m.SchoolCycle(
+            establishment_id=self.tenant.id,
+            code="PRIMAIRE",
+            name="Primaire",
+            status="active",
+        ))
+        primary_class = self.add(m.SchoolClass(
+            establishment_id=self.tenant.id,
+            academic_year_id=self.year.id,
+            cycle_id=primary.id,
+            name="Primaire cycle rules",
+            status="active",
+        ))
+        with self.assertRaises(m.HTTPException) as rejected:
+            m.validate_program_type_for_class(
+                primary_class, "devoir", "devoir_1", self.s
+            )
+        self.assertEqual(rejected.exception.status_code, 422)
+
+        # The existing fixture is a collège class and keeps D1/D2/composition.
+        m.validate_program_type_for_class(
+            self.cl, "devoir", "devoir_1", self.s
+        )
+        m.validate_program_type_for_class(
+            self.cl, "devoir", "devoir_2", self.s
+        )
+        m.validate_program_type_for_class(
+            self.cl, "composition", "composition", self.s
+        )
+
     def test_primary_trimester_event_mapping_for_all_three_periods(self):
         self.assertEqual(
             set(m.primary_trimester_composition_events(self.periods[0])),
