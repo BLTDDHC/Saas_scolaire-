@@ -7762,9 +7762,17 @@ def list_school_grades(
     if current.role == "teacher":
         if not current.teacher_id:
             return []
-        statement = statement.where(Evaluation.affectation_id.in_(
+        teacher_id = uuid.UUID(current.teacher_id)
+        # Keep batch grade loading aligned with the evaluation list. An older
+        # evaluation may still reference the affectation that existed when the
+        # ADMIN programmed it. What matters operationally is the teacher's
+        # CURRENT active class + subject assignment, not that historical id.
+        statement = statement.where(exists(
             select(Affectation.id).where(
-                Affectation.teacher_id == uuid.UUID(current.teacher_id),
+                Affectation.establishment_id == database_id,
+                Affectation.teacher_id == teacher_id,
+                Affectation.class_id == Evaluation.class_id,
+                Affectation.subject_id == Evaluation.subject_id,
                 Affectation.status == "active",
             )
         ))
