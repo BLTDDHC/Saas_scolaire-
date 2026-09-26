@@ -1961,12 +1961,28 @@ class StoreService extends ChangeNotifier {
     required String academicYearId,
     required String cycleId,
     required List<Map<String, dynamic>> files,
-  }) =>
-      _repository.importStudentPhotos({
-        'academicYearId': academicYearId,
-        'cycleId': cycleId,
-        'files': files,
-      });
+  }) async {
+    final response = await _repository.importStudentPhotos({
+      'academicYearId': academicYearId,
+      'cycleId': cycleId,
+      'files': files,
+    });
+    final refreshedStudentIds = <String>{};
+    for (final rawItem in response['items'] as List? ?? const []) {
+      if (rawItem is! Map) continue;
+      final status = rawItem['status']?.toString();
+      if (status != 'associated' && status != 'already_present') continue;
+      final studentId = rawItem['studentId']?.toString();
+      if (studentId != null && studentId.isNotEmpty) {
+        refreshedStudentIds.add(studentId);
+      }
+    }
+    for (final studentId in refreshedStudentIds) {
+      _studentPhotoRevisions[studentId] = studentPhotoRevision(studentId) + 1;
+    }
+    if (refreshedStudentIds.isNotEmpty) notifyListeners();
+    return response;
+  }
 
   Future<void> updateStudentPhotoRemote(
         String studentId, Map<String, dynamic> file) async {
